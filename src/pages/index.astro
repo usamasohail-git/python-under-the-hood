@@ -8,7 +8,7 @@ const firstReady = parts.flatMap((p) => p.sections.flatMap((s) => s.lectures.map
 const totalLectures = parts.reduce((n, p) => n + p.sections.reduce((m, s) => m + s.lectures.length, 0), 0);
 const totalSections = parts.reduce((n, p) => n + p.sections.length, 0);
 ---
-<Base title="Python Deep Dive">
+<Base title="Python Under the Hood">
   <section class="hero">
     <p class="eyebrow">Free · Interactive · Runs in your browser</p>
     <h1>Understand Python, not just use it.</h1>

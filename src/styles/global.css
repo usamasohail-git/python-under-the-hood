@@ -100,8 +100,9 @@ button { font: inherit; }
 .site-footer .wrap { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; justify-content: space-between; }
 .site-footer a { color: var(--muted); }
 .site-nav .short { display: none; }
+@media (max-width: 1100px) { .site-nav .hide-sm { display: none; } }
 @media (max-width: 640px) {
-  .site-nav .hide-sm, .site-nav .long { display: none; }
+  .site-nav .long { display: none; }
   .site-nav .short { display: inline; }
   .site-nav a { padding: 0.35rem 0.45rem; }
   .brand .brand-text { display: none; }

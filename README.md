@@ -1,4 +1,6 @@
-# Python Deep Dive (interactive site)
+# Python Under the Hood
+
+See how Python really works, by running it. (Interactive course site.)
 
 A free, interactive Python course with notes, runnable code, quizzes and auto-graded exercises.
 It follows the 4-part / section / lecture structure of Dr. Fred Baptiste's *Python 3: Deep Dive* series

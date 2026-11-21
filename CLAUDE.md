@@ -1,4 +1,4 @@
-# Python Deep Dive: interactive course site
+# Python Under the Hood: interactive course site
 
 A free, static, interactive Python course: lesson notes, editable code cells that run real Python
 in the browser, quizzes and auto-graded exercises. It mirrors the 4-part / 47-section / 324-lecture
