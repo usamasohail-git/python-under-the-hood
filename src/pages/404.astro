@@ -1,0 +1,37 @@
+---
+import Base from '../layouts/Base.astro';
+import { parts, url } from '../lib/course';
+
+// A tiny runnable joke for lost visitors (kept in a string: braces are Astro syntax).
+const demo = `site = {'/': 'home', '/part-1/': 'Functional', '/part-4/': 'OOP'}
+try:
+    page = site['/this-url/']
+except KeyError as ex:
+    print(f'KeyError: {ex}  (but the course is still here!)')`;
+---
+<Base title="Page not found" noindex>
+  <section class="hero" style="padding-bottom:1rem">
+    <p class="eyebrow">404 · page not found</p>
+    <h1>This page doesn't exist.</h1>
+    <p class="lead">The link may be mistyped or out of date.</p>
+  </section>
+
+  <div class="prose">
+    <py-cell><pre class="py-src"><code>{demo}</code></pre></py-cell>
+  </div>
+
+  <h2>Pick up where you want</h2>
+  <div class="grid">
+    {parts.map((p) => (
+      <a class="card" href={url(p.slug)}>
+        <span class="eyebrow">{p.title}</span>
+        <h3>{p.subtitle}</h3>
+        <p class="muted">{p.sections.length} sections</p>
+      </a>
+    ))}
+  </div>
+  <p style="margin-top:1.5rem"><a class="btn primary" href={url('/')}>← Back to the home page</a></p>
+  <script>
+    import '../scripts/pycell';
+  </script>
+</Base>

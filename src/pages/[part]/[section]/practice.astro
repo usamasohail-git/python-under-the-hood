@@ -19,7 +19,7 @@ const sid = sectionId(part, section);
 const { quiz, exercises } = entry.data;
 const themes = { light: 'github-light', dark: 'github-dark' } as const;
 ---
-<Base title={`Practice: ${section.title}`} activePart={part.slug} files={{ section: sid, files: entry.data.files, packages: entry.data.packages }}>
+<Base title={`Practice: ${section.title}`} description={`Test yourself on ${section.title}: ${quiz.length} quiz questions with explanations and ${exercises.length} auto-graded coding exercises that run in your browser.`} activePart={part.slug} files={{ section: sid, files: entry.data.files, packages: entry.data.packages }}>
   <nav class="crumbs" aria-label="Breadcrumb">
     <a href={url('/')}>Home</a> / <a href={url(part.slug)}>{part.title}</a> / <a href={url(sid)}>{sectionLabel(section)}</a> / <span>Practice</span>
   </nav>
