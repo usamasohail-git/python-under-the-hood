@@ -1,0 +1,465 @@
+files: ['car-brands-1.txt', 'car-brands-2.txt', 'car-brands-3.txt']
+
+quiz:
+  - q: What does this print?
+    code: |
+      def gen():
+          print('start')
+          yield 1
+
+      g = gen()
+      print(type(g).__name__)
+    options:
+      - "`start` then `generator`"
+      - "`generator`"
+      - "`start` then `function`"
+      - "`1`"
+    answer: 1
+    explain: |
+      Calling a generator function runs **none** of its body. It only creates a generator object; `'start'` would be printed on the first `next(g)`.
+
+  - q: What does this print?
+    code: |
+      def f():
+          print('a')
+          yield 1
+          print('b')
+          yield 2
+
+      g = f()
+      print(next(g))
+      print(next(g))
+    options:
+      - "`a`, `b`, `1`, `2`"
+      - "`1`, `2`"
+      - "`a`, `1`, `b`, `2`"
+      - "`a`, `1`, `a`, `2`"
+    answer: 2
+    explain: |
+      Each `next()` resumes the body where it paused and runs until the next `yield`. The first call prints `a` and returns `1`; the second resumes after the first `yield`, prints `b` and returns `2`.
+
+  - q: What does this print?
+    code: |
+      g = (c.upper() for c in 'abc')
+      print(list(g), list(g))
+    options:
+      - "`['A', 'B', 'C'] ['A', 'B', 'C']`"
+      - "`['A', 'B', 'C'] []`"
+      - "`[] []`"
+      - "`ABC ABC`"
+    answer: 1
+    explain: |
+      A generator is an iterator, so it can be consumed only once. The second `list(g)` finds it exhausted and returns an empty list.
+
+  - q: What does this print?
+    code: |
+      def gen():
+          yield 1
+          return 'done'
+
+      g = gen()
+      next(g)
+      try:
+          next(g)
+      except StopIteration as ex:
+          print(ex.value)
+    options:
+      - "`None`"
+      - "`1`"
+      - "`done`"
+      - Nothing, `return` is not allowed in a generator
+    answer: 2
+    explain: |
+      Returning from a generator ends the iteration. Python raises `StopIteration` and stores the returned value in its `value` attribute.
+
+  - q: What does this print?
+    code: |
+      def squares(n):
+          for i in range(n):
+              yield i * i
+
+      g = squares(4)
+      print(iter(g) is g, '__next__' in dir(g))
+    options:
+      - "`True True`"
+      - "`False True`"
+      - "`True False`"
+      - "`False False`"
+    answer: 0
+    explain: |
+      Generators implement the full iterator protocol: `__next__`, and an `__iter__` that returns the generator itself.
+
+  - q: What does this print?
+    code: |
+      n = 2
+      g = (i * n for i in range(3))
+      n = 10
+      print(list(g))
+    options:
+      - "`[0, 2, 4]`"
+      - "`[0, 10, 20]`"
+      - "`[0, 10, 20, 30, 40, 50, 60, 70, 80, 90]`"
+      - "`[0, 2, 4, 6, 8, 10, 12, 14, 16, 18]`"
+    answer: 1
+    explain: |
+      Only the outermost iterable, `range(3)`, is evaluated when the generator expression is created. The expression `i * n` runs during iteration and reads `n` at that time, when it is already `10`.
+
+  - q: What does this print?
+    code: |
+      def squares(n):
+          for i in range(n):
+              yield i * i
+
+      sq = squares(5)
+      e = enumerate(sq)
+      next(sq)
+      print(next(e))
+    options:
+      - "`(0, 0)`"
+      - "`(1, 1)`"
+      - "`(0, 1)`"
+      - "`(1, 0)`"
+    answer: 2
+    explain: |
+      `enumerate` is lazy and pulls from the same generator. The first square (`0`) was taken directly, so `enumerate` receives `1` next, and labels it with **its own** first index, `0`.
+
+  - q: What does this print?
+    code: |
+      class Evens:
+          def __init__(self, n):
+              self.n = n
+          def __iter__(self):
+              for i in range(0, self.n, 2):
+                  yield i
+
+      e = Evens(5)
+      print(list(e), list(e))
+    options:
+      - "`[0, 2, 4] []`"
+      - "`[0, 2, 4] [0, 2, 4]`"
+      - "A `TypeError`, because `Evens` has no `__next__`"
+      - "`[0, 2, 4, 6, 8] [0, 2, 4, 6, 8]`"
+    answer: 1
+    explain: |
+      Because `__iter__` contains `yield`, every call to `iter(e)` returns a **new** generator. `Evens` is an iterable, not an iterator, so it can be looped over repeatedly.
+
+  - q: What does this print?
+    code: |
+      def inner():
+          yield 'a'
+          return 'inner result'
+
+      def outer():
+          r = yield from inner()
+          yield r
+
+      print(list(outer()))
+    options:
+      - "`['a']`"
+      - "`['a', None]`"
+      - "`['inner result']`"
+      - "`['a', 'inner result']`"
+    answer: 3
+    explain: |
+      `yield from` passes `'a'` through to the caller, and when `inner` returns, its return value becomes the value of the `yield from` expression. `outer` then yields it.
+
+  - q: Which of these lines is a **SyntaxError**?
+    options:
+      - "`total = sum(x * x for x in range(10))`"
+      - "`total = sum((x * x for x in range(10)), 100)`"
+      - "`total = sum(x * x for x in range(10), 100)`"
+      - "`biggest = max((len(w) for w in words), default=0)`"
+    answer: 2
+    explain: |
+      The parentheses of a generator expression can be dropped only when it is the **sole** argument of a call. With a second argument, it must be wrapped in its own parentheses.
+
+  - q: A class defines `__iter__` (as a generator) but neither `__reversed__` nor `__len__`/`__getitem__`. What does `reversed(obj)` do?
+    options:
+      - It raises `TypeError` because the object is not reversible
+      - It iterates the object into a list and reverses it
+      - It returns an empty iterator
+      - It calls `__iter__` and walks it backwards lazily
+    answer: 0
+    explain: |
+      `reversed()` needs either a `__reversed__` method or the sequence protocol (`__len__` plus integer `__getitem__`). Being merely iterable is not enough, because an iterator can only move forwards.
+
+  - q: You build a large nested data set with generator expressions and then iterate over **every** element. Compared with nested list comprehensions, what do you usually gain?
+    options:
+      - Much less total running time
+      - Random access to any element
+      - Nothing at all
+      - Much lower peak memory use, at about the same total running time
+    answer: 3
+    explain: |
+      If every value is eventually computed, the total work is about the same. The decisive win is memory: a generator holds only its current state, while a list keeps every element alive at once. Time is saved only when you stop early.
+
+exercises:
+  - id: fib-generator
+    title: A correct Fibonacci generator
+    prompt: |
+      Write a generator function `fib_gen(n)` that yields the first `n` Fibonacci numbers `1, 1, 2, 3, 5, 8, …` (each number is the sum of the two before it).
+
+      It must work for **every** `n >= 0`: `fib_gen(0)` yields nothing and `fib_gen(1)` yields just `1`. The starter is the version from the lesson, which is wrong for small `n`.
+
+      It must be lazy: never compute more numbers than have been requested, and never recompute earlier numbers from scratch.
+    starter: |
+      def fib_gen(n):
+          fib_0 = 1
+          yield fib_0
+          fib_1 = 1
+          yield fib_1
+          for i in range(n - 2):
+              fib_0, fib_1 = fib_1, fib_0 + fib_1
+              yield fib_1
+    tests: |
+      import inspect
+      from itertools import islice
+
+      def test_is_generator():
+          """fib_gen is a generator function"""
+          assert inspect.isgeneratorfunction(fib_gen), "use yield inside fib_gen"
+
+      def test_seven():
+          """fib_gen(7) yields the first 7 numbers"""
+          assert list(fib_gen(7)) == [1, 1, 2, 3, 5, 8, 13], f"got {list(fib_gen(7))}"
+
+      def test_zero():
+          """fib_gen(0) yields nothing"""
+          assert list(fib_gen(0)) == [], f"got {list(fib_gen(0))}"
+
+      def test_one_and_two():
+          """fib_gen(1) and fib_gen(2)"""
+          assert list(fib_gen(1)) == [1], f"fib_gen(1) gave {list(fib_gen(1))}"
+          assert list(fib_gen(2)) == [1, 1], f"fib_gen(2) gave {list(fib_gen(2))}"
+
+      def test_lazy():
+          """works lazily even for an enormous n"""
+          assert list(islice(fib_gen(10**12), 6)) == [1, 1, 2, 3, 5, 8]
+
+      def test_fast():
+          """10,000 numbers in linear time"""
+          nums = list(fib_gen(10_000))
+          assert len(nums) == 10_000
+          assert all(nums[i] == nums[i - 1] + nums[i - 2] for i in range(2, 10_000))
+    solution: |
+      def fib_gen(n):
+          a, b = 1, 1
+          for _ in range(n):
+              yield a
+              a, b = b, a + b
+    hints:
+      - Instead of yielding two values before the loop, run the loop exactly `n` times and yield one value per iteration.
+      - "Yield `a` first, then slide the pair forward: `a, b = b, a + b`."
+
+  - id: countdown-iterable
+    title: A re-usable, reversible countdown
+    prompt: |
+      Write a class `Countdown` so that `Countdown(start)` is an **iterable** (not an iterator):
+
+      - iterating it yields `start, start - 1, …, 1`
+      - it can be iterated any number of times
+      - `reversed(Countdown(start))` yields `1, 2, …, start`
+
+      Use generators for both directions; don't store a list of the numbers.
+    starter: |
+      class Countdown:
+          def __init__(self, start):
+              self.start = start
+              self.current = start
+
+          def __iter__(self):
+              return self
+
+          def __next__(self):
+              if self.current <= 0:
+                  raise StopIteration
+              self.current -= 1
+              return self.current + 1
+    tests: |
+      import types
+
+      def test_values():
+          """iterating yields start down to 1"""
+          assert list(Countdown(5)) == [5, 4, 3, 2, 1], f"got {list(Countdown(5))}"
+
+      def test_reusable():
+          """can be iterated more than once"""
+          c = Countdown(3)
+          first, second = list(c), list(c)
+          assert first == second == [3, 2, 1], f"got {first} then {second}"
+
+      def test_iterable_not_iterator():
+          """iter() returns a new generator, not the object itself"""
+          c = Countdown(3)
+          it = iter(c)
+          assert it is not c, "Countdown should be an iterable, not its own iterator"
+          assert isinstance(it, types.GeneratorType), f"iter() returned {type(it).__name__}, expected a generator"
+
+      def test_reversed():
+          """reversed() counts up from 1"""
+          assert list(reversed(Countdown(4))) == [1, 2, 3, 4]
+
+      def test_reversed_lazy():
+          """reversed() returns a generator too"""
+          assert isinstance(reversed(Countdown(4)), types.GeneratorType)
+
+      def test_zero():
+          """Countdown(0) is empty in both directions"""
+          assert list(Countdown(0)) == [] and list(reversed(Countdown(0))) == []
+    solution: |
+      class Countdown:
+          def __init__(self, start):
+              self.start = start
+
+          def __iter__(self):
+              for i in range(self.start, 0, -1):
+                  yield i
+
+          def __reversed__(self):
+              for i in range(1, self.start + 1):
+                  yield i
+    hints:
+      - Store only `start`. State that changes during iteration belongs in the generator, not on `self`.
+      - Put `yield` directly inside `__iter__`. Each call then returns a fresh generator.
+      - "`reversed()` looks for a `__reversed__` method; write it the same way."
+
+  - id: deep-flatten
+    title: Flatten any nesting, lazily
+    prompt: |
+      Write a generator function `flatten(obj)` that yields the "leaf" values of arbitrarily nested iterables, in order.
+
+      - Any iterable (lists, tuples, sets, ranges, generators, …) is flattened recursively.
+      - Strings and bytes are **leaves**, not containers: `'abc'` is yielded as `'abc'`, not as `'a', 'b', 'c'`.
+      - Anything that isn't iterable (numbers, `None`, …) is a leaf.
+      - If `obj` itself is a leaf (for example `flatten(42)` or `flatten('hi')`), yield it as the only value.
+
+      Use `yield from` for the recursion.
+    starter: |
+      def flatten(obj):
+          result = []
+          for item in obj:
+              if isinstance(item, list):
+                  result.extend(flatten(item))
+              else:
+                  result.append(item)
+          return result
+    tests: |
+      import inspect
+
+      def test_generator():
+          """flatten is a generator function"""
+          assert inspect.isgeneratorfunction(flatten), "use yield / yield from"
+
+      def test_nested_lists():
+          """nested lists and tuples"""
+          assert list(flatten([1, [2, (3, [4])], [[5]]])) == [1, 2, 3, 4, 5]
+
+      def test_strings_are_leaves():
+          """strings are not split into characters"""
+          got = list(flatten(['ab', ['cd', ('ef',)], b'gh']))
+          assert got == ['ab', 'cd', 'ef', b'gh'], f"got {got}"
+
+      def test_other_iterables():
+          """ranges and generators are flattened too"""
+          got = list(flatten([range(3), (x * 10 for x in range(2)), [[range(1)]]]))
+          assert got == [0, 1, 2, 0, 10, 0], f"got {got}"
+
+      def test_leaf_at_top():
+          """a non-iterable or string at the top level is yielded as-is"""
+          assert list(flatten(42)) == [42]
+          assert list(flatten('hi')) == ['hi']
+
+      def test_empty():
+          """empty containers produce nothing"""
+          assert list(flatten([[], [[]], ()])) == []
+
+      def test_lazy():
+          """values come out before an infinite iterable is exhausted"""
+          from itertools import count, islice
+          assert list(islice(flatten([[1, 2], count(3)]), 5)) == [1, 2, 3, 4, 5]
+    solution: |
+      def flatten(obj):
+          if isinstance(obj, (str, bytes)):
+              yield obj
+              return
+          try:
+              items = iter(obj)
+          except TypeError:
+              yield obj        # not iterable: a leaf
+              return
+          for item in items:
+              yield from flatten(item)
+    hints:
+      - "Make `flatten` handle a single object: if it's a leaf, yield it and `return`; otherwise loop over it and `yield from flatten(item)` for each item."
+      - "To test whether something is iterable, try `iter(obj)` and catch `TypeError`."
+      - Check for `str`/`bytes` **before** trying `iter()`, otherwise a one-character string would recurse forever.
+
+  - id: chained-brands
+    title: Chain the brand files
+    prompt: |
+      The files `car-brands-1.txt`, `car-brands-2.txt` and `car-brands-3.txt` (UTF-8) contain one car brand per line.
+
+      1. Write a generator `clean_lines(file_name)` that opens one file and yields each line with surrounding whitespace removed, skipping lines that are empty after stripping.
+      2. Write a generator `brands(*file_names)` that yields the cleaned lines of every file, in order, using `yield from clean_lines(...)`.
+
+      Both must be lazy: a file must not be opened until iteration actually reaches it.
+    starter: |
+      def clean_lines(file_name):
+          with open(file_name, encoding='utf-8') as f:
+              return [line for line in f]
+
+      def brands(*file_names):
+          result = []
+          for name in file_names:
+              result += clean_lines(name)
+          return result
+    tests: |
+      import inspect
+
+      FILES = ('car-brands-1.txt', 'car-brands-2.txt', 'car-brands-3.txt')
+
+      def test_generators():
+          """both functions are generator functions"""
+          assert inspect.isgeneratorfunction(clean_lines), "clean_lines should use yield"
+          assert inspect.isgeneratorfunction(brands), "brands should use yield from"
+
+      def test_one_file():
+          """clean_lines strips line endings"""
+          got = list(clean_lines('car-brands-1.txt'))
+          assert len(got) == 20, f"expected 20 brands, got {len(got)}"
+          assert got[:3] == ['Alfa Romeo', 'Aston Martin', 'Audi'], f"got {got[:3]}"
+          assert all('\n' not in b for b in got), "line endings were not removed"
+
+      def test_all_files():
+          """brands chains all files in order"""
+          got = list(brands(*FILES))
+          assert len(got) == 66, f"expected 66 brands, got {len(got)}"
+          assert got[0] == 'Alfa Romeo' and got[-1] == 'Volvo', f"first/last: {got[0]!r}, {got[-1]!r}"
+          assert got[19:21] == ['Dodge', 'Farboud'], f"file boundary wrong: {got[19:21]}"
+          assert 'Citroën' in got and 'Škoda' in got
+
+      def test_skips_blank_lines():
+          """blank lines are skipped"""
+          with open('brands-test.txt', 'w', encoding='utf-8') as f:
+              f.write('  Tesla  \n\n   \nRivian\n')
+          got = list(brands('brands-test.txt'))
+          assert got == ['Tesla', 'Rivian'], f"got {got}"
+
+      def test_lazy():
+          """a missing file is not opened until iteration reaches it"""
+          gen = brands('car-brands-1.txt', 'no-such-file.txt')
+          assert next(gen) == 'Alfa Romeo'
+    solution: |
+      def clean_lines(file_name):
+          with open(file_name, encoding='utf-8') as f:
+              for line in f:
+                  cleaned = line.strip()
+                  if cleaned:
+                      yield cleaned
+
+      def brands(*file_names):
+          for name in file_names:
+              yield from clean_lines(name)
+    hints:
+      - "In `clean_lines`, keep the `with` block and replace the list with a loop that `yield`s each stripped, non-empty line."
+      - "`brands` needs only two lines: loop over the names and `yield from clean_lines(name)`."

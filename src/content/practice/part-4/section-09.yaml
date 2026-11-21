@@ -1,0 +1,599 @@
+quiz:
+  - q: What does this print?
+    code: |
+      class Field:
+          def __set_name__(self, owner, name):
+              self.name = name
+
+      class A:
+          pass
+
+      A.x = Field()
+      B = type('B', (), {'x': Field()})
+      print(hasattr(A.x, 'name'), hasattr(B.x, 'name'))
+    options:
+      - "`True True`"
+      - "`False False`"
+      - "`True False`"
+      - "`False True`"
+    answer: 3
+    explain: |
+      `__set_name__` is called by `type.__new__` while a class is being created, which happens for both `class` statements and `type(name, bases, namespace)`. Assigning a descriptor to a class that already exists (`A.x = ...`) doesn't trigger it.
+
+  - q: What does this print?
+    code: |
+      class Bounded:
+          def __init__(self, min_=None):
+              self.min_ = min_
+          def __set_name__(self, owner, name):
+              self.name = name
+          def __set__(self, instance, value):
+              if self.min_ and value < self.min_:
+                  raise ValueError(f'{self.name} too small')
+              instance.__dict__[self.name] = value
+          def __get__(self, instance, owner):
+              return self if instance is None else instance.__dict__.get(self.name)
+
+      class Account:
+          balance = Bounded(0)
+
+      a = Account()
+      a.balance = -5
+      print(a.balance)
+    options:
+      - "`-5`"
+      - "`ValueError: balance too small`"
+      - "`None`"
+      - "`0`"
+    answer: 0
+    explain: |
+      `self.min_` is `0`, which is falsy, so `self.min_ and ...` short-circuits and the check never runs. Optional bounds must be tested with `self.min_ is not None`.
+
+  - q: "What does `type('Point', (), {'x': 0})` return?"
+    options:
+      - An instance of a class named `Point`
+      - A new class named `Point` with a class attribute `x = 0`
+      - The `type` of the existing `Point` class
+      - A `TypeError`, because `type()` takes one argument
+    answer: 1
+    explain: |
+      With three arguments (name, bases tuple, namespace dict), `type` creates a new class, just as a `class` statement would. With one argument it returns an object's type.
+
+  - q: Why does the solution check values with `isinstance(value, numbers.Integral)` instead of `type(value) is int`?
+    options:
+      - "`numbers.Integral` is faster"
+      - It accepts any integer-like type (including `int` subclasses and registered integral types), not just exactly `int`
+      - It rejects `bool` values
+      - "`type(value) is int` raises an exception for floats"
+    answer: 1
+    explain: |
+      `numbers.Integral` is an abstract base class: `isinstance` accepts `int`, its subclasses, and any type registered as integral. Note that `bool` is an `int` subclass, so it passes too.
+
+  - q: What does this print?
+    code: |
+      import unittest
+
+      class T(unittest.TestCase):
+          def test_values(self):
+              for v in (1, 2, 3):
+                  with self.subTest(v=v):
+                      self.assertLess(v, 2)
+
+      result = unittest.TestResult()
+      T('test_values').run(result)
+      print(result.testsRun, len(result.failures))
+    options:
+      - "`3 2`"
+      - "`1 1`"
+      - "`1 2`"
+      - "`3 1`"
+    answer: 2
+    explain: |
+      It's one test method, so `testsRun` is 1. Each failing `subTest` is recorded separately, and the loop keeps going after a failure: `v=2` and `v=3` both fail, giving 2 failures.
+
+  - q: In the refactored design, `IntegerField(BaseValidator)` defines only `validate`. Why is it still a data descriptor?
+    options:
+      - Because `validate` counts as a descriptor method
+      - "It isn't: subclasses must redefine `__set__`"
+      - Because `__set__` (and `__get__`) are inherited from `BaseValidator`, and lookup of special methods goes through the MRO
+      - Because `__set_name__` makes any class a data descriptor
+    answer: 2
+    explain: |
+      Python checks the descriptor's **type** for `__set__`, and that check follows the class's MRO like any attribute lookup. Inherited `__get__`/`__set__` work exactly as if they were defined in the subclass.
+
+  - q: What does this print?
+    code: |
+      class Base:
+          def __set_name__(self, owner, name):
+              self.name = name
+          def validate(self, value):
+              pass
+          def __set__(self, instance, value):
+              self.validate(value)
+              instance.__dict__[self.name] = value
+          def __get__(self, instance, owner):
+              return self if instance is None else instance.__dict__.get(self.name)
+
+      class Even(Base):
+          def validate(self, value):
+              if value % 2:
+                  raise ValueError('odd')
+
+      class C:
+          n = Even()
+
+      c = C()
+      for v in (2, 3, 4):
+          try:
+              c.n = v
+          except ValueError:
+              pass
+      print(c.n)
+    options:
+      - "`3`"
+      - "`2`"
+      - "`None`"
+      - "`4`"
+    answer: 3
+    explain: |
+      `Base.__set__` calls `self.validate`, which dispatches to `Even.validate` (the template method pattern). Assigning 3 raises before anything is stored, so the value goes from 2 straight to 4.
+
+exercises:
+  - id: goal-1-integer-field
+    title: "Goal 1: IntegerField"
+    prompt: |
+      Write a data descriptor `IntegerField(min_=None, max_=None)`:
+
+      - It learns its attribute name with `__set_name__`.
+      - Assigning a value that isn't a `numbers.Integral` raises `ValueError`.
+      - If `min_` is not `None`, values below it raise `ValueError`; if `max_` is not `None`, values above it raise `ValueError`. Both bounds are **inclusive**, and either may be `None` (no limit).
+      - Every `ValueError` message contains the attribute name.
+      - Valid values are stored in the instance `__dict__` **under the attribute's own name**.
+      - Class access returns the descriptor; reading a value that was never set returns `None`.
+    starter: |
+      import numbers
+
+      class IntegerField:
+          def __init__(self, min_=None, max_=None):
+              self._min = min_
+              self._max = max_
+
+          def __set_name__(self, owner_class, prop_name):
+              self.prop_name = prop_name
+
+          def __set__(self, instance, value):
+              # validate, then store
+              pass
+
+          def __get__(self, instance, owner_class):
+              pass
+    tests: |
+      def make(min_=None, max_=None):
+          return type('TestClass', (), {'age': IntegerField(min_, max_)})()
+
+      def raises(obj, value):
+          try:
+              obj.age = value
+          except ValueError as ex:
+              assert 'age' in str(ex), f"message {str(ex)!r} should mention 'age'"
+              return True
+          return False
+
+      def test_valid_values():
+          """values within the inclusive bounds are stored and returned"""
+          obj = make(5, 10)
+          for v in range(5, 11):
+              obj.age = v
+              assert obj.age == v, f"after setting {v}, got {obj.age!r}"
+
+      def test_storage():
+          """the value lives in the instance __dict__ under the attribute name"""
+          obj = make(0, 100)
+          obj.age = 42
+          assert obj.__dict__ == {'age': 42}, f"__dict__ is {obj.__dict__}"
+
+      def test_out_of_range():
+          """values outside the bounds raise ValueError"""
+          obj = make(-10, 10)
+          for v in (-11, -100, 11, 100):
+              assert raises(obj, v), f"{v} should be rejected"
+
+      def test_non_integers():
+          """non-integral values raise ValueError"""
+          obj = make(-10, 10)
+          for v in (10.5, 1 + 0j, 'abc', (1, 2), None):
+              assert raises(obj, v), f"{v!r} should be rejected"
+
+      def test_zero_bounds():
+          """a bound of 0 is enforced"""
+          obj = make(0, 0)
+          obj.age = 0
+          assert raises(obj, -1), "-1 should be rejected when min_ is 0"
+          assert raises(obj, 1), "1 should be rejected when max_ is 0"
+
+      def test_optional_bounds():
+          """either bound (or both) may be None"""
+          lo = make(0, None)
+          lo.age = 10 ** 9
+          hi = make(None, 10)
+          hi.age = -10 ** 9
+          free = make()
+          free.age = -5
+          assert (lo.age, hi.age, free.age) == (10 ** 9, -10 ** 9, -5)
+
+      def test_class_access_and_unset():
+          """class access gives the descriptor; unset reads as None"""
+          obj = make(0, 10)
+          assert isinstance(type(obj).age, IntegerField), f"class access gave {type(obj).age!r}"
+          assert obj.age is None, f"unset value should be None, got {obj.age!r}"
+
+      def test_independent_instances():
+          """two instances keep separate values"""
+          cls = type('TestClass', (), {'age': IntegerField(0, 100)})
+          a, b = cls(), cls()
+          a.age, b.age = 1, 2
+          assert (a.age, b.age) == (1, 2), "values are shared between instances"
+    solution: |
+      import numbers
+
+      class IntegerField:
+          def __init__(self, min_=None, max_=None):
+              self._min = min_
+              self._max = max_
+
+          def __set_name__(self, owner_class, prop_name):
+              self.prop_name = prop_name
+
+          def __set__(self, instance, value):
+              if not isinstance(value, numbers.Integral):
+                  raise ValueError(f'{self.prop_name} must be an integer.')
+              if self._min is not None and value < self._min:
+                  raise ValueError(f'{self.prop_name} must be >= {self._min}.')
+              if self._max is not None and value > self._max:
+                  raise ValueError(f'{self.prop_name} must be <= {self._max}.')
+              instance.__dict__[self.prop_name] = value
+
+          def __get__(self, instance, owner_class):
+              if instance is None:
+                  return self
+              return instance.__dict__.get(self.prop_name, None)
+    hints:
+      - "Check bounds with `self._min is not None and value < self._min`; a plain truthiness test skips a bound of `0`."
+      - "Store with `instance.__dict__[self.prop_name] = value`, and read with `instance.__dict__.get(self.prop_name)`."
+      - "In `__get__`, return `self` when `instance is None`."
+
+  - id: goal-2-char-field
+    title: "Goal 2: CharField"
+    prompt: |
+      Write a data descriptor `CharField(min_=None, max_=None)` for string attributes:
+
+      - Non-strings raise `ValueError`.
+      - Strings shorter than `min_` or longer than `max_` characters raise `ValueError` (bounds are inclusive; `max_=None` means no maximum).
+      - A `min_` of `None` or a negative number is stored as `0` in the attribute `_min`; `max_` is stored as given in `_max`.
+      - Error messages contain the attribute name; values are stored in the instance `__dict__` under the attribute name.
+      - Class access returns the descriptor; an unset value reads as `None`.
+    starter: |
+      class CharField:
+          def __init__(self, min_=None, max_=None):
+              self._min = min_
+              self._max = max_
+
+          def __set_name__(self, owner_class, prop_name):
+              self.prop_name = prop_name
+
+          def __set__(self, instance, value):
+              if not isinstance(value, str):
+                  raise ValueError(f'{self.prop_name} must be a string.')
+              instance.__dict__[self.prop_name] = value
+
+          def __get__(self, instance, owner_class):
+              if instance is None:
+                  return self
+              return instance.__dict__.get(self.prop_name)
+    tests: |
+      def make(min_=None, max_=None):
+          return type('TestClass', (), {'name': CharField(min_, max_)})()
+
+      def raises(obj, value):
+          try:
+              obj.name = value
+          except ValueError as ex:
+              assert 'name' in str(ex), f"message {str(ex)!r} should mention 'name'"
+              return True
+          return False
+
+      def test_valid_lengths():
+          """strings within the inclusive length bounds are accepted"""
+          obj = make(1, 10)
+          for n in range(1, 11):
+              obj.name = 'a' * n
+              assert obj.name == 'a' * n
+          assert obj.__dict__ == {'name': 'a' * 10}, f"__dict__ is {obj.__dict__}"
+
+      def test_bad_lengths():
+          """too short or too long strings raise ValueError"""
+          obj = make(5, 10)
+          for n in (0, 4, 11, 20):
+              assert raises(obj, 'a' * n), f"a string of length {n} should be rejected"
+
+      def test_non_strings():
+          """non-strings raise ValueError"""
+          obj = make(0, 10)
+          for v in (10, None, ['a', 'b']):
+              assert raises(obj, v), f"{v!r} should be rejected"
+
+      def test_min_normalized():
+          """None or negative min_ becomes 0"""
+          for min_ in (None, -10, 0):
+              d = type(make(min_, 100)).name
+              assert d._min == 0, f"min_={min_!r} gave _min={d._min!r}"
+              assert d._max == 100
+          assert type(make(3, None)).name._min == 3
+          assert type(make(None, None)).name._max is None
+
+      def test_no_max():
+          """with no max, long strings are fine; with min 0, empty is fine"""
+          obj = make(None, None)
+          obj.name = ''
+          obj.name = 'x' * 1000
+          assert len(obj.name) == 1000
+
+      def test_zero_max():
+          """a max of 0 only allows the empty string"""
+          obj = make(0, 0)
+          obj.name = ''
+          assert raises(obj, 'a'), "'a' should be rejected when max_ is 0"
+
+      def test_class_access_and_unset():
+          """class access gives the descriptor; unset reads as None"""
+          obj = make(1, 5)
+          assert isinstance(type(obj).name, CharField)
+          assert obj.name is None
+    solution: |
+      class CharField:
+          def __init__(self, min_=None, max_=None):
+              self._min = max(min_ or 0, 0)
+              self._max = max_
+
+          def __set_name__(self, owner_class, prop_name):
+              self.prop_name = prop_name
+
+          def __set__(self, instance, value):
+              if not isinstance(value, str):
+                  raise ValueError(f'{self.prop_name} must be a string.')
+              if len(value) < self._min:
+                  raise ValueError(f'{self.prop_name} must be >= {self._min} chars.')
+              if self._max is not None and len(value) > self._max:
+                  raise ValueError(f'{self.prop_name} must be <= {self._max} chars.')
+              instance.__dict__[self.prop_name] = value
+
+          def __get__(self, instance, owner_class):
+              if instance is None:
+                  return self
+              return instance.__dict__.get(self.prop_name)
+    hints:
+      - "`max(min_ or 0, 0)` turns both `None` and negative numbers into `0`."
+      - "Compare `len(value)` with the bounds, and remember `self._max` may be `None`."
+
+  - id: goal-3-test-factory
+    title: "Goal 3: build test classes on the fly"
+    prompt: |
+      To test a descriptor you need an owner class, and a fresh one per test so tests can't affect each other. Write `make_instance(**fields)`:
+
+      - It creates a **new** class named `'TestClass'` whose class attributes are the keyword arguments (typically descriptors), and returns an instance of it.
+      - The descriptors' `__set_name__` must be called with the attribute names, exactly as if the class had been written with a `class` statement.
+
+      For example, `obj = make_instance(age=IntegerField(0, 10))` gives an object where `obj.age = 5` works and `type(obj).age` is the descriptor.
+
+      The starter attaches the attributes to a class after creating it. Find out why that doesn't work and fix it.
+    starter: |
+      def make_instance(**fields):
+          class TestClass:
+              pass
+          for name, value in fields.items():
+              setattr(TestClass, name, value)
+          return TestClass()
+    tests: |
+      class Recorder:
+          """A descriptor that records the name and owner it was given."""
+          def __set_name__(self, owner, name):
+              self.name, self.owner = name, owner
+          def __get__(self, instance, owner):
+              return self if instance is None else instance.__dict__.get(self.name)
+          def __set__(self, instance, value):
+              instance.__dict__[self.name] = value
+
+      def test_returns_instance():
+          """returns an instance of a class named TestClass"""
+          obj = make_instance(a=1)
+          assert not isinstance(obj, type), "return an instance, not the class"
+          assert type(obj).__name__ == 'TestClass', f"class name is {type(obj).__name__!r}"
+
+      def test_plain_attributes():
+          """plain values become class attributes"""
+          obj = make_instance(a=1, b='two')
+          assert (obj.a, obj.b) == (1, 'two')
+          assert 'a' in type(obj).__dict__, "the values should be class attributes"
+
+      def test_set_name_called():
+          """descriptors get __set_name__ with their attribute name and owner"""
+          r = Recorder()
+          obj = make_instance(score=r)
+          assert getattr(r, 'name', None) == 'score', "__set_name__ was not called (attach the fields while the class is created)"
+          assert r.owner is type(obj)
+
+      def test_descriptor_works():
+          """the descriptor stores values per instance"""
+          obj = make_instance(score=Recorder())
+          obj.score = 10
+          assert obj.score == 10 and obj.__dict__ == {'score': 10}
+
+      def test_fresh_class_each_call():
+          """every call creates a new class"""
+          a, b = make_instance(x=1), make_instance(x=2)
+          assert type(a) is not type(b), "each call should build a new class"
+          assert (a.x, b.x) == (1, 2)
+    solution: |
+      def make_instance(**fields):
+          cls = type('TestClass', (), fields)
+          return cls()
+    hints:
+      - "`__set_name__` runs only while a class is being created, so `setattr` afterwards is too late."
+      - "`type(name, bases, namespace)` creates a class from a dictionary of attributes; `fields` already is that dictionary."
+
+  - id: goal-4-base-validator
+    title: "Goal 4: refactor onto a base class"
+    prompt: |
+      `IntegerField` and `CharField` share most of their code. Refactor:
+
+      - `BaseValidator(min_=None, max_=None)` stores the bounds in `_min` and `_max`, implements `__set_name__` (saving `prop_name`), `__get__` (descriptor for class access, the stored value or `None` otherwise) and `__set__`, which calls `self.validate(value)` and then stores the value in the instance `__dict__` under `prop_name`. Its own `validate` accepts everything.
+      - `IntegerField(BaseValidator)` defines **only** `validate` (integral values within the optional bounds).
+      - `CharField(BaseValidator)` defines `__init__` (normalizing a `None`/negative minimum to `0`, then calling `super().__init__`) and `validate` (strings within the optional length bounds).
+
+      Neither subclass may define `__get__`, `__set__` or `__set_name__`. All errors are `ValueError`s that mention the attribute name.
+    starter: |
+      import numbers
+
+      class BaseValidator:
+          def __init__(self, min_=None, max_=None):
+              self._min = min_
+              self._max = max_
+
+          def __set_name__(self, owner_class, prop_name):
+              self.prop_name = prop_name
+
+          def __get__(self, instance, owner_class):
+              if instance is None:
+                  return self
+              return instance.__dict__.get(self.prop_name)
+
+          def validate(self, value):
+              pass
+
+          def __set__(self, instance, value):
+              # call the validation hook, then store
+              instance.__dict__[self.prop_name] = value
+
+
+      class IntegerField(BaseValidator):
+          def validate(self, value):
+              pass
+
+
+      class CharField(BaseValidator):
+          def validate(self, value):
+              pass
+    tests: |
+      def make(field, name='attr'):
+          return type('TestClass', (), {name: field})()
+
+      def raises(obj, value, name='attr'):
+          try:
+              setattr(obj, name, value)
+          except ValueError as ex:
+              assert name in str(ex), f"message {str(ex)!r} should mention {name!r}"
+              return True
+          return False
+
+      def test_structure():
+          """subclasses only add validation; descriptor methods come from the base"""
+          assert issubclass(IntegerField, BaseValidator) and issubclass(CharField, BaseValidator)
+          for cls in (IntegerField, CharField):
+              for name in ('__get__', '__set__', '__set_name__'):
+                  assert name not in cls.__dict__, f"{cls.__name__} should inherit {name} from BaseValidator"
+              assert 'validate' in cls.__dict__, f"{cls.__name__} should define validate"
+          assert '__init__' not in IntegerField.__dict__, "IntegerField should inherit __init__"
+
+      def test_base_accepts_anything():
+          """BaseValidator on its own stores any value"""
+          obj = make(BaseValidator(), 'x')
+          obj.x = object
+          assert obj.x is object and obj.__dict__ == {'x': object}
+
+      def test_set_calls_validate():
+          """__set__ calls self.validate before storing"""
+          class Never(BaseValidator):
+              def validate(self, value):
+                  raise ValueError(f'{self.prop_name}: never')
+          obj = make(Never(), 'v')
+          assert raises(obj, 1, 'v'), "BaseValidator.__set__ should call self.validate"
+          assert 'v' not in obj.__dict__, "nothing should be stored when validation fails"
+
+      def test_integer_field():
+          """IntegerField validates type and inclusive optional bounds"""
+          obj = make(IntegerField(0, 10), 'age')
+          for v in (0, 5, 10):
+              obj.age = v
+              assert obj.age == v
+          for v in (-1, 11, 2.5, '3', None):
+              assert raises(obj, v, 'age'), f"{v!r} should be rejected"
+          free = make(IntegerField(), 'age')
+          free.age = -10 ** 6
+          assert free.age == -10 ** 6
+          assert isinstance(type(obj).age, IntegerField)
+
+      def test_char_field():
+          """CharField validates type and inclusive optional lengths"""
+          obj = make(CharField(2, 4), 'name')
+          for s in ('ab', 'abcd'):
+              obj.name = s
+              assert obj.name == s
+          for v in ('a', 'abcde', 42):
+              assert raises(obj, v, 'name'), f"{v!r} should be rejected"
+          long_ok = make(CharField(1), 'name')
+          long_ok.name = 'x' * 500
+
+      def test_char_min_normalized():
+          """CharField turns a None or negative minimum into 0"""
+          assert type(make(CharField(-5, 10))).attr._min == 0
+          assert type(make(CharField(None, None))).attr._min == 0
+          assert type(make(CharField(3, None))).attr._max is None
+    solution: |
+      import numbers
+
+      class BaseValidator:
+          def __init__(self, min_=None, max_=None):
+              self._min = min_
+              self._max = max_
+
+          def __set_name__(self, owner_class, prop_name):
+              self.prop_name = prop_name
+
+          def __get__(self, instance, owner_class):
+              if instance is None:
+                  return self
+              return instance.__dict__.get(self.prop_name)
+
+          def validate(self, value):
+              pass
+
+          def __set__(self, instance, value):
+              self.validate(value)
+              instance.__dict__[self.prop_name] = value
+
+
+      class IntegerField(BaseValidator):
+          def validate(self, value):
+              if not isinstance(value, numbers.Integral):
+                  raise ValueError(f'{self.prop_name} must be an integer.')
+              if self._min is not None and value < self._min:
+                  raise ValueError(f'{self.prop_name} must be >= {self._min}.')
+              if self._max is not None and value > self._max:
+                  raise ValueError(f'{self.prop_name} must be <= {self._max}.')
+
+
+      class CharField(BaseValidator):
+          def __init__(self, min_=None, max_=None):
+              super().__init__(max(min_ or 0, 0), max_)
+
+          def validate(self, value):
+              if not isinstance(value, str):
+                  raise ValueError(f'{self.prop_name} must be a string.')
+              if len(value) < self._min:
+                  raise ValueError(f'{self.prop_name} must be >= {self._min} chars.')
+              if self._max is not None and len(value) > self._max:
+                  raise ValueError(f'{self.prop_name} must be <= {self._max} chars.')
+    hints:
+      - "`BaseValidator.__set__` needs just two lines: `self.validate(value)`, then store."
+      - "`self.validate` dispatches to the subclass's method, because `self` is the subclass instance."
+      - "In `CharField.__init__`, compute the normalized minimum and pass it on with `super().__init__(min_, max_)`."

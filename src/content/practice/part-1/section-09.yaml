@@ -1,0 +1,376 @@
+quiz:
+  - q: Three different modules of your program each run `import math`. How many `math` module objects exist?
+    options:
+      - Three, one per importing module
+      - One, cached in `sys.modules`; each importer just gets a name pointing at it
+      - None, because built-in modules are not objects
+      - Two, the original and a copy
+    answer: 1
+    explain: |
+      The first import creates the module and stores it in `sys.modules`. Every later import is a cache hit that binds a name to that same object.
+
+  - q: What does this print?
+    code: |
+      import sys, types
+
+      m = types.ModuleType('quiz_dyn')
+      m.x = 42
+      sys.modules['quiz_dyn'] = m
+
+      import quiz_dyn
+      print(quiz_dyn.x, quiz_dyn is m)
+    options:
+      - "`ModuleNotFoundError`, because there is no file `quiz_dyn.py`"
+      - "`42 False`"
+      - "`42 True`"
+      - "`None True`"
+    answer: 2
+    explain: |
+      `import` checks `sys.modules` first. The name is there, so the cached object is returned without searching for any file.
+
+  - q: How many times is `hi` printed?
+    code: |
+      import importlib, sys, tempfile
+      from pathlib import Path
+
+      d = tempfile.mkdtemp()
+      sys.path.insert(0, d)
+      Path(d, 'quiz_hello.py').write_text("print('hi')\n")
+      importlib.invalidate_caches()
+      sys.modules.pop('quiz_hello', None)
+
+      import quiz_hello
+      import quiz_hello
+      _ = importlib.import_module('quiz_hello')
+    options:
+      - Once
+      - Twice
+      - Three times
+      - Never
+    answer: 0
+    explain: |
+      A module's code runs on its **first** import only. The second `import` and the `import_module` call both find the module in `sys.modules`.
+
+  - q: What does this print?
+    code: |
+      import sys
+      from cmath import phase
+
+      print('cmath' in sys.modules, 'cmath' in globals())
+    options:
+      - "`False False`"
+      - "`False True`"
+      - "`True True`"
+      - "`True False`"
+    answer: 3
+    explain: |
+      `from cmath import phase` loads the **whole** module and caches it in `sys.modules`, but only binds the name `phase` in our namespace, not `cmath`.
+
+  - q: What does this print?
+    code: |
+      from cmath import *
+      from math import *
+
+      print(sqrt.__module__)
+    options:
+      - "`cmath`"
+      - "`math`"
+      - "`builtins`"
+      - A `NameError`
+    answer: 1
+    explain: |
+      Both modules define `sqrt`. The second star-import silently re-binds the name to `math.sqrt`. This kind of clobbering is the main risk of `import *`.
+
+  - q: What does this print?
+    code: |
+      import importlib, sys, tempfile
+      from pathlib import Path
+
+      d = tempfile.mkdtemp()
+      sys.path.insert(0, d)
+      Path(d, 'quiz_rel.py').write_text('def f():\n    return 1\n')
+      importlib.invalidate_caches()
+      sys.modules.pop('quiz_rel', None)
+
+      import quiz_rel
+      from quiz_rel import f
+
+      Path(d, 'quiz_rel.py').write_text('def f():\n    return 22\n')
+      importlib.reload(quiz_rel)
+      print(f(), quiz_rel.f())
+    options:
+      - "`1 1`"
+      - "`22 22`"
+      - "`1 22`"
+      - "`22 1`"
+    answer: 2
+    explain: |
+      `reload` re-runs the code in the same module object, so `quiz_rel.f` is the new function. But the name `f` was bound to the **old** function object, and nothing re-binds it.
+
+  - q: |
+      The file `tools.py` contains just `print(__name__)`. What does it print when run with `python tools.py`, and when imported with `import tools`?
+    options:
+      - "`tools`, then `tools`"
+      - "`__main__`, then `tools`"
+      - "`__main__`, then `__main__`"
+      - "`tools.py`, then `tools`"
+    answer: 1
+    explain: |
+      The code running as the program is named `'__main__'`. An imported module's `__name__` is its module name. That's what the `if __name__ == '__main__':` guard relies on.
+
+  - q: After `import a.b.c`, which of these names exist in the importing namespace?
+    options:
+      - Only `a`
+      - Only `c`
+      - "`a`, `b` and `c`"
+      - None of them; you must use `from a.b import c`
+    answer: 0
+    explain: |
+      Python imports and caches `a`, `a.b` and `a.b.c` (in that order), but the statement binds only the top-level name `a`. You reach the rest through attributes: `a.b.c`.
+
+  - q: What does this print?
+    code: |
+      import sys, types
+
+      m = types.ModuleType('quiz_all')
+      exec("__all__ = ['a', '_c']\na = 1\nb = 2\n_c = 3\n", m.__dict__)
+      sys.modules['quiz_all'] = m
+
+      ns = {}
+      exec('from quiz_all import *', ns)
+      print(sorted(k for k in ns if k != '__builtins__'))
+    options:
+      - "`['a', 'b']`"
+      - "`['a']`"
+      - "`['a', 'b', '_c']`"
+      - "`['_c', 'a']`"
+    answer: 3
+    explain: |
+      When a module defines `__all__`, a star-import takes exactly those names, even one starting with an underscore, and nothing else. `b` is not listed, so it's skipped.
+
+  - q: Which statement about a directory `plugins/` that has **no** `__init__.py` is true in Python 3?
+    options:
+      - It can't be imported at all
+      - It's imported as a namespace package, whose `__file__` is `None` and which may span several directories on `sys.path`
+      - It's imported as a regular package and Python creates an empty `__init__.py` for it
+      - It's imported as a plain module
+    answer: 1
+    explain: |
+      Since Python 3.3 (PEP 420), such directories become implicit namespace packages. They have no code of their own, and every matching directory on `sys.path` contributes to the same package.
+
+  - q: Why prefer `from .boolean import *` over `from common.validators.boolean import *` inside `common/validators/__init__.py`?
+    options:
+      - Relative imports are faster
+      - Relative imports also work in scripts run from the command line
+      - The relative form doesn't hard-code the package name, so the package still works if it's renamed or moved
+      - The absolute form would import the module twice
+    answer: 2
+    explain: |
+      A relative import describes a position inside the package, not its full name. Note that relative imports only work **inside** a package; in a script they raise `ImportError`.
+
+  - q: You have `lib.zip` containing `mypkg/__init__.py` at the archive's root. What do you need to do so that `import mypkg` works?
+    options:
+      - Extract the archive first; Python can't read zip files
+      - Add the path of `lib.zip` itself to `sys.path`
+      - Add the folder that contains `lib.zip` to `sys.path`
+      - Rename the archive to `mypkg.zip`
+    answer: 1
+    explain: |
+      A zip file on `sys.path` acts like a directory: `zipimport` searches inside it. The package must be at the archive's root (or at the sub-path you add, like `lib.zip/src`).
+
+exercises:
+  - id: module-from-source
+    title: Your own importer
+    prompt: |
+      Write `module_from_source(name, source)` that mimics what `import` does with a module's source code:
+
+      1. If `name` is already in `sys.modules`, return the cached object (don't run any code).
+      2. Otherwise create a new module object named `name`.
+      3. Register it in `sys.modules` **before** running its code.
+      4. Execute `source` so that its global names end up in the module's namespace, and return the module.
+
+      Afterwards, a plain `import <name>` anywhere in the program should find your module.
+    starter: |
+      import sys
+      import types
+
+      def module_from_source(name, source):
+          # your code here
+          pass
+    tests: |
+      import sys, types, uuid
+
+      def _new_name():
+          return 'dyn_' + uuid.uuid4().hex[:8]
+
+      def test_namespace():
+          """the source's names become module attributes"""
+          mod = module_from_source(_new_name(), 'x = 10\ndef double(n):\n    return 2 * n\n')
+          assert isinstance(mod, types.ModuleType), f'expected a module, got {type(mod).__name__}'
+          assert mod.x == 10, f'x is {getattr(mod, "x", None)!r}'
+          assert mod.double(4) == 8
+
+      def test_module_name():
+          """inside the module, __name__ is the module's name"""
+          name = _new_name()
+          mod = module_from_source(name, 'who = __name__\n')
+          assert mod.__name__ == name
+          assert mod.who == name, f'__name__ inside the module was {mod.who!r}'
+
+      def test_registered():
+          """the module is cached and importable"""
+          name = _new_name()
+          mod = module_from_source(name, 'value = 1\n')
+          assert sys.modules.get(name) is mod, 'module not found in sys.modules'
+          ns = {}
+          exec(f'import {name} as imported', ns)
+          assert ns['imported'] is mod
+
+      def test_cache_hit():
+          """a second call returns the cached module without running new code"""
+          name = _new_name()
+          first = module_from_source(name, 'x = 1\n')
+          second = module_from_source(name, 'x = 2\n')
+          assert second is first, 'a new module was created'
+          assert second.x == 1, 'the second source was executed'
+
+      def test_registered_before_running():
+          """the module is in sys.modules while its code runs"""
+          name = _new_name()
+          mod = module_from_source(name, f'import sys\nseen = {name!r} in sys.modules\n')
+          assert mod.seen is True, 'module was not in sys.modules while its code ran'
+    solution: |
+      import sys
+      import types
+
+      def module_from_source(name, source):
+          if name in sys.modules:
+              return sys.modules[name]
+          mod = types.ModuleType(name)
+          sys.modules[name] = mod
+          code = compile(source, filename=f'<{name}>', mode='exec')
+          exec(code, mod.__dict__)
+          return mod
+    hints:
+      - "`types.ModuleType(name)` creates an empty module; its namespace is `mod.__dict__`."
+      - "`exec(code, namespace)` runs code with `namespace` as its globals."
+      - Put the module in `sys.modules` before calling `exec`, just as Python does.
+
+  - id: public-names
+    title: What would a star-import bring in?
+    prompt: |
+      Write `public_names(module)` that returns a **sorted list** of the names that `from module import *` would bind:
+
+      - if the module defines `__all__`, exactly the names it lists;
+      - otherwise, every name in the module's namespace that doesn't start with an underscore.
+    starter: |
+      def public_names(module):
+          # your code here
+          return sorted(vars(module))
+    tests: |
+      import sys, types, uuid
+
+      def _make(source):
+          name = 'star_' + uuid.uuid4().hex[:8]
+          mod = types.ModuleType(name)
+          exec(source, mod.__dict__)
+          sys.modules[name] = mod
+          return mod
+
+      def _star(mod):
+          ns = {}
+          exec(f'from {mod.__name__} import *', ns)
+          return sorted(k for k in ns if k != '__builtins__')
+
+      def test_without_all():
+          """without __all__, underscore names are skipped"""
+          mod = _make('a = 1\nb = 2\n_private = 3\ndef f(): pass\n')
+          assert public_names(mod) == ['a', 'b', 'f'], f'got {public_names(mod)}'
+
+      def test_with_all():
+          """with __all__, exactly the listed names"""
+          mod = _make("__all__ = ['b', '_hidden']\na = 1\nb = 2\n_hidden = 3\n")
+          assert public_names(mod) == ['_hidden', 'b'], f'got {public_names(mod)}'
+
+      def test_matches_python():
+          """agrees with a real star-import"""
+          for source in ['x = 1\n_y = 2\nimport math\n', "__all__ = ['x']\nx = 1\nz = 3\n"]:
+              mod = _make(source)
+              assert public_names(mod) == _star(mod), f'{public_names(mod)} != {_star(mod)}'
+    solution: |
+      def public_names(module):
+          names = getattr(module, '__all__', None)
+          if names is not None:
+              return sorted(names)
+          return sorted(name for name in vars(module) if not name.startswith('_'))
+    hints:
+      - "`vars(module)` (or `module.__dict__`) is the module's namespace."
+      - "Use `getattr(module, '__all__', None)` to check for `__all__` without an error."
+      - Note that an imported module (like `math` after `import math`) is also a public name.
+
+  - id: flat-package
+    title: A flat package interface
+    prompt: |
+      A package contains two modules:
+
+      ```python
+      product.py   __all__ = ['Product']   (plus a private helper _slug)
+      cart.py      __all__ = ['Cart']
+      ```
+
+      Write the source of the package's `__init__.py` in the string `INIT_SOURCE` so that users can write `pkg.Product` and `pkg.Cart` directly, the package's `__all__` contains exactly `Product` and `Cart`, and private helpers are **not** exposed at package level.
+
+      The tests give the package a random name each time, so your `__init__.py` can't refer to the package by name.
+    starter: |
+      INIT_SOURCE = '''
+      # your __init__.py code here
+      '''
+    tests: |
+      import importlib, sys, tempfile, uuid
+      from pathlib import Path
+
+      PRODUCT = "__all__ = ['Product']\n\nclass Product:\n    def __init__(self, name, price):\n        self.name, self.price = name, price\n\ndef _slug(text):\n    return text.lower()\n"
+      CART = "__all__ = ['Cart']\n\nclass Cart:\n    def __init__(self):\n        self.items = []\n    def add(self, product):\n        self.items.append(product)\n    def total(self):\n        return sum(p.price for p in self.items)\n"
+
+      def _load():
+          root = Path(tempfile.mkdtemp())
+          name = 'shop_' + uuid.uuid4().hex[:8]
+          (root / name).mkdir()
+          (root / name / 'product.py').write_text(PRODUCT)
+          (root / name / 'cart.py').write_text(CART)
+          (root / name / '__init__.py').write_text(INIT_SOURCE)
+          sys.path.insert(0, str(root))
+          importlib.invalidate_caches()
+          try:
+              return importlib.import_module(name)
+          finally:
+              sys.path.remove(str(root))
+
+      def test_flat_access():
+          """Product and Cart are available at package level"""
+          pkg = _load()
+          cart = pkg.Cart()
+          cart.add(pkg.Product('apple', 3))
+          cart.add(pkg.Product('pear', 4))
+          assert cart.total() == 7
+
+      def test_all():
+          """the package's __all__ lists exactly Product and Cart"""
+          pkg = _load()
+          assert sorted(getattr(pkg, '__all__', [])) == ['Cart', 'Product'], f"__all__ is {getattr(pkg, '__all__', None)!r}"
+
+      def test_no_helpers():
+          """private helpers stay inside their module"""
+          pkg = _load()
+          assert not hasattr(pkg, '_slug'), '_slug leaked into the package namespace'
+    solution: |
+      INIT_SOURCE = '''
+      from .product import *
+      from .cart import *
+
+      __all__ = product.__all__ + cart.__all__
+      '''
+    hints:
+      - Use relative imports such as `from .product import *`; they don't depend on the package's name.
+      - A star-import respects each module's `__all__`, so `_slug` won't come along.
+      - "After `from .product import *`, the sub-module itself is available as the name `product` inside `__init__.py`, so `product.__all__` works."

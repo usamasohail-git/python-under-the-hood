@@ -1,0 +1,552 @@
+quiz:
+  - q: What does this print?
+    code: |
+      class Item:
+          def __repr__(self):
+              return 'R'
+          def __str__(self):
+              return 'S'
+
+      i = Item()
+      print([i], i)
+    options:
+      - "`[S] S`"
+      - "`[R] S`"
+      - "`[R] R`"
+      - "`[S] R`"
+    answer: 1
+    explain: |
+      `print(i)` uses `str(i)`, so `S`. But a list builds its string from the `repr` of each element, so printing `[i]` shows `[R]`.
+
+  - q: A class defines `__str__` but **not** `__repr__`. What does `repr(obj)` return?
+    options:
+      - The result of `__str__`
+      - The default `<__main__.ClassName object at 0x...>` form
+      - An empty string
+      - It raises `TypeError`
+    answer: 1
+    explain: |
+      `str()` falls back to `__repr__`, but not the other way round. `repr()` uses the default inherited from `object` and never looks at `__str__`.
+
+  - q: Your `__add__` receives an operand type it can't handle. What should it do?
+    options:
+      - "`raise NotImplementedError`"
+      - "`return None`"
+      - "`return NotImplemented`"
+      - "`raise ValueError`"
+    answer: 2
+    explain: |
+      Returning the `NotImplemented` singleton tells Python to try the other operand's reflected method (`__radd__`). Raising `NotImplementedError` propagates immediately, so the other operand never gets a chance.
+
+  - q: What happens here?
+    code: |
+      class V:
+          def __mul__(self, other):
+              return 'V.__mul__'
+
+      print(V() * 3)
+      print(3 * V())
+    options:
+      - "It prints `V.__mul__` twice"
+      - "It prints `V.__mul__`, then raises `TypeError`"
+      - "It raises `TypeError` on the first `print`"
+      - "It prints `V.__mul__`, then `NotImplemented`"
+    answer: 1
+    explain: |
+      `3 * V()` calls `int.__mul__(3, v)`, which returns `NotImplemented`; Python then looks for `V.__rmul__`, which doesn't exist, so it raises `TypeError`. `__mul__` is only used when the `V` is on the left.
+
+  - q: What does this print?
+    code: |
+      class A:
+          def __add__(self, other):
+              return NotImplemented
+          def __radd__(self, other):
+              return 'radd'
+
+      try:
+          print(A() + A())
+      except TypeError:
+          print('TypeError')
+    options:
+      - "`radd`"
+      - "`NotImplemented`"
+      - "`TypeError`"
+      - "`None`"
+    answer: 2
+    explain: |
+      The reflected method is only tried when the operands have **different** types. For `A() + A()`, Python calls `__add__`, gets `NotImplemented`, and raises `TypeError` straight away.
+
+  - q: What does this print?
+    code: |
+      class Bag:
+          def __init__(self):
+              self.items = []
+          def __iadd__(self, item):
+              self.items.append(item)
+
+      b = Bag()
+      b += 'apple'
+      print(b)
+    options:
+      - "`None`"
+      - "`<__main__.Bag object at 0x...>`"
+      - "`['apple']`"
+      - "A `TypeError`"
+    answer: 0
+    explain: |
+      `b += x` rebinds `b` to whatever `__iadd__` returns. This method forgot `return self`, so it returns `None` and `b` becomes `None`. (The item was still appended to the old object.)
+
+  - q: What does this print?
+    code: |
+      class Box:
+          def __init__(self, n):
+              self.n = n
+          def __lt__(self, other):
+              return self.n < other.n
+
+      print(Box(2) > Box(1))
+    options:
+      - "A `TypeError`, because `__gt__` isn't defined"
+      - "`False`"
+      - "`True`"
+      - "`NotImplemented`"
+    answer: 2
+    explain: |
+      There's no `__gt__`, so Python reflects the comparison: `Box(2) > Box(1)` becomes `Box(1).__lt__(Box(2))`, which is `1 < 2`, i.e. `True`. For comparisons, the mirrored method is tried even for two objects of the same type.
+
+  - q: Which statement about `functools.total_ordering` is correct?
+    options:
+      - It generates `__eq__` from `__lt__`
+      - You define `__eq__` and at least one of `__lt__`, `__le__`, `__gt__`, `__ge__`; it fills in the missing ordering methods
+      - It replaces all comparison methods with faster C implementations
+      - It only works if you define all four ordering methods
+    answer: 1
+    explain: |
+      The decorator needs at least one ordering method and derives the others from it (and from `==`). It never writes `__eq__` and never overrides methods you defined yourself.
+
+  - q: What does this print?
+    code: |
+      class Person:
+          def __init__(self, name):
+              self.name = name
+          def __eq__(self, other):
+              return isinstance(other, Person) and self.name == other.name
+
+      try:
+          s = {Person('Ann')}
+          print(len(s))
+      except TypeError as ex:
+          print('TypeError')
+    options:
+      - "`1`"
+      - "`TypeError`"
+      - "`0`"
+      - "`None`"
+    answer: 1
+    explain: |
+      Defining `__eq__` without `__hash__` sets `__hash__` to `None`, so instances are unhashable and can't go into a set. Python does this because the inherited identity-based hash would contradict the new equality.
+
+  - q: What does this print?
+    code: |
+      class Weird:
+          def __len__(self):
+              return 0
+          def __bool__(self):
+              return True
+
+      print(bool(Weird()))
+    options:
+      - "`False`, because the length is 0"
+      - "`True`"
+      - "A `TypeError`, because both methods are defined"
+      - "`0`"
+    answer: 1
+    explain: |
+      `__bool__` takes priority. `__len__` is only consulted when there's no `__bool__`.
+
+  - q: In CPython, when is `__del__` called?
+    options:
+      - Whenever the `del` statement is used on a name for the object
+      - When the object is about to be reclaimed, typically right after its last reference disappears (or when the garbage collector frees a cycle)
+      - Only at interpreter shutdown
+      - Never automatically; you must call it yourself
+    answer: 1
+    explain: |
+      `del x` only removes a name, i.e. one reference. The finalizer runs when the object is actually reclaimed. The exact timing is an implementation detail; other Pythons may finalize much later.
+
+  - q: What does this print?
+    code: |
+      class Temp:
+          def __str__(self):
+              return '21C'
+
+      try:
+          print(f'[{Temp():>6}]')
+      except TypeError:
+          print('TypeError')
+    options:
+      - "`[   21C]`"
+      - "`[21C   ]`"
+      - "`TypeError`"
+      - "`[21C]`"
+    answer: 2
+    explain: |
+      `f'{x:>6}'` calls `format(x, '>6')`. Without a `__format__` method, `object.__format__` only accepts an empty spec. Writing `{Temp()!s:>6}` would format the string instead and print `[   21C]`.
+
+exercises:
+  - id: vector-arithmetic
+    title: A 2-D vector with operators
+    prompt: |
+      Complete the `Vector2D` class so that it supports:
+
+      - `v + w` and `v - w` for two `Vector2D` objects (component by component),
+      - `v * k` **and** `k * v` for a real number `k` (`numbers.Real`), scaling both components,
+      - `-v` (negate both components) and `abs(v)` (the Euclidean length, a `float`).
+
+      For any operand the class can't handle, the operator methods must **return `NotImplemented`**, so that for example `v + 1` raises a `TypeError`.
+    starter: |
+      from numbers import Real
+      from math import hypot
+
+      class Vector2D:
+          def __init__(self, x, y):
+              self.x = x
+              self.y = y
+
+          def __repr__(self):
+              return f'Vector2D({self.x!r}, {self.y!r})'
+
+          def __eq__(self, other):
+              if isinstance(other, Vector2D):
+                  return (self.x, self.y) == (other.x, other.y)
+              return NotImplemented
+
+          # your code here
+    tests: |
+      def test_add_sub():
+          """+ and - work component by component"""
+          v, w = Vector2D(1, 2), Vector2D(10, 20)
+          assert v + w == Vector2D(11, 22), f"got {v + w!r}"
+          assert w - v == Vector2D(9, 18), f"got {w - v!r}"
+
+      def test_scalar_left_and_right():
+          """v * k and k * v both scale the vector"""
+          v = Vector2D(1, 2)
+          assert v * 3 == Vector2D(3, 6), f"v * 3 gave {v * 3!r}"
+          assert 3 * v == Vector2D(3, 6), "3 * v failed: did you implement __rmul__?"
+          assert 0.5 * v == Vector2D(0.5, 1.0)
+
+      def test_unary_and_abs():
+          """-v negates, abs(v) is the length"""
+          assert -Vector2D(1, -2) == Vector2D(-1, 2)
+          assert abs(Vector2D(3, 4)) == 5.0
+
+      def test_not_implemented_returned():
+          """unsupported operands return NotImplemented (not an exception)"""
+          v = Vector2D(1, 2)
+          assert v.__add__(1) is NotImplemented, "__add__ should return NotImplemented for an int"
+          assert v.__mul__('a') is NotImplemented, "__mul__ should return NotImplemented for a str"
+          assert v.__mul__(v) is NotImplemented, "__mul__ should return NotImplemented for a Vector2D"
+
+      def test_type_errors():
+          """unsupported operations raise TypeError"""
+          v = Vector2D(1, 2)
+          for op in (lambda: v + 1, lambda: v - 'a', lambda: v * v, lambda: 'a' * v):
+              try:
+                  op()
+              except TypeError:
+                  pass
+              else:
+                  raise AssertionError("expected a TypeError")
+
+      def test_new_objects():
+          """operators return new vectors and leave the operands alone"""
+          v = Vector2D(1, 2)
+          r = v + Vector2D(1, 1)
+          assert r is not v and v == Vector2D(1, 2)
+    solution: |
+      from numbers import Real
+      from math import hypot
+
+      class Vector2D:
+          def __init__(self, x, y):
+              self.x = x
+              self.y = y
+
+          def __repr__(self):
+              return f'Vector2D({self.x!r}, {self.y!r})'
+
+          def __eq__(self, other):
+              if isinstance(other, Vector2D):
+                  return (self.x, self.y) == (other.x, other.y)
+              return NotImplemented
+
+          def __add__(self, other):
+              if not isinstance(other, Vector2D):
+                  return NotImplemented
+              return Vector2D(self.x + other.x, self.y + other.y)
+
+          def __sub__(self, other):
+              if not isinstance(other, Vector2D):
+                  return NotImplemented
+              return Vector2D(self.x - other.x, self.y - other.y)
+
+          def __mul__(self, other):
+              if not isinstance(other, Real):
+                  return NotImplemented
+              return Vector2D(self.x * other, self.y * other)
+
+          def __rmul__(self, other):
+              return self * other
+
+          def __neg__(self):
+              return Vector2D(-self.x, -self.y)
+
+          def __abs__(self):
+              return hypot(self.x, self.y)
+    hints:
+      - "Each binary method starts with a type check: `if not isinstance(other, ...): return NotImplemented`."
+      - "`3 * v` first tries `int.__mul__`, which gives up; Python then calls `v.__rmul__(3)`. Since scaling is commutative, `__rmul__` can return `self * other`."
+      - "`math.hypot(x, y)` computes the length `sqrt(x**2 + y**2)`."
+
+  - id: version-ordering
+    title: Comparable, hashable versions
+    prompt: |
+      Write a class `Version` built from a string like `'1.2.3'`:
+
+      - `str(v)` returns the original string and `repr(v)` returns `Version('1.2.3')`.
+      - Versions compare **numerically** part by part, so `Version('1.10') > Version('1.9')`.
+      - Trailing zeros don't matter: `Version('1.2') == Version('1.2.0')`.
+      - Support all of `==`, `!=`, `<`, `<=`, `>`, `>=` (use `functools.total_ordering`).
+      - Instances are hashable, consistently with `==`.
+      - Comparing with anything that isn't a `Version` must use `NotImplemented`, so `==` gives `False` and `<` raises `TypeError`.
+
+      Tip: store a tuple of ints with the trailing zeros stripped, and base `__eq__`, `__lt__` and `__hash__` on it.
+    starter: |
+      from functools import total_ordering
+
+      class Version:
+          def __init__(self, text):
+              self.text = text
+    tests: |
+      def test_str_repr():
+          """str and repr"""
+          v = Version('1.2.3')
+          assert str(v) == '1.2.3', f"str gave {str(v)!r}"
+          assert repr(v) == "Version('1.2.3')", f"repr gave {repr(v)!r}"
+
+      def test_numeric_ordering():
+          """1.10 is greater than 1.9 (numeric, not text, comparison)"""
+          assert Version('1.10') > Version('1.9')
+          assert Version('1.9') < Version('1.10')
+          assert Version('2.0') >= Version('1.99.99')
+          assert Version('0.9') <= Version('0.9.0')
+
+      def test_trailing_zeros():
+          """1.2 == 1.2.0 and != 1.2.1"""
+          assert Version('1.2') == Version('1.2.0')
+          assert Version('1.2') != Version('1.2.1')
+          assert not (Version('1.2') < Version('1.2.0'))
+
+      def test_sorting():
+          """sorted() orders versions correctly"""
+          vs = [Version(s) for s in ['1.10', '1.2', '1.9.1', '0.5']]
+          assert [str(v) for v in sorted(vs)] == ['0.5', '1.2', '1.9.1', '1.10']
+
+      def test_hash_consistent():
+          """equal versions have equal hashes and deduplicate in a set"""
+          assert hash(Version('3.1')) == hash(Version('3.1.0.0'))
+          assert len({Version('3.1'), Version('3.1.0'), Version('3.2')}) == 2
+
+      def test_other_types():
+          """non-Version operands: == is False, < raises TypeError"""
+          v = Version('1.0')
+          assert v.__eq__('1.0') is NotImplemented, "__eq__ should return NotImplemented for a str"
+          assert (v == '1.0') is False
+          try:
+              v < '2.0'
+          except TypeError:
+              pass
+          else:
+              raise AssertionError("v < '2.0' should raise TypeError")
+    solution: |
+      from functools import total_ordering
+
+      @total_ordering
+      class Version:
+          def __init__(self, text):
+              self.text = text
+              parts = [int(p) for p in text.split('.')]
+              while len(parts) > 1 and parts[-1] == 0:
+                  parts.pop()
+              self._key = tuple(parts)
+
+          def __str__(self):
+              return self.text
+
+          def __repr__(self):
+              return f'Version({self.text!r})'
+
+          def __eq__(self, other):
+              if isinstance(other, Version):
+                  return self._key == other._key
+              return NotImplemented
+
+          def __lt__(self, other):
+              if isinstance(other, Version):
+                  return self._key < other._key
+              return NotImplemented
+
+          def __hash__(self):
+              return hash(self._key)
+    hints:
+      - "Tuples of ints already compare element by element: `(1, 10) > (1, 9)` is `True`."
+      - "Strip trailing zeros (`while parts and parts[-1] == 0: parts.pop()`) so `1.2` and `1.2.0` get the same key."
+      - "Defining `__eq__` removes the inherited hash: add `__hash__` returning `hash(self._key)`."
+
+  - id: count-calls
+    title: A call-counting decorator class
+    prompt: |
+      Write a decorator **class** `CountCalls`:
+
+      - `@CountCalls` above a function replaces it with a `CountCalls` instance.
+      - Calling the instance calls the original function with all positional and keyword arguments and returns its result.
+      - The attribute `calls` holds how many times it has been called; the method `reset()` sets it back to `0`.
+      - The decorated function keeps its `__name__` and `__doc__` (use `functools.update_wrapper`).
+    starter: |
+      from functools import update_wrapper
+
+      class CountCalls:
+          def __init__(self, fn):
+              self.fn = fn
+    tests: |
+      def test_forwards_arguments():
+          """calls the function with args and kwargs and returns the result"""
+          @CountCalls
+          def power(base, exp=2):
+              return base ** exp
+          assert power(3) == 9
+          assert power(2, exp=10) == 1024
+
+      def test_counts():
+          """counts each call separately per decorated function"""
+          @CountCalls
+          def f():
+              return 'f'
+          @CountCalls
+          def g():
+              return 'g'
+          f(); f(); g()
+          assert f.calls == 2, f"f.calls is {f.calls}"
+          assert g.calls == 1, f"g.calls is {g.calls}"
+
+      def test_reset():
+          """reset() starts counting from zero again"""
+          @CountCalls
+          def f():
+              pass
+          f(); f()
+          f.reset()
+          f()
+          assert f.calls == 1, f"after reset and one call, calls is {f.calls}"
+
+      def test_metadata():
+          """keeps __name__ and __doc__ of the decorated function"""
+          @CountCalls
+          def greet(name):
+              """Say hello."""
+              return f'hello {name}'
+          assert greet.__name__ == 'greet', f"__name__ is {greet.__name__!r}"
+          assert greet.__doc__ == 'Say hello.'
+
+      def test_is_instance():
+          """the decorated function is a callable CountCalls instance"""
+          @CountCalls
+          def f():
+              pass
+          assert isinstance(f, CountCalls) and callable(f)
+    solution: |
+      from functools import update_wrapper
+
+      class CountCalls:
+          def __init__(self, fn):
+              self.fn = fn
+              self.calls = 0
+              update_wrapper(self, fn)
+
+          def __call__(self, *args, **kwargs):
+              self.calls += 1
+              return self.fn(*args, **kwargs)
+
+          def reset(self):
+              self.calls = 0
+    hints:
+      - "`__init__` receives the function being decorated; `__call__(self, *args, **kwargs)` runs every time the decorated name is called."
+      - "`update_wrapper(self, fn)` copies `__name__`, `__doc__` and friends onto the instance."
+
+  - id: money-format
+    title: Formatting money
+    prompt: |
+      Complete the `Money` class (an `amount` and a `currency` code):
+
+      - `str(m)` returns the amount with two decimals followed by the currency: `str(Money(12.5, 'EUR'))` is `'12.50 EUR'`.
+      - `format(m, spec)` (and so `f'{m:spec}'`) formats the **amount** with `spec` and appends the currency: `f'{Money(1234.5):,.2f}'` is `'1,234.50 USD'`. With an empty spec, it returns `str(m)`.
+      - `bool(m)` is `False` for a zero amount and `True` otherwise.
+    starter: |
+      class Money:
+          def __init__(self, amount, currency='USD'):
+              self.amount = amount
+              self.currency = currency
+
+          def __repr__(self):
+              return f'Money({self.amount!r}, {self.currency!r})'
+    tests: |
+      def test_str():
+          """str shows two decimals and the currency"""
+          assert str(Money(12.5, 'EUR')) == '12.50 EUR', f"got {str(Money(12.5, 'EUR'))!r}"
+          assert str(Money(3)) == '3.00 USD'
+
+      def test_format_spec():
+          """the spec is applied to the amount"""
+          m = Money(1234.5)
+          assert f'{m:,.2f}' == '1,234.50 USD', f"got {f'{m:,.2f}'!r}"
+          assert format(m, '.0f') == '1234 USD', f"got {format(m, '.0f')!r}"
+          assert f'{Money(7, "GBP"):>8.1f}' == '     7.0 GBP'
+
+      def test_empty_spec():
+          """an empty spec gives the same text as str()"""
+          m = Money(0.1, 'CHF')
+          assert f'{m}' == str(m) == '0.10 CHF', f"got {f'{m}'!r}"
+
+      def test_bool():
+          """zero is falsy, anything else truthy"""
+          assert bool(Money(0)) is False
+          assert bool(Money(0.0, 'EUR')) is False
+          assert bool(Money(5)) is True
+          assert bool(Money(-1)) is True
+
+      def test_repr_unchanged():
+          """repr still shows the constructor form"""
+          assert repr(Money(2, 'EUR')) == "Money(2, 'EUR')"
+    solution: |
+      class Money:
+          def __init__(self, amount, currency='USD'):
+              self.amount = amount
+              self.currency = currency
+
+          def __repr__(self):
+              return f'Money({self.amount!r}, {self.currency!r})'
+
+          def __str__(self):
+              return f'{self.amount:.2f} {self.currency}'
+
+          def __format__(self, spec):
+              if not spec:
+                  return str(self)
+              return f'{format(self.amount, spec)} {self.currency}'
+
+          def __bool__(self):
+              return self.amount != 0
+    hints:
+      - "Delegate: `format(self.amount, spec)` does all the hard work of interpreting the spec."
+      - "`__bool__` must return a real `bool`: `self.amount != 0` does."

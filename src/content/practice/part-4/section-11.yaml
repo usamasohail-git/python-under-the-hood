@@ -1,0 +1,398 @@
+quiz:
+  - q: What does this print?
+    code: |
+      from enum import Enum
+
+      class Err(Enum):
+          BAD = (1, ValueError, 'Bad value.')
+
+      print(Err.BAD.value)
+      try:
+          Err(1)
+      except ValueError:
+          print('no member with value 1')
+    options:
+      - "`1` and then nothing else"
+      - "`(1, <class 'ValueError'>, 'Bad value.')` and then `no member with value 1`"
+      - "`1` and then `no member with value 1`"
+      - "A `TypeError`, because enum values can't contain classes"
+    answer: 1
+    explain: |
+      Without a custom `__new__`, the member's value is the whole tuple, so looking it up by the code alone fails. That's the problem `__new__` with `_value_` solves.
+
+  - q: Inside an enumeration's `__new__`, what does assigning `member._value_ = ex_code` achieve?
+    options:
+      - "It makes `ex_code` the member's `.value`, so lookups like `AppException(ex_code)` find the member"
+      - "It creates a private attribute that only `__repr__` uses"
+      - "It renames the member"
+      - "Nothing; `_value_` is ignored in `__new__`"
+    answer: 0
+    explain: |
+      `_value_` is the special attribute the enum machinery reads to decide a member's value and to register it in the value-to-member lookup table.
+
+  - q: Why is the method called `throw` rather than `raise`?
+    options:
+      - "`raise` is already a method of `Enum`"
+      - "`raise` is a reserved keyword, so it can't be used as an identifier"
+      - "Methods named `raise` can't take arguments"
+      - "To avoid shadowing the built-in function `raise()`"
+    answer: 1
+    explain: |
+      `raise` is a statement keyword, so `def raise(self): ...` is a `SyntaxError`. (There is no built-in *function* called `raise`.)
+
+  - q: What does this print?
+    code: |
+      class Demo:
+          default = 'Default message.'
+
+          def text_or(self, message=None):
+              return message or self.default
+
+          def text_is(self, message=None):
+              return self.default if message is None else message
+
+      d = Demo()
+      print(repr(d.text_or('')), repr(d.text_is('')))
+    options:
+      - "`'' ''`"
+      - "`'Default message.' 'Default message.'`"
+      - "`'' 'Default message.'`"
+      - "`'Default message.' ''`"
+    answer: 3
+    explain: |
+      `message or default` falls back for **any** falsy argument, including an empty string. `message is None` falls back only when no message was passed at all, which is usually what you mean.
+
+  - q: Two members are accidentally given the same error code. What happens without `@unique`?
+    code: |
+      from enum import Enum
+
+      class Err(Enum):
+          NotAList = 201
+          NotATuple = 201
+
+      print(Err.NotATuple.name, len(Err))
+    options:
+      - "`NotATuple 2`"
+      - "A `ValueError` when the class is created"
+      - "`NotAList 1`"
+      - "`NotATuple 1`"
+    answer: 2
+    explain: |
+      `NotATuple` silently becomes an **alias** of `NotAList`: it is the same member, so its name is `'NotAList'`, and the enumeration has only one member. With `@unique`, the duplicate would raise `ValueError` instead.
+
+  - q: "`AppException.NotAList.throw()` is called inside `try: ... except ValueError: ...`. Which statement is correct?"
+    options:
+      - "The `except ValueError` clause can't catch it, because the exception is an enum member"
+      - "It raises a normal `ValueError` instance, so ordinary `except` clauses catch it"
+      - "`throw()` returns the exception and the caller must raise it"
+      - "Only `except AppException` can catch it"
+    answer: 1
+    explain: |
+      `throw()` calls the stored exception class (here `ValueError`) to create a normal exception and raises it. Callers handle it exactly like any other `ValueError`. (`AppException` isn't an exception class at all; it's an enumeration.)
+
+exercises:
+  - id: app-exception-members
+    title: "Goal 1: one member per error"
+    prompt: |
+      Complete the `AppException` enumeration so that each member stores three things from its tuple:
+
+      - its **code**, which must be the member's `value` (so `AppException(201)` returns `AppException.NotAList`), also available as a read-only `code` property,
+      - its exception class, as the attribute `exception`,
+      - its default message, as the attribute `message`.
+
+      Lookup by name (`AppException['Timeout']`) must keep working, and there must be exactly four members.
+    starter: |
+      from enum import Enum
+
+      class GenericException(Exception):
+          pass
+
+      class Timeout(Exception):
+          pass
+
+      class AppException(Enum):
+          Generic = (100, GenericException, 'Application exception.')
+          Timeout = (101, Timeout, 'Timeout connecting to resource.')
+          NotAnInteger = (200, ValueError, 'Value must be an integer.')
+          NotAList = (201, ValueError, 'Value must be a list.')
+
+          # your code here
+    tests: |
+      def test_value_is_code():
+          """the value of each member is its code"""
+          values = [m.value for m in AppException]
+          assert values == [100, 101, 200, 201], f"got {values}"
+
+      def test_lookup_by_code():
+          """AppException(code) finds the member"""
+          assert AppException(201) is AppException.NotAList
+          assert AppException(101) is AppException.Timeout
+
+      def test_lookup_by_name():
+          """AppException[name] finds the member"""
+          assert AppException['NotAnInteger'] is AppException.NotAnInteger
+
+      def test_code_property():
+          """code property matches the value"""
+          assert AppException.Generic.code == 100, f"got {AppException.Generic.code!r}"
+
+      def test_exception_and_message():
+          """exception class and message are stored"""
+          assert AppException.Timeout.exception is Timeout
+          assert AppException.NotAList.exception is ValueError
+          assert AppException.Generic.message == 'Application exception.'
+          assert AppException.NotAnInteger.message == 'Value must be an integer.'
+
+      def test_four_members():
+          """exactly four members, no extra ones"""
+          assert len(AppException) == 4, f"got {list(AppException)}"
+    solution: |
+      from enum import Enum
+
+      class GenericException(Exception):
+          pass
+
+      class Timeout(Exception):
+          pass
+
+      class AppException(Enum):
+          Generic = (100, GenericException, 'Application exception.')
+          Timeout = (101, Timeout, 'Timeout connecting to resource.')
+          NotAnInteger = (200, ValueError, 'Value must be an integer.')
+          NotAList = (201, ValueError, 'Value must be a list.')
+
+          def __new__(cls, ex_code, ex_class, ex_message):
+              member = object.__new__(cls)
+              member._value_ = ex_code
+              member.exception = ex_class
+              member.message = ex_message
+              return member
+
+          @property
+          def code(self):
+              return self.value
+    hints:
+      - "Define `__new__(cls, ex_code, ex_class, ex_message)`: each member's tuple is unpacked into these arguments."
+      - "Create the member with `object.__new__(cls)`, set `member._value_ = ex_code`, attach the other two attributes and return it."
+      - "A `@property` named `code` can simply return `self.value`."
+
+  - id: app-exception-throw
+    title: "Goal 2: raise with one call"
+    prompt: |
+      Add a `throw(message=None)` method to `AppException`. It must raise the member's exception class with the message `'<code> - <message>'`, using the member's default message when no message is given.
+
+      For example, `AppException.Timeout.throw()` raises `Timeout('101 - Timeout connecting to resource.')`, and `AppException.Timeout.throw('Database timeout.')` raises `Timeout('101 - Database timeout.')`.
+
+      Use the default **only** when `message` is `None`: an explicitly passed empty string is kept as is.
+    starter: |
+      from enum import Enum
+
+      class GenericException(Exception):
+          pass
+
+      class Timeout(Exception):
+          pass
+
+      class AppException(Enum):
+          Generic = (100, GenericException, 'Application exception.')
+          Timeout = (101, Timeout, 'Timeout connecting to resource.')
+          NotAnInteger = (200, ValueError, 'Value must be an integer.')
+          NotAList = (201, ValueError, 'Value must be a list.')
+
+          def __new__(cls, ex_code, ex_class, ex_message):
+              member = object.__new__(cls)
+              member._value_ = ex_code
+              member.exception = ex_class
+              member.message = ex_message
+              return member
+
+          @property
+          def code(self):
+              return self.value
+
+          def throw(self, message=None):
+              # your code here
+              raise Exception(self.message)
+    tests: |
+      def _raised(member, *args):
+          try:
+              member.throw(*args)
+          except Exception as ex:
+              return ex
+          raise AssertionError(f"{member.name}.throw() did not raise")
+
+      def test_exception_type():
+          """raises the member's exception class"""
+          assert type(_raised(AppException.Timeout)) is Timeout
+          assert type(_raised(AppException.NotAList)) is ValueError
+          assert type(_raised(AppException.Generic)) is GenericException
+
+      def test_default_message():
+          """default message is '<code> - <message>'"""
+          ex = _raised(AppException.Timeout)
+          assert str(ex) == '101 - Timeout connecting to resource.', f"got {str(ex)!r}"
+          ex = _raised(AppException.NotAnInteger)
+          assert str(ex) == '200 - Value must be an integer.', f"got {str(ex)!r}"
+
+      def test_custom_message():
+          """a custom message replaces the default"""
+          ex = _raised(AppException.Timeout, 'Database timeout.')
+          assert str(ex) == '101 - Database timeout.', f"got {str(ex)!r}"
+
+      def test_empty_message_kept():
+          """an explicit empty message is not replaced by the default"""
+          ex = _raised(AppException.NotAList, '')
+          assert str(ex) == '201 - ', f"got {str(ex)!r}"
+
+      def test_catchable():
+          """callers can catch it with a normal except clause"""
+          try:
+              AppException.NotAList.throw()
+          except ValueError:
+              pass
+    solution: |
+      from enum import Enum
+
+      class GenericException(Exception):
+          pass
+
+      class Timeout(Exception):
+          pass
+
+      class AppException(Enum):
+          Generic = (100, GenericException, 'Application exception.')
+          Timeout = (101, Timeout, 'Timeout connecting to resource.')
+          NotAnInteger = (200, ValueError, 'Value must be an integer.')
+          NotAList = (201, ValueError, 'Value must be a list.')
+
+          def __new__(cls, ex_code, ex_class, ex_message):
+              member = object.__new__(cls)
+              member._value_ = ex_code
+              member.exception = ex_class
+              member.message = ex_message
+              return member
+
+          @property
+          def code(self):
+              return self.value
+
+          def throw(self, message=None):
+              if message is None:
+                  message = self.message
+              raise self.exception(f'{self.code} - {message}')
+    hints:
+      - "`self.exception` is a class: calling it, `self.exception('text')`, creates an exception instance you can `raise`."
+      - "Build the text with an f-string: `f'{self.code} - {message}'`."
+      - "`message or self.message` would also replace `''`. Test `message is None` instead."
+
+  - id: app-exception-catalog
+    title: "Goal 3: list the errors"
+    prompt: |
+      Add two class methods to `AppException`:
+
+      - `catalog()` returns a list of `(name, code, message)` tuples for every member, in definition order.
+      - `raising(exc_class)` returns a list of the members whose exception class is `exc_class` **or a subclass of it**, in definition order.
+
+      Adding these methods must not add members to the enumeration.
+    starter: |
+      from enum import Enum
+
+      class GenericException(Exception):
+          pass
+
+      class Timeout(Exception):
+          pass
+
+      class AppException(Enum):
+          Generic = (100, GenericException, 'Application exception.')
+          Timeout = (101, Timeout, 'Timeout connecting to resource.')
+          NotAnInteger = (200, ValueError, 'Value must be an integer.')
+          NotAList = (201, ValueError, 'Value must be a list.')
+
+          def __new__(cls, ex_code, ex_class, ex_message):
+              member = object.__new__(cls)
+              member._value_ = ex_code
+              member.exception = ex_class
+              member.message = ex_message
+              return member
+
+          @property
+          def code(self):
+              return self.value
+
+          @classmethod
+          def catalog(cls):
+              # your code here
+              return []
+
+          @classmethod
+          def raising(cls, exc_class):
+              # your code here
+              return []
+    tests: |
+      def test_catalog():
+          """catalog lists (name, code, message) in definition order"""
+          expected = [
+              ('Generic', 100, 'Application exception.'),
+              ('Timeout', 101, 'Timeout connecting to resource.'),
+              ('NotAnInteger', 200, 'Value must be an integer.'),
+              ('NotAList', 201, 'Value must be a list.'),
+          ]
+          assert AppException.catalog() == expected, f"got {AppException.catalog()}"
+
+      def test_raising_exact():
+          """raising(ValueError) finds both ValueError members"""
+          result = AppException.raising(ValueError)
+          assert result == [AppException.NotAnInteger, AppException.NotAList], f"got {result}"
+
+      def test_raising_custom():
+          """raising(Timeout) finds only the Timeout member"""
+          assert AppException.raising(Timeout) == [AppException.Timeout]
+
+      def test_raising_base_class():
+          """raising(Exception) includes subclasses, so every member matches"""
+          assert AppException.raising(Exception) == list(AppException)
+
+      def test_raising_none():
+          """an unused exception class gives an empty list"""
+          assert AppException.raising(KeyError) == []
+
+      def test_still_four_members():
+          """class methods are not members"""
+          assert len(AppException) == 4
+    solution: |
+      from enum import Enum
+
+      class GenericException(Exception):
+          pass
+
+      class Timeout(Exception):
+          pass
+
+      class AppException(Enum):
+          Generic = (100, GenericException, 'Application exception.')
+          Timeout = (101, Timeout, 'Timeout connecting to resource.')
+          NotAnInteger = (200, ValueError, 'Value must be an integer.')
+          NotAList = (201, ValueError, 'Value must be a list.')
+
+          def __new__(cls, ex_code, ex_class, ex_message):
+              member = object.__new__(cls)
+              member._value_ = ex_code
+              member.exception = ex_class
+              member.message = ex_message
+              return member
+
+          @property
+          def code(self):
+              return self.value
+
+          @classmethod
+          def catalog(cls):
+              return [(ex.name, ex.code, ex.message) for ex in cls]
+
+          @classmethod
+          def raising(cls, exc_class):
+              return [ex for ex in cls if issubclass(ex.exception, exc_class)]
+    hints:
+      - "Inside a class method, `cls` is the enumeration, and iterating it yields the members in definition order."
+      - "`issubclass(ex.exception, exc_class)` is `True` for the class itself and for its subclasses."

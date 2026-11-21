@@ -1,0 +1,306 @@
+quiz:
+  - q: What does this print?
+    code: |
+      d = {'b': 2, 'c': 1, 'a': 3}
+      print(dict(sorted(d.items())))
+    options:
+      - "`{'c': 1, 'b': 2, 'a': 3}`"
+      - "`{'a': 3, 'b': 2, 'c': 1}`"
+      - "`{'b': 2, 'c': 1, 'a': 3}`"
+      - "`[('a', 3), ('b', 2), ('c', 1)]`"
+    answer: 1
+    explain: |
+      Without a `key` function, `sorted` compares the `(key, value)` tuples element by element, so the items are ordered by **key**. Use `key=lambda item: item[1]` to sort by value.
+
+  - q: What does this print?
+    code: |
+      d = {'x': 2, 'y': 1, 'z': 2, 'w': 1}
+      print(list(dict(sorted(d.items(), key=lambda i: i[1], reverse=True))))
+    options:
+      - "`['z', 'x', 'w', 'y']`"
+      - "`['x', 'z', 'w', 'y']`"
+      - "`['x', 'z', 'y', 'w']`"
+      - "`['y', 'w', 'x', 'z']`"
+    answer: 2
+    explain: |
+      Python's sort is stable even with `reverse=True`: items with equal keys keep their original relative order. So `x` stays before `z`, and `y` before `w`.
+
+  - q: What does this print?
+    code: |
+      d1 = {'a': 1, 'b': 2}
+      d2 = {'b': 3, 'c': 4}
+      print(d1.keys() & d2.keys(), type(d1.keys() & d2.keys()).__name__)
+    options:
+      - "`dict_keys(['b']) dict_keys`"
+      - "`{'b': (2, 3)} dict`"
+      - "`{'b'} set`"
+      - A `TypeError`
+    answer: 2
+    explain: |
+      Keys views support set operators, and the result is a plain `set` (not a view, and not a dict).
+
+  - q: What does this print?
+    code: |
+      totals = {'go': 4}
+      for d in ({'go': 1, 'c': 2}, {'c': 5}):
+          totals |= d
+      print(totals)
+    options:
+      - "`{'go': 5, 'c': 7}`"
+      - "`{'go': 1, 'c': 5}`"
+      - "`{'go': 4, 'c': 2}`"
+      - "`{'go': 4}`"
+    answer: 1
+    explain: |
+      `|=` (like `update`) **replaces** the value of an existing key, it doesn't add to it. To combine counts, accumulate with `totals[k] = totals.get(k, 0) + v`.
+
+  - q: What does this print?
+    code: |
+      a = {'x': 1, 'y': 1, 'z': 1}
+      b = {'x': 1, 'y': 1}
+      c = {'x': 1}
+      print(sorted(a.keys() ^ b.keys() ^ c.keys()))
+    options:
+      - "`['y', 'z']`"
+      - "`['z']`"
+      - "`[]`"
+      - "`['x', 'z']`"
+    answer: 3
+    explain: |
+      Chained `^` keeps keys found in an **odd** number of sets: `x` is in 3, `y` in 2, `z` in 1. So `x` and `z` survive. "Some but not all" is `union - intersection`, which here would be `['y', 'z']`.
+
+  - q: What does this print?
+    code: |
+      n1 = {'a': 0, 'b': 5}
+      n2 = {'b': 7}
+      print({k: n1.get(k) or -1 for k in n1.keys() - n2.keys()})
+    options:
+      - "`{'a': 0}`"
+      - "`{'a': -1}`"
+      - "`{'a': None}`"
+      - "`{'b': 5}`"
+    answer: 1
+    explain: |
+      `n1.get('a')` is `0`, which is falsy, so `or` moves on to `-1`. Using `or` to pick a default silently discards real falsy values; `n1.get(k, -1)` is the safe way.
+
+  - q: Which function signature lets `merge` accept any number of dictionaries, like `merge(d1)`, `merge(d1, d2, d3)` or `merge()`?
+    options:
+      - "`def merge(dicts):`"
+      - "`def merge(**dicts):`"
+      - "`def merge(*dicts):`"
+      - "`def merge(d1, d2=None, d3=None):`"
+    answer: 2
+    explain: |
+      `*dicts` collects any number of positional arguments into a tuple (possibly empty). `**dicts` would collect *keyword* arguments instead.
+
+exercises:
+  - id: sort-dict-by-value
+    title: "Exercise 1: sort a dictionary by value"
+    prompt: |
+      Write `sort_dict_by_value(d)` that returns a **new** dictionary with the same items as `d`, ordered by value from smallest to largest. Items with equal values keep their original relative order. Don't modify `d`.
+
+      Example: `sort_dict_by_value({'Johann': 65, 'Ludwig': 56, 'Frederic': 39, 'Wolfgang': 35})` returns `{'Wolfgang': 35, 'Frederic': 39, 'Ludwig': 56, 'Johann': 65}`.
+    starter: |
+      def sort_dict_by_value(d):
+          # your code here
+          return dict(d)
+    tests: |
+      def test_composers():
+          """the composers example, in the right order"""
+          composers = {'Johann': 65, 'Ludwig': 56, 'Frederic': 39, 'Wolfgang': 35}
+          result = sort_dict_by_value(composers)
+          expected = [('Wolfgang', 35), ('Frederic', 39), ('Ludwig', 56), ('Johann', 65)]
+          assert list(result.items()) == expected, f"got {list(result.items())}"
+
+      def test_returns_dict():
+          """returns a dict, not a list of pairs"""
+          assert isinstance(sort_dict_by_value({'a': 2, 'b': 1}), dict)
+
+      def test_ties_stable():
+          """equal values keep their input order"""
+          result = sort_dict_by_value({'x': 2, 'y': 1, 'z': 2, 'w': 1})
+          assert list(result) == ['y', 'w', 'x', 'z'], f"got {list(result)}"
+
+      def test_new_dict_original_unchanged():
+          """a new dict is returned and the input is untouched"""
+          d = {'b': 2, 'a': 1}
+          result = sort_dict_by_value(d)
+          assert result is not d, "returned the same dict object"
+          assert list(d.items()) == [('b', 2), ('a', 1)], f"input changed to {d}"
+
+      def test_other_values():
+          """works with any comparable values"""
+          result = sort_dict_by_value({1: 'pear', 2: 'apple', 3: 'fig'})
+          assert list(result) == [2, 3, 1], f"got {list(result)}"
+
+      def test_empty():
+          """empty dict"""
+          assert sort_dict_by_value({}) == {}
+    solution: |
+      def sort_dict_by_value(d):
+          return dict(sorted(d.items(), key=lambda item: item[1]))
+    hints:
+      - "`sorted(d.items(), key=...)` returns a list of `(key, value)` tuples in the order you choose."
+      - "Use `key=lambda item: item[1]` to sort by value."
+      - "`dict()` accepts a list of pairs and keeps their order."
+
+  - id: intersect-dicts
+    title: "Exercise 2: common keys"
+    prompt: |
+      Write `intersect(d1, d2)` that returns a dictionary containing only the keys present in **both** dicts. Each value is a tuple `(d1[key], d2[key])`. Key order doesn't matter.
+
+      Example: `intersect({'a': 1, 'b': 2, 'c': 3, 'd': 4}, {'b': 20, 'c': 30, 'y': 40, 'z': 50})` returns `{'b': (2, 20), 'c': (3, 30)}`.
+    starter: |
+      def intersect(d1, d2):
+          # your code here
+          pass
+    tests: |
+      def test_example():
+          """the example from the exercise"""
+          d1 = {'a': 1, 'b': 2, 'c': 3, 'd': 4}
+          d2 = {'b': 20, 'c': 30, 'y': 40, 'z': 50}
+          result = intersect(d1, d2)
+          assert result == {'b': (2, 20), 'c': (3, 30)}, f"got {result}"
+
+      def test_no_common_keys():
+          """no shared keys gives an empty dict"""
+          assert intersect({'a': 1}, {'b': 2}) == {}
+          assert intersect({}, {'a': 1}) == {}
+
+      def test_falsy_and_unhashable_values():
+          """falsy and unhashable values are kept as they are"""
+          result = intersect({'a': 0, 'b': [1]}, {'a': None, 'b': [2]})
+          assert result == {'a': (0, None), 'b': ([1], [2])}, f"got {result}"
+
+      def test_tuple_order():
+          """tuples are (value in d1, value in d2)"""
+          assert intersect({'k': 'first'}, {'k': 'second'}) == {'k': ('first', 'second')}
+
+      def test_inputs_unchanged():
+          """the input dicts are not modified"""
+          d1, d2 = {'a': 1, 'b': 2}, {'b': 3}
+          intersect(d1, d2)
+          assert d1 == {'a': 1, 'b': 2} and d2 == {'b': 3}
+    solution: |
+      def intersect(d1, d2):
+          return {k: (d1[k], d2[k]) for k in d1.keys() & d2.keys()}
+    hints:
+      - "`d1.keys() & d2.keys()` gives the set of shared keys."
+      - "Build the result with a comprehension: `{k: (d1[k], d2[k]) for k in ...}`."
+
+  - id: merge-word-counts
+    title: "Exercise 3: merge word counts"
+    prompt: |
+      Write `merge(*dicts)` that takes **any number** of word-frequency dicts and returns a single dict with the **summed** frequency of every word, ordered by frequency from **highest to lowest**. Words with equal totals keep the order in which they were first seen. Don't modify the inputs.
+
+      Example: with `d1 = {'python': 10, 'java': 3, 'c#': 8, 'javascript': 15}` and `d2 = {'java': 10, 'c++': 10, 'c#': 4, 'go': 9, 'python': 6}`, `merge(d1, d2)` returns `{'python': 16, 'javascript': 15, 'java': 13, 'c#': 12, 'c++': 10, 'go': 9}`.
+    starter: |
+      def merge(*dicts):
+          result = {}
+          for d in dicts:
+              result.update(d)
+          return result
+    tests: |
+      d1 = {'python': 10, 'java': 3, 'c#': 8, 'javascript': 15}
+      d2 = {'java': 10, 'c++': 10, 'c#': 4, 'go': 9, 'python': 6}
+      d3 = {'erlang': 5, 'haskell': 2, 'python': 1, 'pascal': 1}
+
+      def test_three_servers():
+          """three servers, sorted by total"""
+          expected = [('python', 17), ('javascript', 15), ('java', 13), ('c#', 12),
+                      ('c++', 10), ('go', 9), ('erlang', 5), ('haskell', 2), ('pascal', 1)]
+          result = merge(d1, d2, d3)
+          assert list(result.items()) == expected, f"got {list(result.items())}"
+
+      def test_two_servers():
+          """only two servers respond"""
+          expected = [('python', 16), ('javascript', 15), ('java', 13),
+                      ('c#', 12), ('c++', 10), ('go', 9)]
+          result = merge(d1, d2)
+          assert list(result.items()) == expected, f"got {list(result.items())}"
+
+      def test_single_and_none():
+          """one dict is just sorted; no dicts gives {}"""
+          assert list(merge({'a': 1, 'b': 3})) == ['b', 'a']
+          assert merge() == {}
+
+      def test_ties_first_seen():
+          """tied totals keep first-seen order"""
+          result = merge({'b': 1, 'a': 2}, {'c': 2, 'b': 1})
+          assert list(result.items()) == [('b', 2), ('a', 2), ('c', 2)], f"got {list(result.items())}"
+
+      def test_inputs_unchanged():
+          """inputs are not modified"""
+          x, y = {'a': 1}, {'a': 2}
+          merge(x, y)
+          assert x == {'a': 1} and y == {'a': 2}, f"inputs changed: {x}, {y}"
+    solution: |
+      def merge(*dicts):
+          totals = {}
+          for d in dicts:
+              for word, count in d.items():
+                  totals[word] = totals.get(word, 0) + count
+          return dict(sorted(totals.items(), key=lambda item: item[1], reverse=True))
+    hints:
+      - "`update` replaces values. You need to **add** each count to a running total: `totals.get(word, 0) + count`."
+      - "Loop over every dict, and over every item in each dict."
+      - "Finish with `dict(sorted(totals.items(), key=..., reverse=True))`. The sort is stable, so ties stay in first-seen order."
+
+  - id: identify-unbalanced
+    title: "Exercise 4: unevenly balanced requests"
+    prompt: |
+      Write `identify(node1, node2, node3)` that takes three dicts mapping resources to request counts and returns a dict of the resources that appear on **some, but not all**, of the nodes.
+
+      Each value is a **tuple** of the three counts in node order, using `0` for a node where the resource is missing. Key order doesn't matter.
+
+      Example: with
+      `n1 = {'employees': 100, 'employee': 5000, 'users': 10, 'user': 100}`,
+      `n2 = {'employees': 250, 'users': 23, 'user': 230}` and
+      `n3 = {'employees': 150, 'users': 4, 'login': 1000}`,
+      the result is `{'employee': (5000, 0, 0), 'user': (100, 230, 0), 'login': (0, 0, 1000)}`.
+    starter: |
+      def identify(node1, node2, node3):
+          # your code here
+          pass
+    tests: |
+      def test_example():
+          """the example from the exercise"""
+          n1 = {'employees': 100, 'employee': 5000, 'users': 10, 'user': 100}
+          n2 = {'employees': 250, 'users': 23, 'user': 230}
+          n3 = {'employees': 150, 'users': 4, 'login': 1000}
+          result = identify(n1, n2, n3)
+          expected = {'employee': (5000, 0, 0), 'user': (100, 230, 0), 'login': (0, 0, 1000)}
+          assert result == expected, f"got {result}"
+
+      def test_balanced():
+          """resources on every node are not reported"""
+          assert identify({'a': 1, 'b': 2}, {'b': 3, 'a': 4}, {'a': 5, 'b': 6}) == {}
+
+      def test_on_two_of_three():
+          """a resource missing from just one node is reported"""
+          assert identify({'x': 1}, {}, {'x': 3}) == {'x': (1, 0, 3)}
+
+      def test_empty_node():
+          """an empty node makes every resource suspicious"""
+          result = identify({'a': 1, 'b': 2}, {'a': 3}, {})
+          assert result == {'a': (1, 3, 0), 'b': (2, 0, 0)}, f"got {result}"
+
+      def test_values_are_tuples():
+          """counts are returned as tuples"""
+          result = identify({'a': 1}, {}, {})
+          assert isinstance(result['a'], tuple), f"got {type(result['a']).__name__}"
+
+      def test_zero_counts_kept():
+          """a real count of 0 stays 0 and the key is still classified correctly"""
+          result = identify({'a': 0}, {'a': 0}, {'b': 0})
+          assert result == {'a': (0, 0, 0), 'b': (0, 0, 0)}, f"got {result}"
+    solution: |
+      def identify(node1, node2, node3):
+          union = node1.keys() | node2.keys() | node3.keys()
+          intersection = node1.keys() & node2.keys() & node3.keys()
+          return {key: (node1.get(key, 0), node2.get(key, 0), node3.get(key, 0))
+                  for key in union - intersection}
+    hints:
+      - "Keys on at least one node: the union `|`. Keys on every node: the intersection `&`."
+      - "The resources you want are `union - intersection`. (Chained `^` is **not** the same for three sets.)"
+      - "`node.get(key, 0)` returns `0` when the resource is missing."

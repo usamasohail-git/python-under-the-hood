@@ -1,0 +1,309 @@
+quiz:
+  - q: What is printed?
+    code: |
+      a = (5)
+      b = 5,
+      print(type(a).__name__, type(b).__name__)
+    options:
+      - "`tuple tuple`"
+      - "`int tuple`"
+      - "`int int`"
+      - "`tuple int`"
+    answer: 1
+    explain: |
+      Commas create tuples, not parentheses. `(5)` is just the number 5 in parentheses; `5,` is a one-element tuple.
+
+  - q: What does this print?
+    code: |
+      record = 'DJIA', 2018, 1, 19, 25_987, 26_072
+      symbol, *middle, close = record
+      print(middle)
+    options:
+      - "`(2018, 1, 19, 25987)`"
+      - "`2018`"
+      - "`[2018, 1, 19, 25987]`"
+      - A `SyntaxError`
+    answer: 2
+    explain: |
+      Extended unpacking collects everything not assigned to the other names into a **list**, even when the source is a tuple.
+
+  - q: What does `collections.namedtuple('Point2D', 'x y')` return?
+    options:
+      - An instance of `tuple` with two empty slots
+      - A new class that is a subclass of `tuple`
+      - A dictionary mapping `'x'` and `'y'` to `None`
+      - A function that returns plain tuples
+    answer: 1
+    explain: |
+      `namedtuple` is a **class factory**. It builds and returns a new class (whose type is `type`) that inherits from `tuple`; you then call that class to create instances.
+
+  - q: What is printed?
+    code: |
+      from collections import namedtuple
+      Pt = namedtuple('Point', 'x y')
+      print(Pt(1, 2))
+    options:
+      - "`Pt(x=1, y=2)`"
+      - "`(1, 2)`"
+      - "`Point(1, 2)`"
+      - "`Point(x=1, y=2)`"
+    answer: 3
+    explain: |
+      The repr uses the **class name** passed as the first argument (`'Point'`), not the variable the class happens to be assigned to.
+
+  - q: What is printed?
+    code: |
+      from collections import namedtuple
+      P = namedtuple('P', 'x y')
+      p = P(1, 2)
+      q = p._replace(x=10)
+      print(p, q, p is q)
+    options:
+      - "`P(x=1, y=2) P(x=10, y=2) False`"
+      - "`P(x=10, y=2) P(x=10, y=2) True`"
+      - "`P(x=10, y=2) P(x=10, y=2) False`"
+      - An `AttributeError`, because named tuples are immutable
+    answer: 0
+    explain: |
+      `_replace` never changes the original. It returns a **new** instance with the given fields replaced.
+
+  - q: What is printed?
+    code: |
+      from collections import namedtuple
+      V = namedtuple('V', 'a b c', defaults=(1, 2))
+      print(V(0))
+    options:
+      - "`V(a=1, b=2, c=0)`"
+      - "`V(a=0, b=1, c=2)`"
+      - "`V(a=0, b=None, c=None)`"
+      - A `TypeError`, because `c` has no value
+    answer: 1
+    explain: |
+      Like function defaults, named tuple defaults apply to the **rightmost** fields. Two defaults cover `b` and `c`, so only `a` is required.
+
+  - q: What is printed?
+    code: |
+      from collections import namedtuple
+      Data = namedtuple('Data', 'a b')
+      d = dict(b=2, a=1)
+      print(Data(*d.values()), Data(**d))
+    options:
+      - "`Data(a=1, b=2) Data(a=1, b=2)`"
+      - "`Data(a=2, b=1) Data(a=2, b=1)`"
+      - "`Data(a=2, b=1) Data(a=1, b=2)`"
+      - "`Data(a=1, b=2) Data(a=2, b=1)`"
+    answer: 2
+    explain: |
+      `*d.values()` passes values **positionally** in the dict's insertion order (`2, 1`), so they land in the wrong fields. `**d` passes keyword arguments, matched by name.
+
+  - q: Which call raises a `ValueError`?
+    options:
+      - "`namedtuple('User', 'name email')`"
+      - "`namedtuple('User', ['name', 'email'])`"
+      - "`namedtuple('User', 'name, _id')`"
+      - "`namedtuple('User', 'name _id', rename=True)`"
+    answer: 2
+    explain: |
+      Field names can't start with an underscore. With `rename=True`, the invalid name would instead be replaced by its position (`_1`) and no error is raised.
+
+  - q: What is printed?
+    code: |
+      from collections import namedtuple
+      Point2D = namedtuple('Point2D', 'x y')
+      Vector2D = namedtuple('Vector2D', 'dx dy')
+      print(Point2D(1, 2) == (1, 2), Point2D(1, 2) == Vector2D(1, 2))
+    options:
+      - "`True True`"
+      - "`True False`"
+      - "`False False`"
+      - "`False True`"
+    answer: 0
+    explain: |
+      Named tuples inherit `==` from `tuple`, which compares only the values, not the class or the field names.
+
+  - q: What is printed?
+    code: |
+      from collections import namedtuple
+      P = namedtuple('P', 'x y')
+      p = P(3, 4)
+      field = 'y'
+      print(getattr(p, field), getattr(p, 'z', 0))
+    options:
+      - "`y 0`"
+      - "`4 None`"
+      - An `AttributeError` for `z`
+      - "`4 0`"
+    answer: 3
+    explain: |
+      `getattr(obj, name)` looks up an attribute whose name is in a variable, and the three-argument form returns the default when the attribute doesn't exist, like `dict.get`.
+
+  - q: "Which of these does **not** produce instances that are tuples?"
+    options:
+      - "`collections.namedtuple('P', 'x y')`"
+      - "A class inheriting from `typing.NamedTuple`"
+      - "A class decorated with `@dataclass(frozen=True)`"
+      - "`P._make([1, 2])` for a named tuple class `P`"
+    answer: 2
+    explain: |
+      A frozen dataclass is immutable, but it's a regular class: it can't be indexed or unpacked, and `isinstance(obj, tuple)` is `False`. The other three all produce `tuple` subclasses.
+
+exercises:
+  - id: tuplify-dicts
+    title: Dictionaries to named tuples
+    prompt: |
+      Write `tuplify_dicts(dicts)` that takes a list of dictionaries with string keys and returns a list of named tuples, one per dictionary, all instances of **one** named tuple class called `'Struct'`.
+
+      - The fields are all keys used in any of the dictionaries, in **alphabetical order**.
+      - A key missing from a dictionary becomes `None` in its record.
+      - Values must end up in the right fields regardless of each dictionary's key order.
+    starter: |
+      from collections import namedtuple
+
+      def tuplify_dicts(dicts):
+          keys = dicts[0].keys()
+          Struct = namedtuple('Struct', keys)
+          return [Struct(*d.values()) for d in dicts]
+    tests: |
+      data = [
+          {'b': 2, 'a': 1},
+          {'a': 3, 'c': 30},
+          {'b': 100},
+      ]
+
+      def test_fields_sorted():
+          """fields are all keys, sorted"""
+          result = tuplify_dicts(data)
+          assert result[0]._fields == ('a', 'b', 'c'), f"got {result[0]._fields}"
+
+      def test_values_by_name():
+          """values are matched by key, not by order"""
+          r = tuplify_dicts(data)[0]
+          assert (r.a, r.b) == (1, 2), f"got {r}"
+
+      def test_missing_is_none():
+          """missing keys become None"""
+          result = tuplify_dicts(data)
+          assert tuple(result[1]) == (3, None, 30), f"got {result[1]}"
+          assert tuple(result[2]) == (None, 100, None), f"got {result[2]}"
+
+      def test_one_class():
+          """all records share one class named Struct"""
+          result = tuplify_dicts(data)
+          assert len({type(r) for r in result}) == 1, "records have different classes"
+          assert type(result[0]).__name__ == 'Struct'
+          assert isinstance(result[0], tuple)
+    solution: |
+      from collections import namedtuple
+
+      def tuplify_dicts(dicts):
+          keys = sorted({key for d in dicts for key in d})
+          Struct = namedtuple('Struct', keys, defaults=(None,) * len(keys))
+          return [Struct(**d) for d in dicts]
+    hints:
+      - "Collect every key with a set comprehension: `{key for d in dicts for key in d}`, then `sorted(...)` it."
+      - "`defaults=(None,) * len(keys)` gives every field a default of `None`."
+      - "Create each record with `Struct(**d)` so values are matched to fields by name."
+
+  - id: extend-record
+    title: Extend a record type
+    prompt: |
+      Write `extend(cls, name, *new_fields)` that takes an existing named tuple class and returns a **new** named tuple class called `name` with all of `cls`'s fields followed by `new_fields`.
+
+      The new fields must default to `None`, so that an old record can be upgraded with `New(*old)`. The original fields stay required.
+
+      Example: `StockExt = extend(Stock, 'StockExt', 'previous_close')`.
+    starter: |
+      from collections import namedtuple
+
+      def extend(cls, name, *new_fields):
+          return namedtuple(name, new_fields)
+    tests: |
+      from collections import namedtuple
+      Stock = namedtuple('Stock', 'symbol close')
+
+      def test_fields():
+          """new class has old fields plus new ones"""
+          New = extend(Stock, 'StockExt', 'previous_close', 'volume')
+          assert New._fields == ('symbol', 'close', 'previous_close', 'volume'), f"got {New._fields}"
+
+      def test_name():
+          """new class has the given name"""
+          New = extend(Stock, 'StockExt', 'previous_close')
+          assert New.__name__ == 'StockExt'
+
+      def test_upgrade_old_record():
+          """an old record can be upgraded; new fields default to None"""
+          New = extend(Stock, 'StockExt', 'previous_close')
+          upgraded = New(*Stock('DJIA', 26_393))
+          assert upgraded == ('DJIA', 26_393, None), f"got {upgraded!r}"
+          assert upgraded.previous_close is None
+
+      def test_old_fields_required():
+          """old fields have no defaults"""
+          New = extend(Stock, 'StockExt', 'previous_close')
+          try:
+              New('DJIA')
+          except TypeError:
+              return
+          assert False, "New('DJIA') should fail: close is required"
+
+      def test_original_untouched():
+          """the original class is unchanged"""
+          extend(Stock, 'StockExt', 'previous_close')
+          assert Stock._fields == ('symbol', 'close')
+    solution: |
+      from collections import namedtuple
+
+      def extend(cls, name, *new_fields):
+          return namedtuple(name, cls._fields + new_fields,
+                            defaults=(None,) * len(new_fields))
+    hints:
+      - "`cls._fields` is a tuple of strings, and `new_fields` (from `*new_fields`) is a tuple too, so `+` joins them."
+      - Defaults apply to the rightmost fields, so `len(new_fields)` defaults cover exactly the new ones.
+
+  - id: summary-record
+    title: Return a named result
+    prompt: |
+      `min_max_mean(values)` currently returns a plain tuple. Change it to return a named tuple of class `Summary` with fields `minimum`, `maximum` and `mean` (in that order), so callers can write `result.mean` while existing code such as `lo, hi, avg = min_max_mean(data)` keeps working.
+
+      For an empty list, return a `Summary` whose three fields are all `None`.
+    starter: |
+      from collections import namedtuple
+
+      def min_max_mean(values):
+          return min(values), max(values), sum(values) / len(values)
+    tests: |
+      def test_named_access():
+          """fields are accessible by name"""
+          r = min_max_mean([2, 4, 9])
+          assert (r.minimum, r.maximum, r.mean) == (2, 9, 5), f"got {r!r}"
+
+      def test_class_name():
+          """result is a Summary named tuple"""
+          r = min_max_mean([1])
+          assert type(r).__name__ == 'Summary', f"got {type(r).__name__}"
+          assert type(r)._fields == ('minimum', 'maximum', 'mean')
+
+      def test_still_unpacks():
+          """existing unpacking code still works"""
+          lo, hi, avg = min_max_mean([1, 2, 3])
+          assert (lo, hi, avg) == (1, 3, 2)
+
+      def test_empty():
+          """an empty list gives all None"""
+          r = min_max_mean([])
+          assert tuple(r) == (None, None, None), f"got {r!r}"
+          assert type(r).__name__ == 'Summary'
+    solution: |
+      from collections import namedtuple
+
+      Summary = namedtuple('Summary', 'minimum maximum mean')
+
+      def min_max_mean(values):
+          if not values:
+              return Summary(None, None, None)
+          return Summary(min(values), max(values), sum(values) / len(values))
+    hints:
+      - "Define `Summary = namedtuple('Summary', 'minimum maximum mean')` once, outside the function."
+      - "A named tuple is still a tuple, so unpacking works unchanged."
+      - "Handle the empty case first: `if not values: ...`"

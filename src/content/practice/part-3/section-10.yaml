@@ -1,0 +1,342 @@
+files: ['common.json', 'dev.json', 'prod.json']
+
+quiz:
+  - q: What does this print?
+    code: |
+      from collections import Counter
+      c = Counter({'a': 1})
+      c.update({'a': 5, 'b': 2})
+      d = {'a': 1}
+      d.update({'a': 5, 'b': 2})
+      print(c['a'], d['a'])
+    options:
+      - "`5 5`"
+      - "`6 6`"
+      - "`6 5`"
+      - "`5 6`"
+    answer: 2
+    explain: |
+      `Counter.update` **adds** the incoming counts (1 + 5), while `dict.update` **replaces** the value. That difference is what makes `Counter` ideal for merging frequency tables.
+
+  - q: What does this print?
+    code: |
+      from collections import Counter
+      c = Counter(x=1)
+      c.update(y=5)
+      print(list(c), c)
+    options:
+      - "`['x', 'y'] Counter({'y': 5, 'x': 1})`"
+      - "`['y', 'x'] Counter({'y': 5, 'x': 1})`"
+      - "`['x', 'y'] Counter({'x': 1, 'y': 5})`"
+      - "`['y', 'x'] Counter({'x': 1, 'y': 5})`"
+    answer: 0
+    explain: |
+      Iteration follows **insertion order**, like any dict. The repr, however, lists items in `most_common()` order. That's why a `Counter` can look sorted without being sorted, and why the merge solution ends with `dict(c.most_common())`.
+
+  - q: What does this print?
+    code: |
+      from collections import Counter
+      seeded = Counter(dict.fromkeys(['amber', 'blue'], 0))
+      a = seeded + Counter(['blue'])
+      seeded.update(['blue'])
+      print(dict(a), dict(seeded))
+    options:
+      - "`{'amber': 0, 'blue': 1} {'amber': 0, 'blue': 1}`"
+      - "`{'blue': 1} {'amber': 0, 'blue': 1}`"
+      - "`{'blue': 1} {'blue': 1}`"
+      - "`{'amber': 0, 'blue': 1} {'blue': 1}`"
+    answer: 1
+    explain: |
+      The `+` operator drops every count that isn't positive, so the zero for `'amber'` disappears. `update` adds counts in place and keeps the zero entries.
+
+  - q: |
+      Why does `ChainMap(dev, common)['database']` lose the `port` setting that only `common` defines?
+    options:
+      - "`ChainMap` only looks at the first mapping"
+      - "`json.load` drops keys that appear in more than one file"
+      - "`ChainMap` returns the value from the **last** map, which is `common`"
+      - "The lookup returns the whole `database` dict from the first map that has the key; it doesn't merge nested dicts"
+    answer: 3
+    explain: |
+      A `ChainMap` resolves the key `'database'` by taking the first value it finds, which is the entire sub-dictionary from `dev`. It never looks inside values, so nested settings need their own chains.
+
+  - q: What does this print?
+    code: |
+      from collections import ChainMap
+      env = {'db': {'user': 'test'}}
+      common = {'db': {'user': 'admin', 'port': 5432}}
+      chain = ChainMap(env, common)
+      chain['db'] = ChainMap(env['db'], common['db'])
+      print(type(env['db']).__name__, chain['db']['port'])
+    options:
+      - "`dict 5432`"
+      - "`ChainMap 5432`"
+      - "`dict`, then a `KeyError`"
+      - "`ChainMap`, then a `KeyError`"
+    answer: 1
+    explain: |
+      Assigning to a `ChainMap` writes into its **first** map, so `env['db']` itself is replaced by the sub-chain. The nested lookup then finds `port` in `common['db']`.
+
+  - q: What does this print?
+    code: |
+      from collections import Counter
+      c = Counter('aabbbc')
+      print(dict(c.most_common()), c.most_common(1))
+    options:
+      - "`{'b': 3, 'a': 2, 'c': 1} [('b', 3)]`"
+      - "`{'a': 2, 'b': 3, 'c': 1} [('a', 2)]`"
+      - "`{'b': 3, 'a': 2, 'c': 1} ('b', 3)`"
+      - "`{'c': 1, 'a': 2, 'b': 3} [('c', 1)]`"
+    answer: 0
+    explain: |
+      `most_common()` returns all `(element, count)` pairs sorted by count, highest first, and a dict built from that list keeps the order. `most_common(1)` still returns a **list**, containing one tuple.
+
+exercises:
+  - id: merge-defaultdict
+    title: "Exercise 1a: merge with defaultdict"
+    prompt: |
+      Write `merge(*dicts)` that combines any number of word-frequency dictionaries into one **plain** `dict` with the total count of each word, **sorted by count from highest to lowest**. Words with equal counts keep the order in which they were first seen.
+
+      Accumulate the totals in a `defaultdict`. Don't modify the input dictionaries.
+    starter: |
+      from collections import defaultdict
+
+      def merge(*dicts):
+          totals = defaultdict(int)
+          for d in dicts:
+              for word, count in d.items():
+                  totals[word] = count
+          return totals
+    tests: |
+      d1 = {'python': 10, 'java': 3, 'c#': 8, 'javascript': 15}
+      d2 = {'java': 10, 'c++': 10, 'c#': 4, 'go': 9, 'python': 6}
+      d3 = {'erlang': 5, 'haskell': 2, 'python': 1, 'pascal': 1}
+
+      def test_totals():
+          """counts are added up across dictionaries"""
+          result = merge(d1, d2, d3)
+          assert result == {'python': 17, 'javascript': 15, 'java': 13, 'c#': 12, 'c++': 10,
+                            'go': 9, 'erlang': 5, 'haskell': 2, 'pascal': 1}, f"got {result}"
+
+      def test_sorted():
+          """the result is sorted by count, highest first"""
+          result = merge(d1, d2, {'modula-2': 100})
+          assert list(result) == ['modula-2', 'python', 'javascript', 'java', 'c#', 'c++', 'go'], f"order: {list(result)}"
+
+      def test_ties_stable():
+          """equal counts keep first-seen order"""
+          assert list(merge({'a': 1, 'b': 2}, {'c': 2})) == ['b', 'c', 'a']
+
+      def test_plain_dict():
+          """returns a plain dict"""
+          assert type(merge(d1)) is dict, f"returned {type(merge(d1)).__name__}"
+
+      def test_edge_cases():
+          """no input gives {}, inputs are not modified"""
+          assert merge() == {}
+          before = dict(d1)
+          merge(d1, d2)
+          assert d1 == before, "an input dictionary was modified"
+    solution: |
+      from collections import defaultdict
+
+      def merge(*dicts):
+          totals = defaultdict(int)
+          for d in dicts:
+              for word, count in d.items():
+                  totals[word] += count
+          return dict(sorted(totals.items(), key=lambda e: e[1], reverse=True))
+    hints:
+      - "`totals[word] += count` works for new words too, because the `defaultdict(int)` supplies `0`."
+      - "`sorted(totals.items(), key=lambda e: e[1], reverse=True)` sorts the pairs by count; `sorted` is stable, so ties keep their order. Wrap it in `dict(...)`."
+
+  - id: merge-counter
+    title: "Exercise 1b: merge with Counter"
+    prompt: |
+      Solve the same problem with a `Counter`: `merge(*dicts)` returns a **plain** `dict` of total counts, sorted from highest to lowest (ties in first-seen order), without modifying the inputs.
+
+      Hint: a `Counter`'s repr looks sorted, but its iteration order isn't.
+    starter: |
+      from collections import Counter
+
+      def merge(*dicts):
+          totals = Counter()
+          for d in dicts:
+              totals.update(d)
+          return totals
+    tests: |
+      d1 = {'python': 10, 'java': 3, 'c#': 8, 'javascript': 15}
+      d2 = {'java': 10, 'c++': 10, 'c#': 4, 'go': 9, 'python': 6}
+      d4 = {'modula-2': 100}
+
+      def test_totals():
+          """counts are added up across dictionaries"""
+          assert merge(d1, d2) == {'python': 16, 'javascript': 15, 'java': 13, 'c#': 12, 'c++': 10, 'go': 9}
+
+      def test_sorted():
+          """the result is really sorted, not just displayed sorted"""
+          result = merge(d1, d2, d4)
+          assert list(result)[0] == 'modula-2', f"order: {list(result)}"
+          counts = list(result.values())
+          assert counts == sorted(counts, reverse=True), f"order: {list(result)}"
+
+      def test_ties_stable():
+          """equal counts keep first-seen order"""
+          assert list(merge({'a': 1, 'b': 2}, {'c': 2})) == ['b', 'c', 'a']
+
+      def test_plain_dict():
+          """returns a plain dict"""
+          assert type(merge(d1)) is dict, f"returned {type(merge(d1)).__name__}"
+
+      def test_inputs_unchanged():
+          """inputs are not modified"""
+          before = dict(d1)
+          merge(d1, d2)
+          assert d1 == before
+    solution: |
+      from collections import Counter
+
+      def merge(*dicts):
+          totals = Counter()
+          for d in dicts:
+              totals.update(d)
+          return dict(totals.most_common())
+    hints:
+      - "`Counter.update(mapping)` **adds** the counts, which is exactly the merge."
+      - "`most_common()` with no argument returns every pair sorted by count. Pass it to `dict`."
+
+  - id: count-eye-colors
+    title: "Exercise 2: count eye colors, zeros included"
+    prompt: |
+      Write `count_eye_colors(persons, possible_eye_colors)`. Each person has an `eye_color` attribute. Return a mapping (a `dict` or `Counter`) with an entry for **every** color in `possible_eye_colors`, in that order, giving how many people have it. Colors nobody has must appear with `0`.
+
+      People whose color isn't in `possible_eye_colors` are ignored.
+    starter: |
+      from collections import Counter
+
+      def count_eye_colors(persons, possible_eye_colors):
+          return Counter(p.eye_color for p in persons)
+    tests: |
+      class Person:
+          def __init__(self, eye_color):
+              self.eye_color = eye_color
+
+      colors = ("amber", "blue", "brown", "gray", "green")
+      people = [Person(c) for c in ['brown', 'gray', 'brown', 'green', 'brown']]
+
+      def test_counts():
+          """counts each color"""
+          result = count_eye_colors(people, colors)
+          assert result['brown'] == 3 and result['gray'] == 1 and result['green'] == 1, f"got {dict(result)}"
+
+      def test_zero_entries():
+          """colors nobody has are present with 0"""
+          result = count_eye_colors(people, colors)
+          assert 'amber' in result and result['amber'] == 0, f"got {dict(result)}"
+          assert 'blue' in result and result['blue'] == 0
+          assert len(result) == 5, f"expected 5 entries, got {len(result)}"
+
+      def test_order():
+          """entries follow the order of possible_eye_colors"""
+          assert list(count_eye_colors(people, colors)) == list(colors)
+
+      def test_unknown_ignored():
+          """colors outside the list are ignored"""
+          result = count_eye_colors(people + [Person('gren')], colors)
+          assert 'gren' not in result, "an unknown color was counted"
+
+      def test_nobody():
+          """with no people, every color is 0"""
+          assert dict(count_eye_colors([], colors)) == dict.fromkeys(colors, 0)
+    solution: |
+      from collections import Counter
+
+      def count_eye_colors(persons, possible_eye_colors):
+          counts = Counter(p.eye_color for p in persons)
+          return {color: counts[color] for color in possible_eye_colors}
+    hints:
+      - "A `Counter` only holds colors it has seen. Build the result by looping over `possible_eye_colors` instead."
+      - "Looking up a missing key in a `Counter` returns `0`, so `{color: counts[color] for color in possible_eye_colors}` fills in the zeros and ignores unknown colors."
+
+  - id: layered-settings
+    title: "Exercise 3: layered settings with ChainMap"
+    prompt: |
+      `common.json`, `dev.json` and `prod.json` are in the working directory.
+
+      1. Write `chain_recursive(d1, d2)` that returns a `ChainMap` in which `d1` overrides `d2`, **at every level**: whenever a key holds a dict in both `d1` and `d2`, its value in the result must be a `chain_recursive` of the two sub-dicts.
+      2. Write `settings(env)` that loads `<env>.json` and `common.json` and returns `chain_recursive(env_settings, common_settings)`.
+
+      Don't build merged copies of the data: the result and its nested sections must be `ChainMap` objects.
+    starter: |
+      import json
+      from collections import ChainMap
+
+      def load_settings(env):
+          with open(f'{env}.json') as f:
+              return json.load(f)
+
+      def chain_recursive(d1, d2):
+          return ChainMap(d1, d2)
+
+      def settings(env):
+          return chain_recursive(load_settings(env), load_settings('common'))
+    tests: |
+      from collections import ChainMap
+
+      def test_top_level():
+          """environment values override, missing sections fall back to common"""
+          prod = settings('prod')
+          assert isinstance(prod, ChainMap), f"returned {type(prod).__name__}"
+          assert prod['logs']['level'] == 'info'
+          assert settings('dev')['logs']['level'] == 'trace'
+
+      def test_nested():
+          """nested sections are chained too"""
+          prod = settings('prod')
+          assert isinstance(prod['database'], ChainMap), "database section is not a ChainMap"
+          assert prod['database']['user'] == '$PG_USER'
+          assert prod['database']['port'] == 5432, "database.port from common.json is missing"
+
+      def test_deeper_nesting():
+          """two levels deep"""
+          dev = settings('dev')
+          assert dev['data']['numerics']['type'] == 'float'
+          assert dev['data']['numerics']['precision'] == 6
+          assert settings('prod')['data']['numerics']['type'] == 'Decimal'
+
+      def test_env_only_section():
+          """a section that exists only in the environment file"""
+          assert dict(settings('dev')['data']['operators']) == {'add': '__add__'}
+
+      def test_chain_recursive_generic():
+          """chain_recursive works on any nested dicts"""
+          a = {'x': {'y': {'z': 1}}, 'k': 'a'}
+          b = {'x': {'y': {'z': 2, 'w': 3}, 'v': 4}, 'k': 'b', 'only_b': 5}
+          c = chain_recursive(a, b)
+          assert c['x']['y']['z'] == 1 and c['x']['y']['w'] == 3 and c['x']['v'] == 4
+          assert c['k'] == 'a' and c['only_b'] == 5
+
+      def test_type_mismatch():
+          """a dict that overrides a non-dict value simply wins"""
+          c = chain_recursive({'x': {'a': 1}}, {'x': 'flat'})
+          assert dict(c['x']) == {'a': 1}
+    solution: |
+      import json
+      from collections import ChainMap
+
+      def load_settings(env):
+          with open(f'{env}.json') as f:
+              return json.load(f)
+
+      def chain_recursive(d1, d2):
+          chain = ChainMap(d1, d2)
+          for k, v in d1.items():
+              if isinstance(v, dict) and isinstance(d2.get(k), dict):
+                  chain[k] = chain_recursive(v, d2[k])
+          return chain
+
+      def settings(env):
+          return chain_recursive(load_settings(env), load_settings('common'))
+    hints:
+      - "A single `ChainMap` returns the whole sub-dict from the first map. Loop over `d1.items()` and look for values that are dicts in **both** maps."
+      - "For each such key, store `chain_recursive(d1[k], d2[k])` in the chain (`chain[k] = ...`), so the nested lookup is layered too."

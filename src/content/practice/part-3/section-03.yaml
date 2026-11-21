@@ -1,0 +1,420 @@
+quiz:
+  - q: Which of these can be used as a dictionary key?
+    options:
+      - "`[1, 2]`"
+      - "`(1, [2])`"
+      - "`(1, (2, 3))`"
+      - "`{1: 2}`"
+    answer: 2
+    explain: |
+      Keys must be hashable. A tuple is hashable only if all its elements are, so `(1, (2, 3))` works but `(1, [2])` does not. Lists and dicts are never hashable.
+
+  - q: What does this print?
+    code: |
+      d = {1: 'a', 1.0: 'b', True: 'c'}
+      print(d)
+    options:
+      - "`{1: 'a', 1.0: 'b', True: 'c'}`"
+      - "`{True: 'c'}`"
+      - "`{1: 'c'}`"
+      - "`{1: 'a'}`"
+    answer: 2
+    explain: |
+      `1 == 1.0 == True` and all three hash to `1`, so they are the **same key**. The first key object (`1`) is kept, and each later item only replaces the value, leaving `'c'`.
+
+  - q: Why must two objects that compare equal (`a == b`) have the same hash?
+    options:
+      - So that `a is b` is also `True`
+      - Because a lookup for `b` starts in the slot chosen by `hash(b)`; if `a` was stored under a different hash, the dict would never find it
+      - Because Python compares hashes instead of using `==`
+      - It's only a style convention; dicts work either way
+    answer: 1
+    explain: |
+      The hash decides where the search begins. Equality is only checked at the slots the probe sequence visits, so an equal key with a different hash is searched for in the wrong place.
+
+  - q: What does this print?
+    code: |
+      groups = dict.fromkeys(['x', 'y'], [])
+      groups['x'].append(1)
+      print(groups)
+    options:
+      - "`{'x': [1], 'y': []}`"
+      - "`{'x': [1], 'y': [1]}`"
+      - "`{'x': 1, 'y': []}`"
+      - An `AttributeError`
+    answer: 1
+    explain: |
+      `fromkeys` stores the **same** list object for every key. Mutating it through `'x'` is visible through `'y'`. Use `{k: [] for k in keys}` for separate lists.
+
+  - q: What does this print?
+    code: |
+      d = {'a': 1, 'b': 2, 'c': 3}
+      d['a'] = 10
+      d['d'] = 4
+      print(d.popitem(), list(d))
+    options:
+      - "`('d', 4) ['a', 'b', 'c']`"
+      - "`('a', 10) ['b', 'c', 'd']`"
+      - "`('c', 3) ['a', 'b', 'd']`"
+      - "`('d', 4) ['b', 'c', 'a']`"
+    answer: 0
+    explain: |
+      Updating an existing key keeps its original position, and new keys go at the end. `popitem()` removes the **last inserted** item, `'d'`.
+
+  - q: What does this print?
+    code: |
+      d = {'a': 1}
+      print(d.setdefault('a', 100), d.setdefault('b', 2), d)
+    options:
+      - "`100 2 {'a': 100, 'b': 2}`"
+      - "`None None {'a': 1, 'b': 2}`"
+      - "`1 None {'a': 1, 'b': 2}`"
+      - "`1 2 {'a': 1, 'b': 2}`"
+    answer: 3
+    explain: |
+      `setdefault` returns the existing value if the key is present (leaving it alone), and otherwise inserts the default and returns it.
+
+  - q: What does this print?
+    code: |
+      d = {'a': 1, 'b': 2}
+      keys = d.keys()
+      d['c'] = 3
+      print(len(keys))
+    options:
+      - "`2`"
+      - "`3`"
+      - A `RuntimeError`
+      - "`0`"
+    answer: 1
+    explain: |
+      Views are **live**: they read from the dict each time, so the new key shows up in `keys`.
+
+  - q: Which expression raises a `TypeError`?
+    code: |
+      d1 = {'a': 1, 'b': [2]}
+      d2 = {'b': [2], 'c': 3}
+    options:
+      - "`d1.keys() & d2.keys()`"
+      - "`d1.keys() - d2.keys()`"
+      - "`d1.items() | d2.items()`"
+      - "`d1.keys() ^ d2.keys()`"
+    answer: 2
+    explain: |
+      Key views are always set-like. An items view is set-like too, but building the result set means hashing each `(key, value)` tuple, and `('b', [2])` contains a list, so it isn't hashable.
+
+  - q: What does this print?
+    code: |
+      d1 = {'a': 1, 'b': 2}
+      d2 = {'b': 20, 'c': 30}
+      print(d1 | d2, d2 | d1)
+    options:
+      - "`{'a': 1, 'b': 20, 'c': 30} {'b': 2, 'c': 30, 'a': 1}`"
+      - "`{'a': 1, 'b': 2, 'c': 30} {'b': 20, 'c': 30, 'a': 1}`"
+      - "`{'a': 1, 'b': 20, 'c': 30} {'a': 1, 'b': 20, 'c': 30}`"
+      - A `TypeError`, because dicts don't support `|`
+    answer: 0
+    explain: |
+      Since 3.9, `|` merges into a new dict. Keys keep the order of their first appearance (left operand first), and on conflicts the **right** operand's value wins.
+
+  - q: What does this print?
+    code: |
+      d = {'cfg': {'debug': False}, 'tags': ['a']}
+      c = d.copy()
+      c['cfg']['debug'] = True
+      c['tags'] = ['b']
+      print(d)
+    options:
+      - "`{'cfg': {'debug': False}, 'tags': ['a']}`"
+      - "`{'cfg': {'debug': True}, 'tags': ['b']}`"
+      - "`{'cfg': {'debug': True}, 'tags': ['a']}`"
+      - "`{'cfg': {'debug': False}, 'tags': ['b']}`"
+    answer: 2
+    explain: |
+      `.copy()` is shallow. Mutating the shared nested dict affects both, but **re-binding** `c['tags']` to a new list only changes `c`.
+
+  - q: What does this print?
+    code: |
+      class P:
+          def __init__(self, x):
+              self.x = x
+          def __eq__(self, other):
+              return isinstance(other, P) and self.x == other.x
+
+      try:
+          print(len({P(1), P(1)}))
+      except TypeError as ex:
+          print('TypeError')
+    options:
+      - "`1`"
+      - "`2`"
+      - "`TypeError`"
+      - "`0`"
+    answer: 2
+    explain: |
+      Defining `__eq__` without `__hash__` sets `__hash__` to `None`, so instances become unhashable and can't go in a set (or be dict keys).
+
+  - q: A `Point` used as a dict key has its `x` attribute changed after insertion, which changes its hash. What usually happens when you then look it up with the same object?
+    options:
+      - It is found, because the dict checks identity first
+      - "Normally a `KeyError`: its new hash starts the search from a different slot, which doesn't lead to the old entry"
+      - Python automatically re-files the key under its new hash
+      - The dict raises `RuntimeError` at the moment `x` is changed
+    answer: 1
+    explain: |
+      The entry was filed under the old hash, and the lookup starts from the new one. (Only if the probe happened to pass through the old slot would the identity check find it, which is pure luck.) The item is still in the dict (you can see it when iterating) but can't be found by key.
+
+exercises:
+  - id: word-frequencies
+    title: Word frequencies
+    prompt: |
+      Write `word_counts(text)` that returns a dict mapping each word in `text` to the number of times it appears.
+
+      - Words are separated by whitespace (use `text.split()`).
+      - Ignore case: `'The'` and `'the'` are the same word (store it lowercase).
+      - Strip the punctuation characters `.,;:!?` from both ends of each word, and skip anything that becomes empty.
+      - Keys must appear in the order each word is **first seen**.
+
+      Use a plain dict (no `collections`).
+    starter: |
+      def word_counts(text):
+          counts = {}
+          # your code here
+          return counts
+    tests: |
+      def test_simple():
+          """counts repeated words"""
+          assert word_counts('a b a') == {'a': 2, 'b': 1}, word_counts('a b a')
+
+      def test_case_and_punctuation():
+          """ignores case and strips punctuation"""
+          result = word_counts('The cat. the CAT, the hat!')
+          assert result == {'the': 3, 'cat': 2, 'hat': 1}, result
+
+      def test_order():
+          """keys are in first-seen order"""
+          result = word_counts('zebra apple zebra mango apple')
+          assert list(result) == ['zebra', 'apple', 'mango'], list(result)
+
+      def test_skip_empty():
+          """punctuation-only tokens are skipped"""
+          result = word_counts('hi , there ... hi !')
+          assert result == {'hi': 2, 'there': 1}, result
+
+      def test_empty_text():
+          """empty text gives an empty dict"""
+          assert word_counts('') == {}
+    solution: |
+      def word_counts(text):
+          counts = {}
+          for word in text.split():
+              word = word.strip('.,;:!?').lower()
+              if word:
+                  counts[word] = counts.get(word, 0) + 1
+          return counts
+    hints:
+      - "`word.strip('.,;:!?')` removes those characters from both ends."
+      - "`counts.get(word, 0) + 1` gives the new count whether or not the word was seen before."
+
+  - id: invert-dict
+    title: Invert a dictionary
+    prompt: |
+      Write `invert(d)` that returns a new dict mapping each **value** of `d` to a **list of the keys** that had that value.
+
+      - The keys in each list appear in the same order as in `d`.
+      - The result's keys appear in the order each value is first seen.
+      - Don't modify `d`.
+
+      Example: `invert({'a': 1, 'b': 2, 'c': 1})` returns `{1: ['a', 'c'], 2: ['b']}`.
+    starter: |
+      def invert(d):
+          # your code here
+          pass
+    tests: |
+      def test_example():
+          """groups keys by value"""
+          result = invert({'a': 1, 'b': 2, 'c': 1})
+          assert result == {1: ['a', 'c'], 2: ['b']}, result
+
+      def test_orders():
+          """value order and key order follow the input"""
+          result = invert({'x': 'b', 'y': 'a', 'z': 'b', 'w': 'a'})
+          assert list(result.items()) == [('b', ['x', 'z']), ('a', ['y', 'w'])], result
+
+      def test_separate_lists():
+          """each value gets its own list"""
+          result = invert({'a': 1, 'b': 2})
+          result[1].append('extra')
+          assert result[2] == ['b'], "lists are shared between values"
+
+      def test_not_mutated():
+          """the input dict is unchanged"""
+          d = {'a': 1, 'b': 1}
+          invert(d)
+          assert d == {'a': 1, 'b': 1}, d
+
+      def test_empty():
+          """empty dict"""
+          assert invert({}) == {}
+    solution: |
+      def invert(d):
+          result = {}
+          for key, value in d.items():
+              result.setdefault(value, []).append(key)
+          return result
+    hints:
+      - Loop over `d.items()` to get each key with its value.
+      - "`result.setdefault(value, [])` returns the list for `value`, creating it the first time. Append the key to it."
+      - "`dict.fromkeys(values, [])` would share one list between all values, so avoid it."
+
+  - id: deep-merge
+    title: Merge nested configuration
+    prompt: |
+      Write `deep_merge(base, override)` that returns a **new** dict combining two nested configuration dicts:
+
+      - Keys from both dicts appear in the result, `base`'s keys first (in their order), then new keys from `override`.
+      - If a key is in both and **both** values are dicts, merge them recursively the same way.
+      - Otherwise the value from `override` wins.
+      - Neither input may be modified, and changing the result (even its nested dicts) must not change the inputs.
+    starter: |
+      def deep_merge(base, override):
+          # a shallow merge is not enough!
+          return base | override
+    tests: |
+      def test_flat():
+          """flat dicts: override wins, order kept"""
+          result = deep_merge({'a': 1, 'b': 2}, {'b': 20, 'c': 3})
+          assert list(result.items()) == [('a', 1), ('b', 20), ('c', 3)], result
+
+      def test_nested():
+          """nested dicts are merged recursively"""
+          base = {'db': {'host': 'localhost', 'port': 5432}, 'debug': False}
+          override = {'db': {'host': 'prod.example.com'}, 'debug': True}
+          result = deep_merge(base, override)
+          assert result == {'db': {'host': 'prod.example.com', 'port': 5432}, 'debug': True}, result
+
+      def test_deeper():
+          """three levels deep"""
+          result = deep_merge({'a': {'b': {'c': 1, 'd': 2}}}, {'a': {'b': {'d': 3}}})
+          assert result == {'a': {'b': {'c': 1, 'd': 3}}}, result
+
+      def test_non_dict_replaces():
+          """a non-dict value replaces a dict (and vice versa)"""
+          assert deep_merge({'a': {'x': 1}}, {'a': 5}) == {'a': 5}
+          assert deep_merge({'a': 5}, {'a': {'x': 1}}) == {'a': {'x': 1}}
+
+      def test_inputs_unchanged():
+          """inputs are not mutated"""
+          base = {'db': {'host': 'localhost', 'port': 5432}}
+          override = {'db': {'host': 'prod'}}
+          deep_merge(base, override)
+          assert base == {'db': {'host': 'localhost', 'port': 5432}}, base
+          assert override == {'db': {'host': 'prod'}}, override
+
+      def test_result_independent():
+          """mutating the result's nested dicts leaves the inputs alone"""
+          base = {'db': {'host': 'localhost'}, 'only_base': {'k': 1}}
+          override = {'only_override': {'k': 2}}
+          result = deep_merge(base, override)
+          result['db']['host'] = 'changed'
+          result['only_base']['k'] = 99
+          result['only_override']['k'] = 99
+          assert base == {'db': {'host': 'localhost'}, 'only_base': {'k': 1}}, base
+          assert override == {'only_override': {'k': 2}}, override
+    solution: |
+      from copy import deepcopy
+
+      def deep_merge(base, override):
+          result = deepcopy(base)
+          for key, value in override.items():
+              if isinstance(result.get(key), dict) and isinstance(value, dict):
+                  result[key] = deep_merge(result[key], value)
+              else:
+                  result[key] = deepcopy(value)
+          return result
+    hints:
+      - Start from a **deep** copy of `base`, so nothing in the result is shared with it.
+      - Loop over `override.items()`. When both sides hold a dict, call `deep_merge` recursively on them; otherwise store (a deep copy of) the override value.
+      - "Assigning to an existing key keeps its position, so `base`'s key order is preserved automatically."
+
+  - id: hashable-card
+    title: A hashable playing card
+    prompt: |
+      Write a class `Card(rank, suit)` that can be used as a dictionary key and in sets:
+
+      - Two cards are equal when their `rank` and `suit` are equal. Comparing a `Card` with a non-`Card` gives `False` (return `NotImplemented` from `__eq__` for other types).
+      - Equal cards must have equal hashes.
+      - `rank` and `suit` are **read-only** properties: assigning to them raises `AttributeError`.
+      - `repr(Card('A', 'spades'))` is `"Card('A', 'spades')"`.
+    starter: |
+      class Card:
+          def __init__(self, rank, suit):
+              self.rank = rank
+              self.suit = suit
+
+          def __eq__(self, other):
+              if isinstance(other, Card):
+                  return (self.rank, self.suit) == (other.rank, other.suit)
+              return NotImplemented
+    tests: |
+      def test_equality():
+          """cards compare by value"""
+          assert Card('A', 'spades') == Card('A', 'spades')
+          assert Card('A', 'spades') != Card('K', 'spades')
+          assert Card('A', 'spades') != ('A', 'spades')
+
+      def test_hash():
+          """equal cards have equal hashes"""
+          assert hash(Card('Q', 'hearts')) == hash(Card('Q', 'hearts'))
+
+      def test_dict_key():
+          """an equal card finds the dict entry"""
+          scores = {Card('A', 'spades'): 11}
+          assert scores[Card('A', 'spades')] == 11
+
+      def test_set_dedupes():
+          """a set keeps one copy of equal cards"""
+          cards = {Card('2', 'clubs'), Card('2', 'clubs'), Card('3', 'clubs')}
+          assert len(cards) == 2, len(cards)
+
+      def test_read_only():
+          """rank and suit can't be reassigned"""
+          c = Card('J', 'diamonds')
+          for attr in ('rank', 'suit'):
+              try:
+                  setattr(c, attr, 'x')
+              except AttributeError:
+                  continue
+              raise AssertionError(f'{attr} could be reassigned')
+
+      def test_repr():
+          """repr shows the constructor call"""
+          assert repr(Card('A', 'spades')) == "Card('A', 'spades')", repr(Card('A', 'spades'))
+    solution: |
+      class Card:
+          def __init__(self, rank, suit):
+              self._rank = rank
+              self._suit = suit
+
+          @property
+          def rank(self):
+              return self._rank
+
+          @property
+          def suit(self):
+              return self._suit
+
+          def __repr__(self):
+              return f'Card({self.rank!r}, {self.suit!r})'
+
+          def __eq__(self, other):
+              if isinstance(other, Card):
+                  return (self.rank, self.suit) == (other.rank, other.suit)
+              return NotImplemented
+
+          def __hash__(self):
+              return hash((self.rank, self.suit))
+    hints:
+      - The starter defines `__eq__`, so Python has set `__hash__` to `None`. Define `__hash__` yourself.
+      - "Hash the same fields `__eq__` compares: `hash((self.rank, self.suit))`."
+      - Store the data as `_rank` and `_suit`, and expose `rank` and `suit` with `@property` (no setter).
+      - "Use `!r` in the f-string so the strings get their quotes in the repr."

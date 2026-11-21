@@ -1,0 +1,490 @@
+quiz:
+  - q: Which methods must an object implement to be an **iterator**?
+    options:
+      - "Only `__next__`"
+      - "`__getitem__` and `__len__`"
+      - "`__iter__` (returning itself) and `__next__`"
+      - "`__iter__` (returning a new object) only"
+    answer: 2
+    explain: |
+      The iterator protocol is two methods: `__next__` returns the next item or raises `StopIteration`, and `__iter__` returns the iterator itself, so an iterator can be used anywhere an iterable is expected.
+
+  - q: What does this print?
+    code: |
+      numbers = [1, 2, 3]
+      it = iter(numbers)
+      print(list(it), list(it))
+    options:
+      - "`[1, 2, 3] [1, 2, 3]`"
+      - "`[1, 2, 3] []`"
+      - "`[] []`"
+      - A `StopIteration` error
+    answer: 1
+    explain: |
+      `it` is an iterator. The first `list()` consumes it completely; the second gets an exhausted iterator and silently produces an empty list. (Calling `list(numbers)` twice would work, because a list is an iterable that hands out a fresh iterator each time.)
+
+  - q: What does this print?
+    code: |
+      d = {'a': 1, 'b': 2}
+      keys = d.keys()
+      print(list(keys), list(keys))
+    options:
+      - "`['a', 'b'] ['a', 'b']`"
+      - "`['a', 'b'] []`"
+      - "`dict_keys(['a', 'b']) []`"
+      - "A `TypeError`"
+    answer: 0
+    explain: |
+      Dictionary views are **iterables**, not iterators: `iter(keys) is keys` is `False`, so each `list()` call gets a new iterator and sees every key.
+
+  - q: What does this print?
+    code: |
+      class Countdown:
+          def __init__(self, start):
+              self.n = start
+          def __iter__(self):
+              return self
+          def __next__(self):
+              if self.n <= 0:
+                  raise StopIteration
+              self.n -= 1
+              return self.n + 1
+
+      c = Countdown(3)
+      print(list(c), sum(c))
+    options:
+      - "`[3, 2, 1] 6`"
+      - "A `TypeError`"
+      - "`[2, 1, 0] 3`"
+      - "`[3, 2, 1] 0`"
+    answer: 3
+    explain: |
+      `Countdown.__iter__` returns `self`, so `c` is an iterator. `list(c)` exhausts it and `sum(c)` adds up nothing, giving `0`. Making `__iter__` return a *new* iterator object would fix it.
+
+  - q: What does this print?
+    code: |
+      it = iter('abcde')
+      next(it)
+      next(it)
+      print(''.join(it))
+    options:
+      - "`abcde`"
+      - "`ab`"
+      - "`cde`"
+      - "`de`"
+    answer: 2
+    explain: |
+      An iterator remembers its position. The two `next()` calls consume `'a'` and `'b'`, and `join` continues from there. This is the same trick used to skip header rows in a file.
+
+  - q: Which of these is an **iterator** (and therefore single-use)?
+    options:
+      - "`range(5)`"
+      - "`[1, 2, 3]`"
+      - "`{'a': 1}.items()`"
+      - "`enumerate('ab')`"
+    answer: 3
+    explain: |
+      `enumerate`, `zip`, `map`, `filter`, `reversed` and file objects return iterators. `range`, lists and dict views are re-iterable iterables.
+
+  - q: What does this print?
+    code: |
+      class Squares:
+          def __getitem__(self, i):
+              if i >= 4:
+                  raise IndexError
+              return i * i
+
+      print(list(Squares()))
+    options:
+      - "`[0, 1, 4, 9]`"
+      - "`TypeError: 'Squares' object is not iterable`"
+      - "`[1, 4, 9, 16]`"
+      - "`[]`"
+    answer: 0
+    explain: |
+      There's no `__iter__`, so `iter()` falls back to the sequence protocol: it calls `__getitem__` with 0, 1, 2, … until `IndexError`. No `__len__` is needed for that.
+
+  - q: What does this print?
+    code: |
+      def counter():
+          n = 0
+          def inc():
+              nonlocal n
+              n += 1
+              return n
+          return inc
+
+      print(list(iter(counter(), 4)))
+    options:
+      - "`[1, 2, 3, 4]`"
+      - "`[0, 1, 2, 3]`"
+      - "`[1, 2, 3]`"
+      - "It runs forever"
+    answer: 2
+    explain: |
+      `iter(callable, sentinel)` calls `counter()`'s closure repeatedly and stops as soon as it returns the sentinel `4`. The sentinel itself is not included.
+
+  - q: |
+      A class implements `__iter__` and `__len__` but **not** `__getitem__` or `__reversed__`. What does `reversed(obj)` do?
+    options:
+      - Returns an iterator over the items in reverse
+      - Raises `TypeError`, because the object is not reversible
+      - Returns the items in their normal order
+      - Converts the object to a list and reverses it
+    answer: 1
+    explain: |
+      `reversed()` uses `__reversed__` if present, otherwise the sequence protocol (`__len__` **and** `__getitem__`). A plain iterable can only move forward, so `reversed()` refuses rather than silently materializing everything.
+
+  - q: What does this print?
+    code: |
+      nums = map(int, '3 1 2'.split())
+      total = sum(nums)
+      count = len(list(nums))
+      print(total, count)
+    options:
+      - "`6 3`"
+      - "A `TypeError`"
+      - "`0 0`"
+      - "`6 0`"
+    answer: 3
+    explain: |
+      `map` returns an iterator. `sum` consumes it, so `list(nums)` is empty and the count is 0. No error warns you, which is what makes this bug dangerous.
+
+  - q: A function needs to loop over its `data` argument twice. Which check detects that it was given an iterator?
+    options:
+      - "`iter(data) is data`"
+      - "`hasattr(data, '__iter__')`"
+      - "`isinstance(data, list)`"
+      - "`len(data) > 0`"
+    answer: 0
+    explain: |
+      An iterator's `__iter__` returns itself; a re-iterable collection returns a new object. `hasattr(data, '__iter__')` is true for both, and `isinstance(data, list)` would reject perfectly good iterables like tuples or sets.
+
+  - q: What does this print?
+    code: |
+      import itertools
+      print(list(zip('xyz', itertools.cycle([0, 1]))))
+    options:
+      - "It runs forever"
+      - "`[('x', 0), ('y', 1)]`"
+      - "`[('x', 0), ('y', 1), ('z', 0)]`"
+      - "`[('x', 0), ('y', 0), ('z', 0)]`"
+    answer: 2
+    explain: |
+      `itertools.cycle` is infinite, but `zip` stops as soon as its shortest input (the string, 3 items) is exhausted.
+
+exercises:
+  - id: reusable-countdown
+    title: A re-iterable countdown
+    prompt: |
+      The `Countdown` class below is its own iterator, so it can only be looped over once.
+
+      Refactor it into a proper **iterable**: `Countdown(start)` should produce `start, start - 1, …, 1` every time it is iterated. Put the iteration logic in a separate iterator class `CountdownIterator` (it may be nested inside `Countdown` or defined at module level) that implements the iterator protocol, so that:
+
+      - `iter(Countdown(3))` returns a new `CountdownIterator`, not the `Countdown` itself
+      - each iterator is independent and stays exhausted once it's done
+      - `len(Countdown(3))` is `3`, and `Countdown(0)` produces nothing
+    starter: |
+      class Countdown:
+          def __init__(self, start):
+              self.start = start
+              self.current = start
+
+          def __len__(self):
+              return self.start
+
+          def __iter__(self):
+              return self
+
+          def __next__(self):
+              if self.current <= 0:
+                  raise StopIteration
+              self.current -= 1
+              return self.current + 1
+    tests: |
+      def test_values():
+          """produces start down to 1"""
+          assert list(Countdown(3)) == [3, 2, 1], f"got {list(Countdown(3))}"
+
+      def test_reiterable():
+          """can be iterated more than once"""
+          c = Countdown(4)
+          first, second = list(c), list(c)
+          assert first == second == [4, 3, 2, 1], f"got {first} then {second}"
+
+      def test_new_iterator():
+          """iter() returns a new CountdownIterator each time"""
+          c = Countdown(3)
+          it1, it2 = iter(c), iter(c)
+          assert it1 is not c, "iter(countdown) returned the Countdown itself"
+          assert it1 is not it2, "iter() returned the same iterator twice"
+          assert type(it1).__name__ == 'CountdownIterator', f"iterator type is {type(it1).__name__}"
+
+      def test_iterator_protocol():
+          """the iterator returns itself from iter() and supports next()"""
+          it = iter(Countdown(2))
+          assert iter(it) is it, "iterator's __iter__ must return self"
+          assert next(it) == 2 and next(it) == 1
+
+      def test_independent():
+          """two iterators keep separate positions"""
+          c = Countdown(3)
+          a, b = iter(c), iter(c)
+          next(a); next(a)
+          assert next(b) == 3, "iterators share state"
+          assert next(a) == 1
+
+      def test_stays_exhausted():
+          """an exhausted iterator keeps raising StopIteration"""
+          it = iter(Countdown(1))
+          assert list(it) == [1]
+          for _ in range(2):
+              try:
+                  next(it)
+                  assert False, "next() on an exhausted iterator should raise StopIteration"
+              except StopIteration:
+                  pass
+
+      def test_len_and_empty():
+          """len() works and Countdown(0) is empty"""
+          assert len(Countdown(3)) == 3
+          assert list(Countdown(0)) == []
+    solution: |
+      class Countdown:
+          def __init__(self, start):
+              self.start = start
+
+          def __len__(self):
+              return self.start
+
+          def __iter__(self):
+              return self.CountdownIterator(self.start)
+
+          class CountdownIterator:
+              def __init__(self, start):
+                  self.current = start
+
+              def __iter__(self):
+                  return self
+
+              def __next__(self):
+                  if self.current <= 0:
+                      raise StopIteration
+                  self.current -= 1
+                  return self.current + 1
+    hints:
+      - "Keep only the data (`start`) in `Countdown`. Move `current` and `__next__` into `CountdownIterator`."
+      - "`Countdown.__iter__` should `return CountdownIterator(self.start)` (or `self.CountdownIterator(...)` if nested)."
+      - "Once `current` reaches 0 it never increases again, so the iterator stays exhausted automatically."
+
+  - id: cycle-iterator
+    title: Build your own cycle
+    prompt: |
+      Write an iterator class `Cycle(iterable)` that repeats the items of `iterable` forever, like `itertools.cycle` (don't use `itertools`).
+
+      It must work with **any** iterable, including a one-shot iterator such as `iter([1, 2])` or a `map` object, which can only be read once. So during the first pass, remember each item as you hand it out, and replay the remembered items afterwards.
+
+      If the iterable is empty, `next()` should raise `StopIteration` straight away.
+    starter: |
+      class Cycle:
+          def __init__(self, iterable):
+              self._items = iterable
+              self._i = 0
+
+          def __iter__(self):
+              return self
+
+          def __next__(self):
+              item = self._items[self._i % len(self._items)]
+              self._i += 1
+              return item
+    tests: |
+      def take(it, n):
+          return [next(it) for _ in range(n)]
+
+      def test_string():
+          """cycles over a string"""
+          assert take(Cycle('NSWE'), 6) == ['N', 'S', 'W', 'E', 'N', 'S']
+
+      def test_is_iterator():
+          """Cycle is an iterator"""
+          c = Cycle([1])
+          assert iter(c) is c, "__iter__ must return self"
+
+      def test_one_shot_iterator():
+          """works with a one-shot iterator"""
+          c = Cycle(iter([1, 2, 3]))
+          assert take(c, 7) == [1, 2, 3, 1, 2, 3, 1]
+
+      def test_map_object():
+          """works with a lazy map object"""
+          c = Cycle(map(str.upper, 'ab'))
+          assert take(c, 5) == ['A', 'B', 'A', 'B', 'A']
+
+      def test_with_zip():
+          """zip stops at the finite input"""
+          result = [f'{i}{d}' for i, d in zip(range(1, 6), Cycle('NS'))]
+          assert result == ['1N', '2S', '3N', '4S', '5N'], f"got {result}"
+
+      def test_empty():
+          """empty input raises StopIteration"""
+          try:
+              next(Cycle([]))
+              assert False, "expected StopIteration for an empty iterable"
+          except StopIteration:
+              pass
+    solution: |
+      class Cycle:
+          def __init__(self, iterable):
+              self._source = iter(iterable)
+              self._saved = []
+              self._first_pass = True
+              self._i = 0
+
+          def __iter__(self):
+              return self
+
+          def __next__(self):
+              if self._first_pass:
+                  try:
+                      item = next(self._source)
+                  except StopIteration:
+                      self._first_pass = False
+                  else:
+                      self._saved.append(item)
+                      return item
+              if not self._saved:
+                  raise StopIteration
+              item = self._saved[self._i % len(self._saved)]
+              self._i += 1
+              return item
+    hints:
+      - "Call `iter(iterable)` once in `__init__` and pull items from it with `next()` during the first pass."
+      - "Append each item to a list as you return it. When the source raises `StopIteration`, switch to replaying that list with a wrapping index (`%`)."
+      - "If the saved list is still empty after the source is exhausted, raise `StopIteration`."
+
+  - id: parse-records
+    title: Header rows with next()
+    prompt: |
+      Write `parse_records(lines)`. `lines` is any iterable of strings (a list, a file, a generator…) laid out like this:
+
+      ```text
+      name,age,score      <- column names
+      str,int,float       <- column types
+      Alice,30,88.5       <- data rows
+      Bob,25,92.0
+      ```
+
+      Return a list of dictionaries, one per data row, with each value converted to its column's type: `[{'name': 'Alice', 'age': 30, 'score': 88.5}, …]`. Lines may end with `'\n'`. If there are no lines at all, return `[]`.
+
+      Use an iterator: take the two header lines with `next()` and loop over the rest, so the function also works when `lines` is a one-shot iterator.
+    starter: |
+      def parse_records(lines):
+          headers = lines[0].strip().split(',')
+          types = lines[1].strip().split(',')
+          records = []
+          for line in lines[2:]:
+              records.append(dict(zip(headers, line.strip().split(','))))
+          return records
+    tests: |
+      LINES = ['name,age,score\n', 'str,int,float\n', 'Alice,30,88.5\n', 'Bob,25,92.0\n']
+
+      def test_list_input():
+          """parses a list of lines with types converted"""
+          result = parse_records(LINES)
+          assert result == [{'name': 'Alice', 'age': 30, 'score': 88.5},
+                            {'name': 'Bob', 'age': 25, 'score': 92.0}], f"got {result}"
+
+      def test_types():
+          """values have the right types"""
+          rec = parse_records(LINES)[0]
+          assert type(rec['age']) is int and type(rec['score']) is float, f"got {rec}"
+
+      def test_iterator_input():
+          """works with a one-shot iterator"""
+          result = parse_records(iter(LINES))
+          assert len(result) == 2 and result[1]['name'] == 'Bob', f"got {result}"
+
+      def test_generator_input():
+          """works with a generator expression"""
+          result = parse_records(line for line in LINES)
+          assert result[0]['age'] == 30, f"got {result}"
+
+      def test_headers_only():
+          """no data rows gives an empty list"""
+          assert parse_records(LINES[:2]) == []
+
+      def test_empty():
+          """no lines at all gives an empty list"""
+          assert parse_records([]) == []
+    solution: |
+      CASTS = {'str': str, 'int': int, 'float': float}
+
+      def parse_records(lines):
+          it = iter(lines)
+          header = next(it, None)
+          if header is None:
+              return []
+          headers = header.strip().split(',')
+          casts = [CASTS[t] for t in next(it).strip().split(',')]
+          return [
+              {name: cast(value)
+               for name, cast, value in zip(headers, casts, line.strip().split(','))}
+              for line in it
+          ]
+    hints:
+      - "Start with `it = iter(lines)`. Then `next(it)` gives the first line, the second `next(it)` the second, and `for line in it` continues from line 3."
+      - "`next(it, None)` returns `None` instead of raising when there are no lines."
+      - "Map type names to functions with a dict such as `{'str': str, 'int': int, 'float': float}`, then `zip` names, casts and values together."
+
+  - id: percent-of-max
+    title: Two passes, one iterator
+    prompt: |
+      Write `percent_of_max(values)` that returns a list with each value expressed as a percentage of the largest value, rounded to 1 decimal place: `percent_of_max([50, 100, 25])` → `[50.0, 100.0, 25.0]`.
+
+      The function needs two passes over the data (one to find the maximum, one to compute the percentages). Make it work correctly for **any** iterable, including iterators like `map(...)` objects and generators, without needlessly copying data that is already a re-iterable collection. An empty input returns `[]`.
+    starter: |
+      def percent_of_max(values):
+          biggest = max(values, default=0)
+          return [round(v / biggest * 100, 1) for v in values]
+    tests: |
+      def test_list():
+          """works with a list"""
+          assert percent_of_max([50, 100, 25]) == [50.0, 100.0, 25.0]
+
+      def test_tuple_and_range():
+          """works with other iterables"""
+          assert percent_of_max((1, 4)) == [25.0, 100.0]
+          assert percent_of_max(range(1, 5)) == [25.0, 50.0, 75.0, 100.0]
+
+      def test_iterator():
+          """works when given a one-shot iterator"""
+          result = percent_of_max(iter([3, 6]))
+          assert result == [50.0, 100.0], f"got {result}"
+
+      def test_map_object():
+          """works with a map object"""
+          result = percent_of_max(map(int, ['1', '2', '8']))
+          assert result == [12.5, 25.0, 100.0], f"got {result}"
+
+      def test_generator():
+          """works with a generator expression"""
+          result = percent_of_max(x * 10 for x in [1, 3])
+          assert result == [33.3, 100.0], f"got {result}"
+
+      def test_empty():
+          """empty input gives an empty list"""
+          assert percent_of_max([]) == []
+          assert percent_of_max(iter([])) == []
+    solution: |
+      def percent_of_max(values):
+          if iter(values) is values:     # an iterator: materialize it once
+              values = list(values)
+          biggest = max(values, default=None)
+          if biggest is None:
+              return []
+          return [round(v / biggest * 100, 1) for v in values]
+    hints:
+      - "With an iterator, `max()` uses up every value, so the comprehension afterwards sees nothing."
+      - "`iter(values) is values` is `True` only for iterators. In that case, convert to a list first."
+      - "`max(values, default=None)` avoids an error on empty input."

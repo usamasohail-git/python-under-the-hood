@@ -1,0 +1,34 @@
+---
+import Base from '../../layouts/Base.astro';
+import { parts, url, contentIndex, lectureId, sectionId, sectionLabel } from '../../lib/course';
+
+export function getStaticPaths() {
+  return parts.map((p) => ({ params: { part: p.slug }, props: { part: p } }));
+}
+const { part } = Astro.props;
+const { lessons, practice } = await contentIndex();
+const kindLabel = { lessons: 'Lessons', project: 'Project', exercises: 'Coding exercises' };
+---
+<Base title={`${part.title}: ${part.subtitle}`} activePart={part.slug} description={part.blurb}>
+  <nav class="crumbs" aria-label="Breadcrumb"><a href={url('/')}>Home</a> / <span>{part.title}</span></nav>
+  <h1>{part.title}: {part.subtitle}</h1>
+  <p class="lead muted" style="max-width:44rem">{part.blurb}</p>
+  <div class="grid" style="margin-top:1.5rem">
+    {part.sections.map((s) => {
+      const ids = s.lectures.map((l) => lectureId(part, s, l));
+      const written = ids.filter((id) => lessons.has(id)).length;
+      const hasPractice = practice.has(sectionId(part, s));
+      return (
+        <a class="card" href={url(sectionId(part, s))}>
+          <span class="eyebrow">{sectionLabel(s)} · {kindLabel[s.kind]}</span>
+          <h3>{s.title}</h3>
+          <p class="muted" style="margin-bottom:.6rem">{s.lectures.length} lecture{s.lectures.length === 1 ? '' : 's'}{hasPractice ? ' · quiz & exercises' : ''}</p>
+          {written === ids.length ? <span class="tag ready">Available</span>
+            : written > 0 ? <span class="tag ready">{written} of {ids.length} available</span>
+            : <span class="tag">Coming soon</span>}
+          <div class="bar" data-progress-of={ids.join(' ')}><span></span></div>
+        </a>
+      );
+    })}
+  </div>
+</Base>

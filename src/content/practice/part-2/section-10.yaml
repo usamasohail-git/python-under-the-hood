@@ -1,0 +1,506 @@
+files: ['nyc_parking_tickets_extract.csv']
+
+quiz:
+  - q: What does this print?
+    code: |
+      class CM:
+          def __enter__(self):
+              print('enter')
+              return self
+          def __exit__(self, exc_type, exc_value, tb):
+              print('exit', exc_type.__name__)
+              return True
+
+      with CM():
+          raise KeyError('k')
+          print('after raise')
+      print('done')
+    options:
+      - "`enter`, `exit KeyError`, then a `KeyError` traceback"
+      - "`enter`, `after raise`, `exit KeyError`, `done`"
+      - "`enter`, `exit KeyError`, `done`"
+      - "`enter`, `done`"
+    answer: 2
+    explain: |
+      The `raise` ends the block immediately, so `after raise` never prints. `__exit__` receives the exception and returns `True`, which **suppresses** it, so execution continues after the `with` statement.
+
+  - q: When the `with` block finishes **without** an exception, what does `__exit__` receive as its three exception arguments?
+    options:
+      - "`None, None, None`"
+      - "`False, False, False`"
+      - It isn't called at all
+      - "`StopIteration` and its instance and traceback"
+    answer: 0
+    explain: |
+      `__exit__` is always called when the block is left. On a normal exit, the exception type, value and traceback are all `None`.
+
+  - q: What does this print?
+    code: |
+      with open('test.txt', 'w') as f:
+          x = 'inside'
+      print(x, f.closed)
+    options:
+      - "A `NameError`: `x` only exists inside the block"
+      - "`inside True`"
+      - "`inside False`"
+      - "A `NameError`: `f` only exists inside the block"
+    answer: 1
+    explain: |
+      A `with` block does not create a new scope, so both `x` and `f` still exist afterwards. The file's `__exit__` has closed it, though, so `f.closed` is `True`.
+
+  - q: What does this print?
+    code: |
+      def lines():
+          with open('test.txt', 'w') as f:
+              f.write('a\nb\n')
+          with open('test.txt') as f:
+              return map(str.strip, f)
+
+      try:
+          print(list(lines()))
+      except ValueError as ex:
+          print('ValueError:', ex)
+    options:
+      - "`['a', 'b']`"
+      - "`[]`"
+      - "`ValueError: I/O operation on closed file.`"
+      - "`<map object at ...>`"
+    answer: 2
+    explain: |
+      `map` is lazy: no line is read when it's created. The `return` leaves the `with` block, which closes the file, and the first attempt to read from it fails.
+
+  - q: What does this print?
+    code: |
+      class CM:
+          def __enter__(self):
+              print('enter')
+              raise RuntimeError('setup failed')
+          def __exit__(self, *exc):
+              print('exit')
+
+      try:
+          with CM():
+              print('body')
+      except RuntimeError as ex:
+          print('caught:', ex)
+    options:
+      - "`enter`, `caught: setup failed`"
+      - "`enter`, `exit`, `caught: setup failed`"
+      - "`enter`, `body`, `exit`"
+      - "`enter`, `body`, `exit`, `caught: setup failed`"
+    answer: 0
+    explain: |
+      `__exit__` only runs if `__enter__` **succeeded**. The exception is raised before the block starts, so neither the body nor `__exit__` runs. That's why setup should leave nothing half-acquired, or clean up after itself before raising.
+
+  - q: In what order are the messages printed?
+    code: |
+      class Named:
+          def __init__(self, name):
+              self.name = name
+          def __enter__(self):
+              print('enter', self.name)
+          def __exit__(self, *exc):
+              print('exit', self.name)
+
+      with Named('a'), Named('b'):
+          print('body')
+    options:
+      - "`enter a`, `enter b`, `body`, `exit a`, `exit b`"
+      - "`enter a`, `enter b`, `body`, `exit b`, `exit a`"
+      - "`enter b`, `enter a`, `body`, `exit a`, `exit b`"
+      - "`enter a`, `exit a`, `enter b`, `exit b`, `body`"
+    answer: 1
+    explain: |
+      A multi-item `with` behaves exactly like nested `with` statements: managers are entered left to right and exited in **reverse** order.
+
+  - q: What does this print?
+    code: |
+      from contextlib import contextmanager
+
+      @contextmanager
+      def cm():
+          print('setup')
+          yield
+          print('cleanup')
+
+      try:
+          with cm():
+              1 / 0
+      except ZeroDivisionError:
+          print('error')
+    options:
+      - "`setup`, `cleanup`, `error`"
+      - "`setup`, `error`, `cleanup`"
+      - "`setup`, `error`"
+      - "`setup`, `cleanup`"
+    answer: 2
+    explain: |
+      The exception from the block is raised **at the `yield`** inside the generator. With no `try`/`finally` around the `yield`, the line after it never runs. Wrap the `yield` in `try`/`finally` to guarantee cleanup.
+
+  - q: What does this print?
+    code: |
+      from contextlib import contextmanager
+
+      @contextmanager
+      def cm():
+          try:
+              yield 'value'
+          except ValueError as ex:
+              print('handled', ex)
+
+      with cm() as v:
+          raise ValueError(v)
+      print('after')
+    options:
+      - "`handled value`, `after`"
+      - "`handled value`, then a `ValueError` traceback"
+      - "`after`"
+      - "A `RuntimeError`: the generator didn't stop"
+    answer: 0
+    explain: |
+      The `ValueError` is thrown into the generator at the `yield`, where the `except` clause catches it. Since the generator doesn't re-raise, `contextmanager` treats the exception as **suppressed** and execution continues after the `with`.
+
+  - q: What does this print?
+    code: |
+      from contextlib import suppress
+
+      with suppress(KeyError):
+          print(1)
+          {}['missing']
+          print(2)
+      print(3)
+    options:
+      - "`1`, `2`, `3`"
+      - "`3`"
+      - "`1`, then a `KeyError` traceback"
+      - "`1`, `3`"
+    answer: 3
+    explain: |
+      `suppress` stops the exception at the end of the `with` block, not at the line that raised it. The rest of the block (`print(2)`) is skipped, just as with `try`/`except`.
+
+  - q: In what order do these callbacks run?
+    code: |
+      from contextlib import ExitStack
+
+      with ExitStack() as stack:
+          for name in 'abc':
+              stack.callback(print, name)
+          print('body')
+    options:
+      - "`body`, `a`, `b`, `c`"
+      - "`a`, `b`, `c`, `body`"
+      - "`body`, `c`, `b`, `a`"
+      - "`c`, `b`, `a`, `body`"
+    answer: 2
+    explain: |
+      Callbacks are only run when the `ExitStack` exits, and like nested `with` blocks they unwind **last in, first out**.
+
+  - q: You need to open a number of files that's only known at run time (every name in a list) and guarantee all of them get closed. What's the best tool?
+    options:
+      - "A multi-item `with` statement, one item per file"
+      - "`contextlib.ExitStack` with `enter_context(open(name))` in a loop"
+      - "`contextlib.suppress(OSError)`"
+      - "Open them all with a list comprehension and rely on garbage collection"
+    answer: 1
+    explain: |
+      A multi-item `with` (including the 3.10 parenthesized form) needs the number of managers written in the source. `ExitStack` lets you enter any number of managers at run time and exits all of them, in reverse order, with correct exception handling.
+
+  - q: Which statement about `__exit__` returning `None` (no `return` statement) is true?
+    options:
+      - It suppresses the exception, because the method returned without error
+      - It raises a `TypeError`, because `__exit__` must return a bool
+      - The exception propagates, because `None` is falsy
+      - The exception is converted to a `RuntimeError`
+    answer: 2
+    explain: |
+      Python only checks the truthiness of the return value. Only a truthy value suppresses the exception, so forgetting the `return` is the same as returning `False`.
+
+exercises:
+  - id: temporary-attribute
+    title: Temporarily set an attribute
+    prompt: |
+      Write a **class** `temp_attr(obj, name, value)` that works as a context manager:
+
+      - on entry, it sets `obj.<name>` to `value` and returns `obj`
+      - on exit, it restores the attribute's previous value, or **deletes** the attribute if it didn't exist before
+      - restoring must happen even if the block raises, and the exception must **not** be suppressed
+
+      Save the old state on **entry**, not in `__init__`.
+    starter: |
+      class temp_attr:
+          def __init__(self, obj, name, value):
+              self.obj = obj
+              self.name = name
+              self.value = value
+
+          def __enter__(self):
+              setattr(self.obj, self.name, self.value)
+
+          def __exit__(self, exc_type, exc_value, exc_tb):
+              pass
+    tests: |
+      class Box:
+          pass
+
+      def test_sets_and_returns():
+          """sets the attribute inside the block and returns obj"""
+          b = Box()
+          b.color = 'red'
+          with temp_attr(b, 'color', 'blue') as result:
+              assert result is b, "__enter__ should return obj"
+              assert b.color == 'blue', f"inside: got {b.color!r}"
+
+      def test_restores():
+          """restores the previous value"""
+          b = Box()
+          b.color = 'red'
+          with temp_attr(b, 'color', 'blue'):
+              pass
+          assert b.color == 'red', f"after: got {b.color!r}"
+
+      def test_deletes_new_attribute():
+          """deletes an attribute that didn't exist before"""
+          b = Box()
+          with temp_attr(b, 'size', 10):
+              assert b.size == 10
+          assert not hasattr(b, 'size'), "the attribute should be removed again"
+
+      def test_restores_on_error():
+          """restores on an exception and lets it propagate"""
+          b = Box()
+          b.color = 'red'
+          try:
+              with temp_attr(b, 'color', 'blue'):
+                  raise ValueError('boom')
+          except ValueError:
+              pass
+          else:
+              raise AssertionError("the ValueError was suppressed")
+          assert b.color == 'red', f"after error: got {b.color!r}"
+
+      def test_saves_on_entry():
+          """saves the value current at entry, not at creation"""
+          b = Box()
+          b.color = 'red'
+          manager = temp_attr(b, 'color', 'blue')
+          b.color = 'green'
+          with manager:
+              pass
+          assert b.color == 'green', f"expected 'green', got {b.color!r}"
+    solution: |
+      class temp_attr:
+          _missing = object()
+
+          def __init__(self, obj, name, value):
+              self.obj = obj
+              self.name = name
+              self.value = value
+
+          def __enter__(self):
+              self.saved = getattr(self.obj, self.name, self._missing)
+              setattr(self.obj, self.name, self.value)
+              return self.obj
+
+          def __exit__(self, exc_type, exc_value, exc_tb):
+              if self.saved is self._missing:
+                  delattr(self.obj, self.name)
+              else:
+                  setattr(self.obj, self.name, self.saved)
+              return False
+    hints:
+      - "`getattr(obj, name, default)` returns `default` when the attribute is missing. Use a unique sentinel object (`object()`) as the default so you can tell \"missing\" apart from `None`."
+      - "Restore with `setattr` or remove with `delattr` in `__exit__`, and return `False` so exceptions propagate."
+
+  - id: record-errors
+    title: Suppress and record errors
+    prompt: |
+      Using `contextlib.contextmanager`, write `recording(*exc_types)`. It yields a list. If the block raises an exception that is an instance of one of `exc_types`, the exception is **appended to the list and suppressed**. Any other exception must propagate unchanged. If the block succeeds, the list stays empty.
+
+      ```python
+      with recording(KeyError, IndexError) as errors:
+          [][0]
+      print(errors)   # [IndexError('list index out of range')]
+      ```
+    starter: |
+      from contextlib import contextmanager
+
+      @contextmanager
+      def recording(*exc_types):
+          errors = []
+          yield errors
+    tests: |
+      def test_no_error():
+          """an empty list when the block succeeds"""
+          with recording(KeyError) as errors:
+              x = 1
+          assert errors == [], f"got {errors}"
+
+      def test_records_and_suppresses():
+          """a matching exception is recorded and suppressed"""
+          with recording(KeyError, IndexError) as errors:
+              [][0]
+          assert len(errors) == 1, f"expected one recorded error, got {errors}"
+          assert isinstance(errors[0], IndexError), f"got {errors[0]!r}"
+
+      def test_subclass_matches():
+          """subclasses of a listed type are recorded too"""
+          with recording(LookupError) as errors:
+              {}['k']
+          assert isinstance(errors[0], KeyError)
+
+      def test_other_errors_propagate():
+          """non-matching exceptions propagate"""
+          try:
+              with recording(KeyError) as errors:
+                  raise ValueError('not mine')
+          except ValueError as ex:
+              assert str(ex) == 'not mine'
+          else:
+              raise AssertionError("ValueError should not be suppressed")
+          assert errors == [], "a non-matching error shouldn't be recorded"
+
+      def test_rest_of_block_skipped():
+          """code after the error inside the block doesn't run"""
+          ran = []
+          with recording(ZeroDivisionError):
+              1 / 0
+              ran.append('after')
+          assert ran == []
+    solution: |
+      from contextlib import contextmanager
+
+      @contextmanager
+      def recording(*exc_types):
+          errors = []
+          try:
+              yield errors
+          except exc_types as ex:
+              errors.append(ex)
+    hints:
+      - The exception from the block is raised at the `yield`. Wrap the `yield` in `try`/`except`.
+      - "`except` accepts a tuple of exception classes, and `exc_types` already is one."
+      - Catching without re-raising tells `contextmanager` to suppress the exception; anything you don't catch propagates.
+
+  - id: lazy-csv-rows
+    title: Lazy rows that keep the file open
+    prompt: |
+      This function is supposed to return the rows of a CSV file **lazily**, as dictionaries keyed by the header row, but it fails with `ValueError: I/O operation on closed file.` as soon as you iterate over the result.
+
+      Fix `read_rows(fname)` so that it is a **generator**, keeps the file open while rows are being consumed, and closes it once iteration is finished. Test it on `nyc_parking_tickets_extract.csv`.
+    starter: |
+      import csv
+
+      def read_rows(fname):
+          with open(fname) as f:
+              return csv.DictReader(f)
+    tests: |
+      import builtins, types
+
+      FNAME = 'nyc_parking_tickets_extract.csv'
+
+      def test_is_generator():
+          """read_rows returns a generator"""
+          assert isinstance(read_rows(FNAME), types.GeneratorType), "use yield / yield from"
+
+      def test_first_row():
+          """the first row is a dict keyed by the header"""
+          row = next(iter(read_rows(FNAME)))
+          assert isinstance(row, dict), f"got {type(row).__name__}"
+          assert row['Plate ID'] == 'VAD7274', f"got {row.get('Plate ID')!r}"
+
+      def test_all_rows():
+          """all 20 data rows are produced"""
+          rows = list(read_rows(FNAME))
+          assert len(rows) == 20, f"got {len(rows)} rows"
+          assert rows[-1]['Vehicle Make'] == 'FORD'
+
+      def test_file_closed_after():
+          """the file is closed once iteration is finished"""
+          real_open = builtins.open
+          opened = []
+          def tracking_open(*args, **kwargs):
+              f = real_open(*args, **kwargs)
+              opened.append(f)
+              return f
+          builtins.open = tracking_open
+          try:
+              rows = list(read_rows(FNAME))
+          finally:
+              builtins.open = real_open
+          assert opened, "the file was never opened with open()"
+          assert all(f.closed for f in opened), "a file was left open"
+    solution: |
+      import csv
+
+      def read_rows(fname):
+          with open(fname) as f:
+              yield from csv.DictReader(f)
+    hints:
+      - Returning the reader leaves the `with` block, which closes the file before any row is read.
+      - Replace `return` with `yield from`. The function becomes a generator that stays paused inside the `with` until the rows run out.
+
+  - id: zip-any-files
+    title: Zip any number of files
+    prompt: |
+      Write `zip_files(*names)` that opens **every** file in `names`, and returns a list of strings, one per line position: the stripped lines of each file joined by commas. Stop at the shortest file (like `zip`). All files must be closed when the function returns, and the function must work for any number of files.
+
+      Use `contextlib.ExitStack`. The sample files `file1.txt`, `file2.txt` and `file3.txt` from the lesson are created for you by the tests.
+    starter: |
+      from contextlib import ExitStack
+
+      def zip_files(*names):
+          result = []
+          # your code here
+          return result
+    tests: |
+      import builtins
+
+      for i in (1, 2, 3):
+          with open(f'file{i}.txt', 'w') as f:
+              f.write('\n'.join(f'file{i}_line{j}' for j in (1, 2, 3)))
+      with open('short.txt', 'w') as f:
+          f.write('only one line\n')
+
+      def test_three_files():
+          """zips three files"""
+          result = zip_files('file1.txt', 'file2.txt', 'file3.txt')
+          assert result == ['file1_line1,file2_line1,file3_line1',
+                            'file1_line2,file2_line2,file3_line2',
+                            'file1_line3,file2_line3,file3_line3'], f"got {result}"
+
+      def test_one_file():
+          """works with a single file"""
+          assert zip_files('file2.txt') == ['file2_line1', 'file2_line2', 'file2_line3']
+
+      def test_shortest():
+          """stops at the shortest file"""
+          result = zip_files('file1.txt', 'short.txt')
+          assert result == ['file1_line1,only one line'], f"got {result}"
+
+      def test_all_closed():
+          """every opened file is closed afterwards"""
+          real_open = builtins.open
+          opened = []
+          def tracking_open(*args, **kwargs):
+              f = real_open(*args, **kwargs)
+              opened.append(f)
+              return f
+          builtins.open = tracking_open
+          try:
+              zip_files('file1.txt', 'file2.txt', 'file3.txt', 'short.txt')
+          finally:
+              builtins.open = real_open
+          assert len(opened) == 4, f"expected 4 files to be opened, got {len(opened)}"
+          assert all(f.closed for f in opened), "a file was left open"
+    solution: |
+      from contextlib import ExitStack
+
+      def zip_files(*names):
+          with ExitStack() as stack:
+              files = [stack.enter_context(open(name)) for name in names]
+              return [','.join(line.strip('\n') for line in lines)
+                      for lines in zip(*files)]
+    hints:
+      - "`stack.enter_context(open(name))` opens a file, registers it to be closed, and returns the file object."
+      - "`zip(*files)` yields one tuple of lines at a time and stops at the shortest file."
+      - Build the full list *inside* the `with` block (a list comprehension, not a lazy generator expression), so the files are still open while you read them.

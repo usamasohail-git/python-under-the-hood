@@ -1,0 +1,481 @@
+quiz:
+  - q: What does this print?
+    code: |
+      from enum import Enum
+
+      class Status(Enum):
+          PENDING = 'pending'
+          DONE = 'done'
+
+      print(Status.PENDING == 'pending', Status('done') is Status.DONE)
+    options:
+      - "`True True`"
+      - "`False True`"
+      - "`True False`"
+      - "`False False`"
+    answer: 1
+    explain: |
+      A plain `Enum` member is never equal to its raw value, so the first comparison is `False`. Calling the class looks up the **existing** member by value, so `Status('done')` is the very same object as `Status.DONE`.
+
+  - q: You receive the string `'PENDING'` (a member **name**) from a JSON payload. Which expression returns the matching member of `Status`?
+    options:
+      - "`Status['PENDING']`"
+      - "`Status('PENDING')`"
+      - "`Status.value('PENDING')`"
+      - "`Status.PENDING('PENDING')`"
+    answer: 0
+    explain: |
+      Square brackets look a member up by **name** (raising `KeyError` if missing). Calling the class, `Status(...)`, looks up by **value**.
+
+  - q: What does this print on Python 3.13?
+    code: |
+      from enum import Enum
+
+      class Status(Enum):
+          PENDING = 'pending'
+
+      print('PENDING' in Status, 'pending' in Status, 'PENDING' in Status.__members__)
+    options:
+      - "`True False True`"
+      - "`False False True`"
+      - "`False True True`"
+      - "A `TypeError` is raised"
+    answer: 2
+    explain: |
+      Since Python 3.12, `in` on an enumeration also accepts a raw **value**, so `'pending' in Status` is `True`. A name is never contained in the enumeration itself; use `__members__` (whose keys are names) for that.
+
+  - q: What does this print?
+    code: |
+      from enum import Enum
+
+      class Shape(Enum):
+          RECTANGLE = 4
+          SQUARE = 4
+          TRIANGLE = 3
+
+      print(len(Shape), Shape.SQUARE.name, len(Shape.__members__))
+    options:
+      - "`3 SQUARE 3`"
+      - "`2 SQUARE 2`"
+      - "`3 RECTANGLE 2`"
+      - "`2 RECTANGLE 3`"
+    answer: 3
+    explain: |
+      `SQUARE` has the same value as `RECTANGLE`, which was defined first, so `SQUARE` is an **alias**: the same object, whose `name` is `'RECTANGLE'`. `len()` and iteration skip aliases, but `__members__` lists all three names.
+
+  - q: What happens when this class is defined?
+    code: |
+      import enum
+
+      @enum.unique
+      class Job(enum.Enum):
+          READY = 1
+          WAITING = 1
+          DONE = 2
+    options:
+      - "`WAITING` silently becomes an alias of `READY`"
+      - "A `ValueError` is raised when the class is created"
+      - "A `ValueError` is raised the first time `Job.WAITING` is used"
+      - "`WAITING` is renamed to `READY`"
+    answer: 1
+    explain: |
+      `@unique` checks the finished class immediately and raises `ValueError: duplicate values found in <enum 'Job'>: WAITING -> READY`, so the mistake surfaces as soon as the module is imported.
+
+  - q: Why does this raise a `TypeError`?
+    code: |
+      from enum import Enum
+
+      class Color(Enum):
+          RED = 1
+
+      class MoreColors(Color):
+          GREEN = 2
+    options:
+      - "Member names must be unique across all enumerations"
+      - "Enumerations can never be subclassed"
+      - "An enumeration that already has members can't be subclassed"
+      - "`GREEN = 2` needs `auto()`"
+    answer: 2
+    explain: |
+      A subclass would add new instances to a closed set of members, so `EnumType` forbids it. Subclassing a member-less enumeration (one that only defines methods) is allowed, which is how reusable base enumerations work.
+
+  - q: What does this print?
+    code: |
+      from enum import Enum
+
+      class State(Enum):
+          READY = 1
+          BUSY = 0
+
+      print(bool(State.BUSY))
+    options:
+      - "`True`, because members are truthy by default"
+      - "`False`, because the value is `0`"
+      - "A `TypeError`"
+      - "`None`"
+    answer: 0
+    explain: |
+      Members are ordinary objects, and without a `__bool__` method every object is truthy. Define `__bool__` (for example `return bool(self.value)`) if the truth value should follow the value.
+
+  - q: An enumeration defines `__eq__` but not `__hash__`. What is the consequence?
+    options:
+      - "Nothing; members still hash by name"
+      - "`==` stops working"
+      - "Its members become unhashable, so they can't be dict keys or set elements"
+      - "Iteration order changes"
+    answer: 2
+    explain: |
+      This is the general Python rule: defining `__eq__` without `__hash__` sets `__hash__` to `None`. Define a `__hash__` consistent with your `__eq__` to fix it.
+
+  - q: What does this print?
+    code: |
+      from enum import Enum
+
+      class AppStatus(Enum):
+          OK = (0, 'Fine')
+          FAILED = (1, 'Broken')
+
+          def __new__(cls, code, phrase):
+              member = object.__new__(cls)
+              member._value_ = code
+              member.phrase = phrase
+              return member
+
+      print(AppStatus(1).name, AppStatus.OK.value, AppStatus.OK.phrase)
+    options:
+      - "`FAILED 0 Fine`"
+      - "`FAILED (0, 'Fine') Fine`"
+      - "A `ValueError`: 1 is not a valid AppStatus"
+      - "`OK 0 Fine`"
+    answer: 0
+    explain: |
+      Each tuple is unpacked into `__new__`, which sets `_value_` to the code only. So the value of `OK` is `0`, the phrase is stored as an extra attribute, and looking up by code with `AppStatus(1)` finds `FAILED`.
+
+  - q: What does this print on Python 3.13?
+    code: |
+      from enum import IntEnum
+
+      class Priority(IntEnum):
+          LOW = 1
+          HIGH = 2
+
+      print(str(Priority.HIGH), Priority.HIGH + 1, Priority.LOW < Priority.HIGH)
+    options:
+      - "`Priority.HIGH 3 True`"
+      - "`2 3 True`"
+      - "`2 3 False`"
+      - "A `TypeError`: unsupported operand"
+    answer: 1
+    explain: |
+      `IntEnum` members are real integers, so arithmetic and ordering work. Since 3.11, `str()` of an `IntEnum` member gives the value (`'2'`), while `repr()` still shows `<Priority.HIGH: 2>`.
+
+  - q: What does this print?
+    code: |
+      import enum
+
+      class State(enum.Enum):
+          WAITING = enum.auto()
+          STARTED = 1
+          FINISHED = enum.auto()
+
+      print(list(State))
+    options:
+      - "`[<State.WAITING: 1>, <State.STARTED: 1>, <State.FINISHED: 2>]`"
+      - "`[<State.WAITING: 2>, <State.STARTED: 1>, <State.FINISHED: 3>]`"
+      - "A `ValueError` is raised"
+      - "`[<State.WAITING: 1>, <State.FINISHED: 2>]`"
+    answer: 3
+    explain: |
+      `auto()` gives `WAITING` the value `1`, so the explicit `STARTED = 1` becomes an **alias** of `WAITING` and is hidden from iteration. `FINISHED` gets one more than the highest value, `2`. This is why mixing `auto()` and explicit values is risky.
+
+  - q: What does this print?
+    code: |
+      import enum
+
+      class Perm(enum.Flag):
+          R = enum.auto()
+          W = enum.auto()
+          X = enum.auto()
+
+      rx = Perm.R | Perm.X
+      print(rx.value, Perm.W in rx, len(rx))
+    options:
+      - "`3 False 2`"
+      - "`5 True 2`"
+      - "`5 False 2`"
+      - "`4 False 1`"
+    answer: 2
+    explain: |
+      For a `Flag`, `auto()` produces powers of two: `R=1`, `W=2`, `X=4`. So `R | X` is `5`, it doesn't contain `W`, and (since 3.11) `len()` counts its two member flags.
+
+exercises:
+  - id: flexible-lookup
+    title: Look up a member any way you like
+    prompt: |
+      Write `lookup(enum_cls, key)` that returns the member of `enum_cls` described by `key`, which may be:
+
+      1. a member of `enum_cls` itself (return it unchanged),
+      2. a member **name** as a string (aliases included), or
+      3. a member **value**.
+
+      Try them in that order. If nothing matches, raise a `ValueError`. A member of a *different* enumeration must not be accepted.
+    starter: |
+      def lookup(enum_cls, key):
+          # your code here
+          return enum_cls(key)
+    tests: |
+      from enum import Enum
+
+      class Status(Enum):
+          PENDING = 'pending'
+          RUNNING = 'running'
+          BUSY = 'running'          # alias of RUNNING
+
+      class Code(Enum):
+          OK = 0
+          ERROR = 1
+
+      def test_member():
+          """a member is returned unchanged"""
+          assert lookup(Status, Status.PENDING) is Status.PENDING
+
+      def test_name():
+          """a name string finds the member"""
+          assert lookup(Status, 'PENDING') is Status.PENDING, f"got {lookup(Status, 'PENDING')!r}"
+
+      def test_alias_name():
+          """an alias name finds the canonical member"""
+          assert lookup(Status, 'BUSY') is Status.RUNNING
+
+      def test_value():
+          """a value finds the member"""
+          assert lookup(Status, 'running') is Status.RUNNING
+          assert lookup(Code, 1) is Code.ERROR
+
+      def test_missing():
+          """an unknown key raises ValueError"""
+          try:
+              lookup(Status, 'done')
+          except ValueError:
+              pass
+          else:
+              assert False, "expected ValueError for 'done'"
+
+      def test_other_enum_member():
+          """a member of another enumeration raises ValueError"""
+          try:
+              result = lookup(Code, Status.PENDING)
+          except ValueError:
+              pass
+          else:
+              assert False, f"expected ValueError, got {result!r}"
+    solution: |
+      def lookup(enum_cls, key):
+          if isinstance(key, enum_cls):
+              return key
+          if isinstance(key, str) and key in enum_cls.__members__:
+              return enum_cls.__members__[key]
+          try:
+              return enum_cls(key)
+          except ValueError:
+              raise ValueError(f'{key!r} does not match any member of {enum_cls.__name__}') from None
+    hints:
+      - "`isinstance(key, enum_cls)` tells you whether `key` is already one of its members."
+      - "`enum_cls.__members__` maps every name (aliases too) to its member. `enum_cls(key)` looks up by value and raises `ValueError` when nothing matches."
+      - "Calling an enumeration with a member of a *different* enumeration also raises `ValueError`, so the value lookup handles that case for you."
+
+  - id: find-aliases
+    title: Map aliases to canonical names
+    prompt: |
+      Write `alias_map(enum_cls)` that returns a dictionary mapping each **alias** name of the enumeration to the **name** of the canonical member it refers to. Canonical members themselves must not appear as keys.
+
+      For example, for `Rectangle = 4; Square = 4; Rhombus = 4` the result is `{'Square': 'Rectangle', 'Rhombus': 'Rectangle'}`.
+    starter: |
+      def alias_map(enum_cls):
+          # your code here
+          return {member.name: member.name for member in enum_cls}
+    tests: |
+      from enum import Enum
+
+      class NumSides(Enum):
+          Triangle = 3
+          Rectangle = 4
+          Square = 4
+          Rhombus = 4
+
+      class Status(Enum):
+          ready = 1
+          running = 2
+          busy = 2
+          ok = 3
+          ran_ok = 3
+
+      class Plain(Enum):
+          A = 1
+          B = 2
+
+      def test_numsides():
+          """aliases of one member"""
+          result = alias_map(NumSides)
+          assert result == {'Square': 'Rectangle', 'Rhombus': 'Rectangle'}, f"got {result}"
+
+      def test_status():
+          """aliases of several members"""
+          result = alias_map(Status)
+          assert result == {'busy': 'running', 'ran_ok': 'ok'}, f"got {result}"
+
+      def test_no_aliases():
+          """no aliases gives an empty dict"""
+          assert alias_map(Plain) == {}, f"got {alias_map(Plain)}"
+    solution: |
+      def alias_map(enum_cls):
+          return {
+              name: member.name
+              for name, member in enum_cls.__members__.items()
+              if name != member.name
+          }
+    hints:
+      - Iterating the enumeration skips aliases. Which attribute lists every name?
+      - "An alias is a name in `__members__` whose member has a *different* `name`."
+
+  - id: declaration-order
+    title: Ordered by declaration, not by value
+    prompt: |
+      Create a member-less base enumeration `DeclOrderEnum` whose members compare by the order in which they were **declared**, ignoring their values. All of `<`, `<=`, `>` and `>=` must work between members of the same enumeration, and comparing with anything else must raise `TypeError`.
+
+      Then define `Size(DeclOrderEnum)` with members `SMALL = 's'`, `MEDIUM = 'm'` and `LARGE = 'l'`. (Notice that alphabetically `'l' < 'm' < 's'`, so comparing values would give the wrong answer.)
+    starter: |
+      from enum import Enum
+      from functools import total_ordering
+
+      class DeclOrderEnum(Enum):
+          def __lt__(self, other):
+              return self.value < other.value
+
+      class Size(DeclOrderEnum):
+          SMALL = 's'
+          MEDIUM = 'm'
+          LARGE = 'l'
+    tests: |
+      def test_less_than():
+          """SMALL < MEDIUM < LARGE"""
+          assert Size.SMALL < Size.MEDIUM < Size.LARGE
+
+      def test_other_operators():
+          """<=, > and >= work"""
+          assert Size.SMALL <= Size.SMALL
+          assert Size.LARGE > Size.SMALL
+          assert Size.MEDIUM >= Size.SMALL
+          assert not (Size.LARGE <= Size.MEDIUM)
+
+      def test_sorting():
+          """sorted() and max() follow declaration order"""
+          assert sorted([Size.LARGE, Size.SMALL, Size.MEDIUM]) == [Size.SMALL, Size.MEDIUM, Size.LARGE]
+          assert max(Size) is Size.LARGE
+
+      def test_reusable():
+          """the base class works for other enumerations too"""
+          class Phase(DeclOrderEnum):
+              READY = 30
+              RUNNING = 20
+              DONE = 10
+          assert Phase.READY < Phase.RUNNING < Phase.DONE
+
+      def test_foreign_type():
+          """comparing with a non-member raises TypeError"""
+          try:
+              Size.SMALL < 's'
+          except TypeError:
+              pass
+          else:
+              assert False, "expected TypeError"
+
+      def test_other_enum():
+          """comparing members of different enumerations raises TypeError"""
+          class Other(DeclOrderEnum):
+              A = 1
+          try:
+              Size.SMALL < Other.A
+          except TypeError:
+              pass
+          else:
+              assert False, "expected TypeError"
+    solution: |
+      from enum import Enum
+      from functools import total_ordering
+
+      @total_ordering
+      class DeclOrderEnum(Enum):
+          def __lt__(self, other):
+              if isinstance(other, self.__class__):
+                  members = list(self.__class__)
+                  return members.index(self) < members.index(other)
+              return NotImplemented
+
+      class Size(DeclOrderEnum):
+          SMALL = 's'
+          MEDIUM = 'm'
+          LARGE = 'l'
+    hints:
+      - "`list(self.__class__)` gives the members in declaration order, and `.index()` gives a position you can compare."
+      - "Return `NotImplemented` when `other` isn't a member of the same enumeration; Python then raises the `TypeError` for you."
+      - "`@functools.total_ordering` fills in `<=`, `>` and `>=` from `__lt__`."
+
+  - id: kebab-values
+    title: Automatic kebab-case values
+    prompt: |
+      Create a member-less base enumeration `KebabEnum` whose `auto()` values are the member name in lower case with underscores replaced by hyphens (`USER_PROFILE` becomes `'user-profile'`). Its members should also convert to that string with `str()`.
+
+      Then define `Endpoint(KebabEnum)` with members `HOME`, `USER_PROFILE` and `ORDER_HISTORY`, all using `auto()`.
+    starter: |
+      import enum
+
+      class KebabEnum(enum.Enum):
+          pass
+
+      class Endpoint(KebabEnum):
+          HOME = enum.auto()
+          USER_PROFILE = enum.auto()
+          ORDER_HISTORY = enum.auto()
+    tests: |
+      import enum
+
+      def test_values():
+          """values are kebab-case names"""
+          assert [m.value for m in Endpoint] == ['home', 'user-profile', 'order-history'], \
+              f"got {[m.value for m in Endpoint]}"
+
+      def test_str():
+          """str() gives the value"""
+          assert str(Endpoint.USER_PROFILE) == 'user-profile', f"got {str(Endpoint.USER_PROFILE)!r}"
+          assert f'/{Endpoint.HOME}' == '/home'
+
+      def test_lookup():
+          """members can be looked up by their kebab value"""
+          assert Endpoint('order-history') is Endpoint.ORDER_HISTORY
+
+      def test_reusable():
+          """the base works for another enumeration"""
+          class Event(KebabEnum):
+              PAGE_VIEW = enum.auto()
+              ADD_TO_CART = enum.auto()
+          assert Event.ADD_TO_CART.value == 'add-to-cart'
+          assert len(Event) == 2
+    solution: |
+      import enum
+
+      class KebabEnum(enum.Enum):
+          def _generate_next_value_(name, start, count, last_values):
+              return name.lower().replace('_', '-')
+
+          def __str__(self):
+              return self.value
+
+      class Endpoint(KebabEnum):
+          HOME = enum.auto()
+          USER_PROFILE = enum.auto()
+          ORDER_HISTORY = enum.auto()
+    hints:
+      - "Define `_generate_next_value_(name, start, count, last_values)` as a plain function in the base class. It receives the member's `name`."
+      - "Because it lives in the base class, it is automatically defined before the subclass's members."
+      - "Override `__str__` to return `self.value`; f-strings follow `__str__` too."

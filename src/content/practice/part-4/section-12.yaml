@@ -1,0 +1,502 @@
+quiz:
+  - q: What does this print?
+    code: |
+      try:
+          [1, 2, 3][10]
+      except LookupError as ex:
+          print(type(ex).__name__)
+    options:
+      - "`LookupError`"
+      - "`IndexError`"
+      - "`Exception`"
+      - Nothing, the exception is not caught
+    answer: 1
+    explain: |
+      `except LookupError` catches `LookupError` **and its subclasses**. The handler type is only a filter: the object it receives is still the `IndexError` that was raised.
+
+  - q: What does this print?
+    code: |
+      try:
+          int('abc')
+      except Exception:
+          print('Exception')
+      except ValueError:
+          print('ValueError')
+    options:
+      - "`ValueError`"
+      - "`Exception` then `ValueError`"
+      - "`Exception`"
+      - An unhandled `ValueError`
+    answer: 2
+    explain: |
+      Handlers are checked top to bottom and only the **first** match runs. `ValueError` is a subclass of `Exception`, so the first clause wins and the second can never run. Put specific handlers first.
+
+  - q: Which of these is **not** caught by `except Exception:`?
+    options:
+      - "`ZeroDivisionError`"
+      - "`StopIteration`"
+      - "`KeyboardInterrupt`"
+      - "`ExceptionGroup`"
+    answer: 2
+    explain: |
+      `KeyboardInterrupt` (like `SystemExit` and `GeneratorExit`) derives directly from `BaseException`, not from `Exception`, precisely so that ordinary error handlers don't stop a user from interrupting the program. `ExceptionGroup` *is* an `Exception` (only `BaseExceptionGroup` isn't).
+
+  - q: What does this print?
+    code: |
+      def f():
+          try:
+              raise ValueError()
+          except ValueError:
+              print('a', end=' ')
+          else:
+              print('b', end=' ')
+          print('c', end=' ')
+
+      f()
+    options:
+      - "`a c`"
+      - "`a b c`"
+      - "`a`"
+      - "`b c`"
+    answer: 0
+    explain: |
+      `else` runs only when the `try` block raised nothing, so `b` is skipped. Code after the `try` statement runs whenever the statement finished without an exception escaping, which includes the case where a handler dealt with it, so `c` is printed.
+
+  - q: What does this print?
+    code: |
+      def f():
+          try:
+              print('try', end=' ')
+              return 'result'
+          finally:
+              print('finally', end=' ')
+
+      print(f())
+    options:
+      - "`try result`"
+      - "`try result finally`"
+      - "`try finally result`"
+      - "`finally try result`"
+    answer: 2
+    explain: |
+      The `return` value is computed, but before the function actually returns, the `finally` block runs. Only then does the caller receive `'result'` and print it.
+
+  - q: What does this print?
+    code: |
+      def f():
+          try:
+              return 1 / 0
+          finally:
+              return 'finally wins'
+
+      print(f())
+    options:
+      - "`finally wins`"
+      - An unhandled `ZeroDivisionError`
+      - "`inf`"
+      - "`None`"
+    answer: 0
+    explain: |
+      A `return` in `finally` replaces whatever was happening, including an exception that was propagating. The `ZeroDivisionError` is silently discarded, which is why returning from `finally` is a bad idea (Python 3.14 warns about it).
+
+  - q: What does this print?
+    code: |
+      ex = ValueError('bad', 42)
+      print(str(ex), ex.args[1])
+    options:
+      - "`bad 42`"
+      - "`ValueError: bad 42`"
+      - "`('bad', 42) 42`"
+      - "`bad, 42 42`"
+    answer: 2
+    explain: |
+      All positional arguments are stored in `args`. With a single argument, `str()` is that argument; with more than one, `str()` shows the whole `args` tuple.
+
+  - q: What does this print?
+    code: |
+      try:
+          try:
+              {}['key']
+          except KeyError:
+              raise RuntimeError('lookup failed') from None
+      except RuntimeError as ex:
+          print(ex.__cause__, type(ex.__context__).__name__, ex.__suppress_context__)
+    options:
+      - "`None NoneType True`"
+      - "`None KeyError True`"
+      - "`'key' KeyError False`"
+      - "`None KeyError False`"
+    answer: 1
+    explain: |
+      `from None` leaves `__cause__` as `None` and sets `__suppress_context__` to `True`. The `KeyError` is still recorded in `__context__`; it just isn't shown in the traceback.
+
+  - q: What does this print?
+    code: |
+      try:
+          raise ExceptionGroup('batch', [
+              ValueError('a'), TypeError('b'), ValueError('c'),
+          ])
+      except* ValueError as eg:
+          print('V', len(eg.exceptions), end=' ')
+      except* TypeError as eg:
+          print('T', len(eg.exceptions), end=' ')
+    options:
+      - "`V 2`"
+      - "`V 2 T 1`"
+      - "`V 1 T 1`"
+      - "`V 3`"
+    answer: 1
+    explain: |
+      Each `except*` clause pulls out **all** the matching exceptions as a sub-group, and more than one `except*` clause can run for the same group. Both `ValueError`s go to the first clause, the `TypeError` to the second.
+
+  - q: What does this print?
+    code: |
+      ex = ValueError('bad value')
+      ex.add_note('while reading row 3')
+      print(str(ex), '|', ex.__notes__)
+    options:
+      - "`bad value | ['while reading row 3']`"
+      - "`bad value while reading row 3 | ['while reading row 3']`"
+      - "`bad value | while reading row 3`"
+      - An `AttributeError`
+    answer: 0
+    explain: |
+      `add_note()` (3.11+) appends to the `__notes__` list. Notes don't change the message or `str()` of the exception; the traceback printer displays them after the message.
+
+  - q: What does this print?
+    code: |
+      class AppError(Exception):
+          """base"""
+
+      class MissingKey(AppError, KeyError):
+          """a key is missing"""
+
+      try:
+          raise MissingKey('id')
+      except LookupError:
+          print('LookupError handler')
+      except AppError:
+          print('AppError handler')
+    options:
+      - "`AppError handler`"
+      - "`LookupError handler`"
+      - Both lines
+      - An unhandled `MissingKey`
+    answer: 1
+    explain: |
+      With multiple inheritance, `MissingKey` is a subclass of both `AppError` and `KeyError` (hence of `LookupError`). The first matching handler is the `LookupError` one.
+
+  - q: Which statement about `try` in Python 3.11+ is correct?
+    options:
+      - Entering a `try` block executes a setup instruction, so try blocks inside loops are slow
+      - Entering a `try` block costs essentially nothing; the cost comes from actually raising an exception
+      - Raising and catching an exception is free; only `finally` blocks cost time
+      - "`try` blocks are optimized away unless they contain `except*`"
+    answer: 1
+    explain: |
+      Since 3.11, handlers are described by an exception table that's only consulted when something is raised ("zero-cost" exceptions). Creating, raising and catching an exception still does real work.
+
+exercises:
+  - id: run-task-log
+    title: try, except, else and finally
+    prompt: |
+      Write `run_task(task, log)`. It calls `task()` (a function with no arguments) and records what happens by appending strings to the list `log`:
+
+      1. `'start'` before calling the task.
+      2. `'ok'` if the task finished without raising, and then return the task's result.
+      3. `'failed: <ExceptionTypeName>'` (for example `'failed: ZeroDivisionError'`) if the task raised an `Exception`, and then **re-raise** the same exception so the caller still sees it.
+      4. `'done'` at the very end, in **every** case.
+
+      So a successful task produces `['start', 'ok', 'done']`, and a failing one `['start', 'failed: ...', 'done']`.
+    starter: |
+      def run_task(task, log):
+          log.append('start')
+          result = task()
+          log.append('ok')
+          log.append('done')
+          return result
+    tests: |
+      def test_success_log():
+          """success: start, ok, done"""
+          log = []
+          assert run_task(lambda: 42, log) == 42, "should return the task's result"
+          assert log == ['start', 'ok', 'done'], f"got {log}"
+
+      def test_failure_log():
+          """failure: start, failed: <type>, done"""
+          log = []
+          try:
+              run_task(lambda: 1 / 0, log)
+          except ZeroDivisionError:
+              pass
+          assert log == ['start', 'failed: ZeroDivisionError', 'done'], f"got {log}"
+
+      def test_reraises_same_exception():
+          """the original exception reaches the caller"""
+          err = KeyError('missing')
+          def task():
+              raise err
+          try:
+              run_task(task, [])
+          except KeyError as ex:
+              assert ex is err, "re-raise the same exception object (a bare raise)"
+          else:
+              assert False, "the exception was swallowed"
+
+      def test_ok_not_logged_on_failure():
+          """'ok' is only logged on success"""
+          log = []
+          try:
+              run_task(lambda: int('x'), log)
+          except ValueError:
+              pass
+          assert 'ok' not in log, f"got {log}"
+    solution: |
+      def run_task(task, log):
+          log.append('start')
+          try:
+              result = task()
+          except Exception as ex:
+              log.append(f'failed: {type(ex).__name__}')
+              raise
+          else:
+              log.append('ok')
+              return result
+          finally:
+              log.append('done')
+    hints:
+      - Put only `task()` in the `try` block. The success bookkeeping belongs in `else`, the cleanup in `finally`.
+      - "`type(ex).__name__` gives the class name. A bare `raise` inside the `except` block re-raises the current exception."
+      - "`return result` inside `else` is fine: `finally` still runs before the function actually returns."
+
+  - id: translate-settings
+    title: Translate and chain exceptions
+    prompt: |
+      Settings are stored in a dict of strings, e.g. `{'port': '8080'}`. Write:
+
+      - `SettingError`, a custom exception derived from `Exception`.
+      - `MissingSettingError` and `InvalidSettingError`, both derived from `SettingError`.
+      - `get_int_setting(config, key)`, which returns `int(config[key])`, but:
+        - if the key is missing, raises `MissingSettingError(f'missing setting: {key}')` **from None** (the `KeyError` is an implementation detail);
+        - if the value isn't a valid integer, raises `InvalidSettingError(f'invalid integer for {key}: {value!r}')` chained **from** the original `ValueError`, so the cause is kept.
+    starter: |
+      class SettingError(Exception):
+          """Base exception for settings."""
+
+      def get_int_setting(config, key):
+          return int(config[key])
+    tests: |
+      def test_valid():
+          """valid setting is converted"""
+          assert get_int_setting({'port': '8080'}, 'port') == 8080
+
+      def test_hierarchy():
+          """both errors derive from SettingError"""
+          assert issubclass(MissingSettingError, SettingError)
+          assert issubclass(InvalidSettingError, SettingError)
+          assert issubclass(SettingError, Exception)
+
+      def test_missing():
+          """missing key raises MissingSettingError from None"""
+          try:
+              get_int_setting({}, 'port')
+          except MissingSettingError as ex:
+              assert str(ex) == 'missing setting: port', f"message was {str(ex)!r}"
+              assert ex.__cause__ is None, "use 'from None'"
+              assert ex.__suppress_context__, "use 'from None' to hide the KeyError"
+          else:
+              assert False, "no MissingSettingError raised"
+
+      def test_invalid():
+          """bad value raises InvalidSettingError caused by the ValueError"""
+          try:
+              get_int_setting({'port': 'eighty'}, 'port')
+          except InvalidSettingError as ex:
+              assert str(ex) == "invalid integer for port: 'eighty'", f"message was {str(ex)!r}"
+              assert isinstance(ex.__cause__, ValueError), "chain it with 'from' the original ValueError"
+          else:
+              assert False, "no InvalidSettingError raised"
+
+      def test_catch_base():
+          """callers can catch everything as SettingError"""
+          for config in ({}, {'port': 'x'}):
+              try:
+                  get_int_setting(config, 'port')
+              except SettingError:
+                  pass
+              else:
+                  assert False, f"no SettingError for {config}"
+    solution: |
+      class SettingError(Exception):
+          """Base exception for settings."""
+
+      class MissingSettingError(SettingError):
+          """A required setting is missing."""
+
+      class InvalidSettingError(SettingError):
+          """A setting has an invalid value."""
+
+      def get_int_setting(config, key):
+          try:
+              value = config[key]
+          except KeyError:
+              raise MissingSettingError(f'missing setting: {key}') from None
+          try:
+              return int(value)
+          except ValueError as ex:
+              raise InvalidSettingError(f'invalid integer for {key}: {value!r}') from ex
+    hints:
+      - Use two separate `try` blocks, one around `config[key]` and one around `int(value)`, so you know which step failed.
+      - "`raise NewError(...) from None` hides the context; `raise NewError(...) from ex` sets `__cause__`."
+
+  - id: bank-errors
+    title: An exception hierarchy with data
+    prompt: |
+      Build the exceptions for a small banking app:
+
+      - `BankError(Exception)`: the base class.
+      - `AccountFrozenError(BankError)`.
+      - `InsufficientFundsError`, which must be a `BankError` **and** a `ValueError` (so generic `ValueError` handlers catch it). Its constructor is `InsufficientFundsError(balance, amount)`. It stores both as attributes, has a `shortfall` property (`amount - balance`), and its `str()` is `'cannot withdraw 150, balance is 100'` (for balance 100, amount 150). Its `args` must be `(message,)`.
+
+      Then write `withdraw(account, amount)` for an account dict like `{'balance': 100, 'frozen': False}`: raise `AccountFrozenError('account is frozen')` if frozen, raise `InsufficientFundsError` if the amount exceeds the balance, otherwise subtract the amount and return the new balance.
+    starter: |
+      class BankError(Exception):
+          """Base exception for the bank app."""
+
+      def withdraw(account, amount):
+          account['balance'] -= amount
+          return account['balance']
+    tests: |
+      def test_hierarchy():
+          """class hierarchy"""
+          assert issubclass(AccountFrozenError, BankError)
+          assert issubclass(InsufficientFundsError, BankError)
+          assert issubclass(InsufficientFundsError, ValueError), "should also be a ValueError"
+
+      def test_insufficient_attributes():
+          """InsufficientFundsError stores data and builds its message"""
+          ex = InsufficientFundsError(100, 150)
+          assert ex.balance == 100 and ex.amount == 150
+          assert ex.shortfall == 50, f"shortfall was {ex.shortfall}"
+          assert str(ex) == 'cannot withdraw 150, balance is 100', f"str was {str(ex)!r}"
+          assert ex.args == ('cannot withdraw 150, balance is 100',), f"args were {ex.args}"
+
+      def test_withdraw_ok():
+          """successful withdrawal"""
+          acct = {'balance': 100, 'frozen': False}
+          assert withdraw(acct, 30) == 70
+          assert acct['balance'] == 70
+
+      def test_withdraw_insufficient():
+          """too large a withdrawal raises and leaves the balance alone"""
+          acct = {'balance': 100, 'frozen': False}
+          try:
+              withdraw(acct, 150)
+          except ValueError as ex:
+              assert isinstance(ex, InsufficientFundsError), f"got {type(ex).__name__}"
+              assert ex.shortfall == 50
+          else:
+              assert False, "no exception raised"
+          assert acct['balance'] == 100, "balance must not change"
+
+      def test_withdraw_frozen():
+          """frozen account raises AccountFrozenError"""
+          acct = {'balance': 100, 'frozen': True}
+          try:
+              withdraw(acct, 10)
+          except BankError as ex:
+              assert isinstance(ex, AccountFrozenError), f"got {type(ex).__name__}"
+          else:
+              assert False, "no exception raised"
+          assert acct['balance'] == 100
+    solution: |
+      class BankError(Exception):
+          """Base exception for the bank app."""
+
+      class AccountFrozenError(BankError):
+          """The account is frozen."""
+
+      class InsufficientFundsError(BankError, ValueError):
+          """Not enough money in the account."""
+
+          def __init__(self, balance, amount):
+              self.balance = balance
+              self.amount = amount
+              super().__init__(f'cannot withdraw {amount}, balance is {balance}')
+
+          @property
+          def shortfall(self):
+              return self.amount - self.balance
+
+      def withdraw(account, amount):
+          if account['frozen']:
+              raise AccountFrozenError('account is frozen')
+          if amount > account['balance']:
+              raise InsufficientFundsError(account['balance'], amount)
+          account['balance'] -= amount
+          return account['balance']
+    hints:
+      - "List both base classes: `class InsufficientFundsError(BankError, ValueError):`."
+      - In `__init__`, store the attributes, then call `super().__init__(message)` with the formatted message so `args` and `str()` work.
+      - Check for problems *before* changing the balance.
+
+  - id: collect-errors
+    title: Report every error at once
+    prompt: |
+      Write `parse_numbers(items)`, which converts every string in `items` with `float()` and returns the list of results.
+
+      Instead of stopping at the first bad item, it must try **all** of them. If any fail, raise an `ExceptionGroup` with the message `'N invalid numbers'` (N is the number of failures) containing each `ValueError` raised by `float()`, in order. Before collecting each error, attach a note with `add_note` of the form `item 2: 'abc'` (the position in `items`, starting at 0, and the repr of the item).
+    starter: |
+      def parse_numbers(items):
+          return [float(item) for item in items]
+    tests: |
+      def test_all_valid():
+          """valid input returns floats"""
+          assert parse_numbers(['1', '2.5', '-3']) == [1.0, 2.5, -3.0]
+
+      def test_group_raised():
+          """bad items raise an ExceptionGroup with every error"""
+          try:
+              parse_numbers(['1', 'abc', '3', 'x'])
+          except ExceptionGroup as eg:
+              assert str(eg) == '2 invalid numbers (2 sub-exceptions)', f"str was {str(eg)!r}"
+              assert len(eg.exceptions) == 2, f"expected 2 errors, got {len(eg.exceptions)}"
+              assert all(isinstance(e, ValueError) for e in eg.exceptions)
+          else:
+              assert False, "no ExceptionGroup raised"
+
+      def test_notes():
+          """each error has a note with its position and value"""
+          try:
+              parse_numbers(['abc', '1', 'x'])
+          except ExceptionGroup as eg:
+              notes = [getattr(e, '__notes__', None) for e in eg.exceptions]
+              assert notes == [["item 0: 'abc'"], ["item 2: 'x'"]], f"notes were {notes}"
+          else:
+              assert False, "no ExceptionGroup raised"
+
+      def test_except_star():
+          """except* ValueError handles the group"""
+          handled = []
+          try:
+              parse_numbers(['?'])
+          except* ValueError as eg:
+              handled.extend(eg.exceptions)
+          assert len(handled) == 1
+    solution: |
+      def parse_numbers(items):
+          results = []
+          errors = []
+          for i, item in enumerate(items):
+              try:
+                  results.append(float(item))
+              except ValueError as ex:
+                  ex.add_note(f'item {i}: {item!r}')
+                  errors.append(ex)
+          if errors:
+              raise ExceptionGroup(f'{len(errors)} invalid numbers', errors)
+          return results
+    hints:
+      - Loop with `enumerate` and wrap each `float(item)` in its own `try`, appending failures to an `errors` list.
+      - "`ex.add_note(...)` must be called on the exception object before you store it."
+      - "After the loop: `if errors: raise ExceptionGroup(f'{len(errors)} invalid numbers', errors)`."

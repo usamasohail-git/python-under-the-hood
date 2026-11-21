@@ -1,0 +1,370 @@
+quiz:
+  - q: What does this print?
+    code: |
+      def double(a: int) -> int:
+          return a * 2
+
+      print(double('ab'))
+    options:
+      - "A `TypeError`, because `'ab'` is not an `int`"
+      - "`abab`"
+      - "`None`"
+      - "`4`"
+    answer: 1
+    explain: |
+      Annotations are only metadata, stored in `double.__annotations__`. Python never checks them at run time, so `'ab' * 2` runs normally and gives `'abab'`.
+
+  - q: Which of these is **not** a valid lambda expression?
+    options:
+      - "`lambda: 0`"
+      - "`lambda *args, **kwargs: (args, kwargs)`"
+      - "`lambda x, y=1: x + y`"
+      - "`lambda x: return x + 1`"
+    answer: 3
+    explain: |
+      A lambda's body is a single **expression**, and its value is returned automatically. `return` is a statement, so it isn't allowed. Lambdas can have no parameters, defaults, `*args` and `**kwargs`.
+
+  - q: What does this print?
+    code: |
+      words = ['bb', 'a', 'cc', 'd']
+      print(sorted(words, key=len))
+    options:
+      - "`['a', 'd', 'bb', 'cc']`"
+      - "`['d', 'a', 'cc', 'bb']`"
+      - "`['a', 'bb', 'cc', 'd']`"
+      - "`[1, 1, 2, 2]`"
+    answer: 0
+    explain: |
+      The items are ordered by their lengths, and the output contains the original items, not the keys. `'a'` and `'d'` tie (and so do `'bb'` and `'cc'`); Python's sort is **stable**, so tied items keep their original relative order.
+
+  - q: What does this print?
+    code: |
+      d = {'x': 3, 'y': 1, 'z': 2}
+      print(sorted(d, key=d.get))
+    options:
+      - "`['x', 'y', 'z']`"
+      - "`[1, 2, 3]`"
+      - "`['y', 'z', 'x']`"
+      - "`[('y', 1), ('z', 2), ('x', 3)]`"
+    answer: 2
+    explain: |
+      Iterating a dictionary gives its keys, and `d.get` maps each key to its value, so the keys are ordered by value: `'y'` (1), `'z'` (2), `'x'` (3).
+
+  - q: What does this print?
+    code: |
+      def f(a, b=1, *args, c, d=2, **kwargs):
+          pass
+
+      print(f.__defaults__, f.__kwdefaults__)
+    options:
+      - "`(None, 1) {'c': None, 'd': 2}`"
+      - "`(1,) {'d': 2}`"
+      - "`(1, 2) None`"
+      - "`{'b': 1} {'d': 2}`"
+    answer: 1
+    explain: |
+      `__defaults__` is a tuple containing only the defaults of the positional parameters that have one (`b=1`). Keyword-only defaults go in the `__kwdefaults__` dictionary. Parameters without defaults aren't represented at all.
+
+  - q: What does this print?
+    code: |
+      class Greeter:
+          def greet(self):
+              return 'hi'
+
+      g = Greeter()
+      print(callable(Greeter), callable(g), callable(g.greet))
+    options:
+      - "`True True True`"
+      - "`False False True`"
+      - "`True False False`"
+      - "`True False True`"
+    answer: 3
+    explain: |
+      Classes are always callable (calling one creates an instance), and bound methods are callable. An instance is callable only if its class defines `__call__`, which `Greeter` doesn't.
+
+  - q: What does this print?
+    code: |
+      m = map(str.upper, ['a', 'b'])
+      print(list(m), list(m))
+    options:
+      - "`['A', 'B'] []`"
+      - "`['A', 'B'] ['A', 'B']`"
+      - "`['a', 'b'] ['A', 'B']`"
+      - An error, because a map object can't be converted twice
+    answer: 0
+    explain: |
+      `map` returns a lazy **iterator**. The first `list(m)` consumes all its values, so the second call finds it exhausted and builds an empty list. No error is raised.
+
+  - q: What does this print?
+    code: |
+      print(list(zip('abc', range(5))))
+    options:
+      - "`[('a', 0), ('b', 1), ('c', 2), (None, 3), (None, 4)]`"
+      - "A `ValueError`, because the lengths differ"
+      - "`[('a', 0), ('b', 1), ('c', 2)]`"
+      - "`[('a', 'b', 'c'), (0, 1, 2, 3, 4)]`"
+    answer: 2
+    explain: |
+      `zip` stops as soon as the shortest iterable is exhausted. It only raises an error for a length mismatch when you pass `strict=True` (Python 3.10+); `itertools.zip_longest` pads instead.
+
+  - q: What does this print?
+    code: |
+      from functools import reduce
+      print(reduce(lambda acc, x: acc + x, [1, 2, 3], 10))
+    options:
+      - "`6`"
+      - "`16`"
+      - "`10`"
+      - "`[11, 12, 13]`"
+    answer: 1
+    explain: |
+      The initializer `10` is the starting value of the running result: `((10 + 1) + 2) + 3 = 16`. It would also be the result if the list were empty.
+
+  - q: What does this print?
+    code: |
+      print(all([]), any([]))
+    options:
+      - "`False False`"
+      - "`True True`"
+      - "`False True`"
+      - "`True False`"
+    answer: 3
+    explain: |
+      `all` is true when no element is falsy, which is vacuously the case for an empty iterable. `any` needs at least one truthy element, and there are none. Think of them as reductions with `and` (starting from `True`) and `or` (starting from `False`).
+
+  - q: What does this print?
+    code: |
+      from functools import partial
+      import operator
+
+      x = 5
+      add_x = partial(operator.add, x)
+      x = 100
+      print(add_x(1))
+    options:
+      - "`101`"
+      - "`6`"
+      - "`5`"
+      - "A `TypeError`"
+    answer: 1
+    explain: |
+      `partial` evaluates and stores its arguments when the partial is **created**. It holds a reference to the integer `5`; re-binding the name `x` afterwards doesn't affect it. So `add_x(1)` is `operator.add(5, 1)`.
+
+  - q: What does this print?
+    code: |
+      from operator import itemgetter
+      pairs = [(1, 'b'), (2, 'a'), (1, 'a')]
+      print(sorted(pairs, key=itemgetter(0)))
+    options:
+      - "`[(1, 'a'), (1, 'b'), (2, 'a')]`"
+      - "`[(2, 'a'), (1, 'a'), (1, 'b')]`"
+      - "`[(1, 'b'), (1, 'a'), (2, 'a')]`"
+      - "`[1, 1, 2]`"
+    answer: 2
+    explain: |
+      `itemgetter(0)` returns a callable that fetches element 0, so only the first elements are compared. The two tuples starting with `1` tie, and the stable sort keeps them in their original order: `(1, 'b')` before `(1, 'a')`. Use `itemgetter(0, 1)` to break the tie.
+
+exercises:
+  - id: sort-by-surname
+    title: Sort names by surname
+    prompt: |
+      Write `sort_names(names)` that takes a list of `'First Last'` strings and returns a **new** list sorted by surname, and by first name when surnames are equal. The comparison must be **case-insensitive**.
+
+      For example, `['ada Lovelace', 'Alan Turing', 'Grace Hopper', 'Bob lovelace']` becomes `['Grace Hopper', 'ada Lovelace', 'Bob lovelace', 'Alan Turing']`.
+    starter: |
+      def sort_names(names):
+          return sorted(names)
+    tests: |
+      def test_by_surname():
+          """sorts by surname"""
+          result = sort_names(['Alan Turing', 'Grace Hopper', 'Ada Lovelace'])
+          assert result == ['Grace Hopper', 'Ada Lovelace', 'Alan Turing'], f"got {result}"
+
+      def test_tie_break():
+          """breaks surname ties by first name"""
+          result = sort_names(['Zoe Smith', 'Adam Smith', 'Bob Jones'])
+          assert result == ['Bob Jones', 'Adam Smith', 'Zoe Smith'], f"got {result}"
+
+      def test_case_insensitive():
+          """ignores case"""
+          result = sort_names(['ada Lovelace', 'Alan Turing', 'Grace Hopper', 'Bob lovelace'])
+          assert result == ['Grace Hopper', 'ada Lovelace', 'Bob lovelace', 'Alan Turing'], f"got {result}"
+
+      def test_new_list():
+          """does not modify the input list"""
+          names = ['Bob Jones', 'Adam Smith', 'Al Brown']
+          sort_names(names)
+          assert names == ['Bob Jones', 'Adam Smith', 'Al Brown'], "the input list was changed"
+    solution: |
+      def sort_names(names):
+          def key(name):
+              first, last = name.lower().split()
+              return (last, first)
+          return sorted(names, key=key)
+    hints:
+      - "`sorted(names, key=...)` returns a new list. The key function receives one full name."
+      - Return a tuple `(surname, first_name)` from the key, so ties on the surname are broken by the first name.
+      - Lower-case (or `casefold()`) the name inside the key to make the comparison case-insensitive.
+
+  - id: my-reduce
+    title: A reduce that works with any iterable
+    prompt: |
+      The `my_reduce` below works only with sequences, because it uses indexing and slicing. Rewrite it so that it works with **any iterable** (sets, generators, `map` objects...) and supports an optional `initializer`, like `functools.reduce`:
+
+      - `my_reduce(fn, iterable)` starts from the first element.
+      - `my_reduce(fn, iterable, initializer)` starts from `initializer`, and returns it if the iterable is empty.
+      - With an empty iterable and no initializer, raise `TypeError`.
+
+      Don't use `functools.reduce`. Tip: `iter()` and `next()` let you take the first element of any iterable.
+    starter: |
+      _missing = object()
+
+      def my_reduce(fn, iterable, initializer=_missing):
+          result = iterable[0]
+          for x in iterable[1:]:
+              result = fn(result, x)
+          return result
+    tests: |
+      import operator
+
+      def test_list():
+          """reduces a list"""
+          assert my_reduce(operator.add, [1, 2, 3, 4]) == 10
+
+      def test_generator():
+          """works with a generator (no indexing)"""
+          result = my_reduce(operator.mul, (n for n in range(1, 6)))
+          assert result == 120, f"got {result}"
+
+      def test_initializer():
+          """uses the initializer as the starting value"""
+          assert my_reduce(lambda acc, s: acc + len(s), ['ab', 'cde'], 0) == 5
+
+      def test_empty_with_initializer():
+          """returns the initializer for an empty iterable"""
+          assert my_reduce(operator.mul, [], 1) == 1
+
+      def test_empty_without_initializer():
+          """raises TypeError for an empty iterable without initializer"""
+          try:
+              my_reduce(operator.add, [])
+          except TypeError:
+              return
+          assert False, "expected a TypeError"
+
+      def test_none_initializer():
+          """None is a valid initializer"""
+          assert my_reduce(lambda acc, x: x, [], None) is None
+    solution: |
+      _missing = object()
+
+      def my_reduce(fn, iterable, initializer=_missing):
+          it = iter(iterable)
+          if initializer is _missing:
+              try:
+                  result = next(it)
+              except StopIteration:
+                  raise TypeError('my_reduce() of empty iterable with no initial value') from None
+          else:
+              result = initializer
+          for x in it:
+              result = fn(result, x)
+          return result
+    hints:
+      - "`it = iter(iterable)` gives you an iterator; `next(it)` returns its first element and raises `StopIteration` if there is none."
+      - A `for` loop over the same iterator continues from where `next` left off.
+      - "The `_missing` sentinel lets you tell \"no initializer\" apart from an initializer of `None`: test it with `is`."
+
+  - id: required-params
+    title: Which arguments are required?
+    prompt: |
+      Using `inspect.signature`, write `required_params(func)` that returns a list of the names of the parameters a caller **must** supply, in order: parameters without a default value, excluding `*args` and `**kwargs`.
+
+      For `def f(a, b=1, *args, c, d=2, **kwargs)` the answer is `['a', 'c']`.
+    starter: |
+      import inspect
+
+      def required_params(func):
+          return list(inspect.signature(func).parameters)
+    tests: |
+      def test_mixed():
+          """positional, keyword-only, defaults and var-args"""
+          def f(a, b=1, *args, c, d=2, **kwargs):
+              pass
+          assert required_params(f) == ['a', 'c'], f"got {required_params(f)}"
+
+      def test_positional_only():
+          """positional-only parameters count too"""
+          def g(x, /, y=0):
+              pass
+          assert required_params(g) == ['x'], f"got {required_params(g)}"
+
+      def test_none_required():
+          """no required parameters"""
+          assert required_params(lambda *args, k=1, **kw: None) == []
+
+      def test_none_default():
+          """a default of None is still a default"""
+          def h(a, b=None):
+              pass
+          assert required_params(h) == ['a'], f"got {required_params(h)}"
+    solution: |
+      import inspect
+
+      def required_params(func):
+          var_kinds = (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+          return [
+              name
+              for name, param in inspect.signature(func).parameters.items()
+              if param.default is param.empty and param.kind not in var_kinds
+          ]
+    hints:
+      - "`inspect.signature(func).parameters` maps names to `Parameter` objects with `.default` and `.kind`."
+      - "A parameter has no default when `param.default is inspect.Parameter.empty`. Don't test with `== None`: `None` is a perfectly good default."
+      - "Skip parameters whose kind is `VAR_POSITIONAL` or `VAR_KEYWORD`."
+
+  - id: compose
+    title: Compose functions
+    prompt: |
+      Write `compose(*funcs)` that returns a **new function** of one argument applying the given functions from **right to left**: `compose(f, g, h)(x)` must equal `f(g(h(x)))`.
+
+      With no functions, `compose()` returns a function that returns its argument unchanged. Try to use `functools.reduce`.
+    starter: |
+      from functools import reduce
+
+      def compose(*funcs):
+          return funcs[0]
+    tests: |
+      def test_two():
+          """compose(f, g)(x) == f(g(x))"""
+          inc = lambda x: x + 1
+          dbl = lambda x: x * 2
+          assert compose(inc, dbl)(5) == 11, f"got {compose(inc, dbl)(5)}"
+          assert compose(dbl, inc)(5) == 12, f"got {compose(dbl, inc)(5)}"
+
+      def test_three():
+          """works with built-ins and methods"""
+          f = compose(len, str.strip, str.lower)
+          assert f('  Hello  ') == 5
+
+      def test_single():
+          """a single function is returned unchanged in behavior"""
+          assert compose(abs)(-3) == 3
+
+      def test_identity():
+          """compose() is the identity function"""
+          f = compose()
+          assert callable(f), "compose() must return a function"
+          obj = [1, 2]
+          assert f(obj) is obj
+    solution: |
+      from functools import reduce
+
+      def compose(*funcs):
+          def compose2(f, g):
+              return lambda x: f(g(x))
+          return reduce(compose2, funcs, lambda x: x)
+    hints:
+      - "Start with composing just two functions: `lambda x: f(g(x))`."
+      - "`reduce` can fold that two-function step over all of `funcs`, left to right: `compose2(compose2(f, g), h)` is `x -> f(g(h(x)))`."
+      - "Use the identity function `lambda x: x` as the initializer, which also handles the empty case."

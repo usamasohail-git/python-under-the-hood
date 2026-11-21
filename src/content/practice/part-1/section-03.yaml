@@ -1,0 +1,260 @@
+quiz:
+  - q: What does the variable `x` actually store after `x = [1, 2, 3]`?
+    options:
+      - The list `[1, 2, 3]` itself
+      - A reference to a list object stored elsewhere in memory
+      - A copy of the list
+      - The type `list`
+    answer: 1
+    explain: |
+      A Python variable is a name bound to an object. The list object lives on the heap; `x` refers to it.
+
+  - q: What does this print?
+    code: |
+      a = [1, 2, 3]
+      b = a
+      b.append(4)
+      print(a)
+    options:
+      - "`[1, 2, 3]`"
+      - "`[1, 2, 3, 4]`"
+      - An error
+      - "`[4]`"
+    answer: 1
+    explain: |
+      `b = a` creates a **shared reference**, not a copy. Appending through `b` mutates the single list that both names refer to.
+
+  - q: What does this print?
+    code: |
+      a = [1, 2, 3]
+      b = a
+      b = b + [4]
+      print(a)
+    options:
+      - "`[1, 2, 3]`"
+      - "`[1, 2, 3, 4]`"
+      - An error
+      - "`None`"
+    answer: 0
+    explain: |
+      `b + [4]` builds a **new** list and `b` is re-bound to it. The original list, still referenced by `a`, is untouched.
+
+  - q: Why does `sys.getrefcount(obj)` usually report one more than you expect?
+    options:
+      - It counts the variable name twice
+      - Passing `obj` as an argument creates a temporary extra reference
+      - The garbage collector holds a reference to every object
+      - It rounds up to the nearest even number
+    answer: 1
+    explain: |
+      While `getrefcount` runs, its own parameter references the object, so the count is inflated by one.
+
+  - q: Which situation can reference counting **not** clean up on its own?
+    options:
+      - A list that no variable refers to any more
+      - Two objects that refer only to each other
+      - A string re-bound to a new value
+      - A function's local variables after it returns
+    answer: 1
+    explain: |
+      In a **reference cycle**, each object keeps the other's count at 1 or more, even when nothing else can reach them. The garbage collector (`gc`) finds and frees such cycles.
+
+  - q: What does this print?
+    code: |
+      def change(items):
+          items = [0, 0, 0]
+
+      data = [1, 2, 3]
+      change(data)
+      print(data)
+    options:
+      - "`[0, 0, 0]`"
+      - "`[1, 2, 3]`"
+      - "`None`"
+      - An error
+    answer: 1
+    explain: |
+      Inside `change`, `items = [...]` only **re-binds the local name**. The caller's list is never mutated, so `data` is unchanged.
+
+  - q: What does this print?
+    code: |
+      t = ([1, 2], 'a')
+      t[0].append(3)
+      print(t)
+    options:
+      - "A `TypeError`, because tuples are immutable"
+      - "`([1, 2], 'a')`"
+      - "`([1, 2, 3], 'a')`"
+      - "`([3], 'a')`"
+    answer: 2
+    explain: |
+      The tuple still holds the same two references, so the tuple didn't change. But the list it references is mutable, and `append` changes it in place.
+
+  - q: Which comparison is the idiomatic way to check whether `x` is `None`?
+    options:
+      - "`x == None`"
+      - "`x is None`"
+      - "`type(x) == None`"
+      - "`x.isNone()`"
+    answer: 1
+    explain: |
+      `None` is a singleton, so an identity check is exact and can't be fooled by a class that overrides `__eq__`.
+
+  - q: What is printed?
+    code: |
+      a = [1, 2, 3]
+      b = [1, 2, 3]
+      print(a == b, a is b)
+    options:
+      - "`True True`"
+      - "`True False`"
+      - "`False False`"
+      - "`False True`"
+    answer: 1
+    explain: |
+      Equal values (`==` is `True`), but two separate list objects (`is` is `False`). Python never shares mutable objects automatically.
+
+  - q: Which of these is guaranteed to be `True` in CPython?
+    options:
+      - "`int('256') is int('256')`"
+      - "`int('257') is int('257')`"
+      - "`'hello world' is ''.join(['hello', ' world'])`"
+      - "`[1] is [1]`"
+    answer: 0
+    explain: |
+      CPython caches (interns) the integers -5 to 256, so every 256 is the same object. 257 built at run time is a new object each time, a joined string isn't interned, and two list literals are always distinct objects.
+
+  - q: |
+      After compiling this function, which constant appears in `f.__code__.co_consts`?
+    code: |
+      def f():
+          return 24 * 60
+    options:
+      - "Only `24` and `60`"
+      - "`1440`"
+      - "`'24 * 60'`"
+      - "Nothing: arithmetic is never pre-computed"
+    answer: 1
+    explain: |
+      Constant folding computes `24 * 60` at compile time and stores the result `1440`, so the multiplication never happens at run time.
+
+  - q: You need to check `word in vocabulary` millions of times. What type should `vocabulary` be?
+    options:
+      - "`list`"
+      - "`tuple`"
+      - "`set`"
+      - "It makes no difference"
+    answer: 2
+    explain: |
+      A `set` is a hash table: membership checks take roughly constant time. A list or tuple is scanned element by element.
+
+exercises:
+  - id: same-object
+    title: Same object or just equal?
+    prompt: |
+      Write a function `relationship(a, b)` that returns:
+
+      `'same object'` if `a` and `b` refer to the same object, otherwise `'equal'` if their values are equal, otherwise `'different'`.
+    starter: |
+      def relationship(a, b):
+          # your code here
+          pass
+    tests: |
+      def test_same():
+          """same object"""
+          x = [1, 2]
+          assert relationship(x, x) == 'same object', f"got {relationship(x, x)!r}"
+
+      def test_equal():
+          """equal but distinct lists"""
+          assert relationship([1, 2], [1, 2]) == 'equal'
+
+      def test_cross_type():
+          """10 and 10.0 are equal, not the same object"""
+          assert relationship(10, 10.0) == 'equal'
+
+      def test_different():
+          """different values"""
+          assert relationship('a', 'b') == 'different'
+    solution: |
+      def relationship(a, b):
+          if a is b:
+              return 'same object'
+          if a == b:
+              return 'equal'
+          return 'different'
+    hints:
+      - Check identity first with `is`. Two names for the same object are always equal too.
+      - "Order matters: if you test `==` first, you can never return `'same object'`."
+
+  - id: no-side-effects
+    title: A function without side effects
+    prompt: |
+      `add_item(items, item)` is supposed to return a **new** list with `item` appended, but the current version also changes the caller's list (a side effect).
+
+      Fix it so the original list is never mutated and the returned list is a different object.
+    starter: |
+      def add_item(items, item):
+          items.append(item)
+          return items
+    tests: |
+      def test_returns_new_list():
+          """returns the list with the item added"""
+          assert add_item([1, 2], 3) == [1, 2, 3]
+
+      def test_original_unchanged():
+          """caller's list is not mutated"""
+          original = [1, 2]
+          add_item(original, 3)
+          assert original == [1, 2], f"original was changed to {original}"
+
+      def test_new_object():
+          """result is a new list object"""
+          original = [1, 2]
+          result = add_item(original, 3)
+          assert result is not original, "returned the same list object"
+    solution: |
+      def add_item(items, item):
+          return items + [item]
+    hints:
+      - "`items.append(...)` mutates the shared list. Which list operation creates a **new** list?"
+      - Alternatively, copy first with `list(items)` or `items.copy()`, then append to the copy.
+
+  - id: refcount
+    title: Count the references
+    prompt: |
+      Using the course's `ctypes` technique, write `ref_count(obj)` that returns how many references point to `obj`, **not** counting the temporary reference created by calling your function.
+
+      Tip: read the count from `id(obj)`. Then think about how many extra references exist while your function is running.
+    starter: |
+      import ctypes
+
+      def ref_count(obj):
+          # your code here
+          pass
+    tests: |
+      def test_single_reference():
+          """a list held by one variable has 1 reference"""
+          data = [1, 2, 3]
+          assert ref_count(data) == 1, f"got {ref_count(data)}"
+
+      def test_two_references():
+          """adding an alias increases the count to 2"""
+          data = [1, 2, 3]
+          alias = data
+          assert ref_count(data) == 2, f"got {ref_count(data)}"
+
+      def test_in_container():
+          """being stored in a list counts as a reference"""
+          data = {}
+          holder = [data, data]
+          assert ref_count(data) == 3, f"got {ref_count(data)}"
+    solution: |
+      import ctypes
+
+      def ref_count(obj):
+          # While this function runs, its parameter `obj` holds one extra reference.
+          return ctypes.c_long.from_address(id(obj)).value - 1
+    hints:
+      - "`ctypes.c_long.from_address(id(obj)).value` reads the raw count."
+      - "Your function's own parameter `obj` is one extra reference while the function is running. Subtract it."

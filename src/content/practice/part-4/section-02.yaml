@@ -1,0 +1,633 @@
+quiz:
+  - q: What does this print?
+    code: |
+      class Account:
+          rate = 1.0
+
+      a = Account()
+      b = Account()
+      a.rate = 2.0
+      Account.rate = 3.0
+      print(a.rate, b.rate)
+    options:
+      - "`2.0 3.0`"
+      - "`3.0 3.0`"
+      - "`2.0 1.0`"
+      - "`3.0 1.0`"
+    answer: 0
+    explain: |
+      `a.rate = 2.0` creates an **instance** attribute that shadows the class attribute for `a` only. `b` has no instance attribute, so the lookup falls through to the class, where `rate` is now `3.0`.
+
+  - q: What does this print?
+    code: |
+      class Team:
+          members = []
+
+      t1 = Team()
+      t2 = Team()
+      t1.members.append('Alex')
+      print(t2.members, t1.__dict__)
+    options:
+      - "`[] {'members': ['Alex']}`"
+      - "`['Alex'] {'members': ['Alex']}`"
+      - "`['Alex'] {}`"
+      - "`[] {}`"
+    answer: 2
+    explain: |
+      `t1.members.append(...)` doesn't assign anything: it **reads** `members` (found on the class) and mutates that one shared list. No instance attribute is created, so `t1.__dict__` stays empty and `t2` sees the change.
+
+  - q: What happens here?
+    code: |
+      class Config:
+          debug = False
+
+      try:
+          Config.__dict__['debug'] = True
+          print(Config.debug)
+      except TypeError:
+          print('TypeError')
+    options:
+      - "It prints `True`"
+      - "It prints `False`"
+      - "It prints `TypeError`"
+      - It creates an instance attribute
+    answer: 2
+    explain: |
+      A class's `__dict__` is a read-only `mappingproxy`. Change class attributes with `setattr(Config, 'debug', True)` or `Config.debug = True` instead.
+
+  - q: What does this print?
+    code: |
+      class Greeter:
+          def greet():
+              return 'hi'
+
+      g = Greeter()
+      try:
+          print(g.greet())
+      except TypeError:
+          print('TypeError')
+      print(Greeter.greet())
+    options:
+      - "`hi` then `hi`"
+      - "`TypeError` then `hi`"
+      - "`hi` then `TypeError`"
+      - "`TypeError` then `TypeError`"
+    answer: 1
+    explain: |
+      Through an instance, `greet` is a **bound method**, so `g` is passed as the first argument, and a function with no parameters can't accept it. Through the class it's a plain function, called with no arguments.
+
+  - q: What does this print?
+    code: |
+      class Person:
+          pass
+
+      p = Person()
+      p.hello = lambda *args: len(args)
+      Person.hi = lambda *args: len(args)
+      print(p.hello(), p.hi())
+    options:
+      - "`0 0`"
+      - "`1 1`"
+      - "`1 0`"
+      - "`0 1`"
+    answer: 3
+    explain: |
+      Only functions found in the **class** are bound when accessed through an instance. `hello` is stored on the instance, so it's called with no arguments; `hi` lives on the class, so `p` is passed in.
+
+  - q: What does this print?
+    code: |
+      class Tricky:
+          __class__ = int
+
+      t = Tricky()
+      print(type(t).__name__, t.__class__.__name__)
+    options:
+      - "`Tricky Tricky`"
+      - "`int int`"
+      - "`Tricky int`"
+      - "`int Tricky`"
+    answer: 2
+    explain: |
+      `__class__ = int` is just a class attribute that shadows the real `__class__`. `type()` asks the interpreter for the object's actual type, so it isn't fooled. That's one reason to prefer `type(obj)`.
+
+  - q: When `Person('Eric')` runs and `Person` defines `__init__(self, name)`, what is true?
+    options:
+      - "`__init__` creates the object and returns it"
+      - "The object already exists when `__init__` runs; `__init__` receives it as `self` and should return `None`"
+      - "`__init__` runs before memory for the object is allocated"
+      - "`__init__` is a class method, so `self` is the class"
+    answer: 1
+    explain: |
+      Calling a class first **creates** the instance (`__new__`), then calls `__init__` on it as an ordinary bound method. The class call returns the instance; `__init__` returning anything but `None` is a `TypeError`.
+
+  - q: What does this print?
+    code: |
+      class Person:
+          def __init__(self, name):
+              self._name = name
+
+          @property
+          def name(self):
+              return self._name
+
+      p = Person('Alex')
+      p.__dict__['name'] = 'Hacker'
+      print(p.name)
+    options:
+      - "`Alex`"
+      - "`Hacker`"
+      - "An `AttributeError`"
+      - "A `KeyError`"
+    answer: 0
+    explain: |
+      A property is a **data descriptor** on the class, and data descriptors take priority over the instance `__dict__`. Dotted access still calls the getter, which returns `_name`.
+
+  - q: What does this print?
+    code: |
+      class Person:
+          def __init__(self, name):
+              self._name = name
+
+          @property
+          def name(self):
+              return self._name
+
+          @name.setter
+          def set_name(self, value):
+              self._name = value
+
+      p = Person('Alex')
+      try:
+          p.name = 'Guido'
+          print(p.name)
+      except AttributeError:
+          print('AttributeError')
+    options:
+      - "`Guido`"
+      - "`Alex`"
+      - "`AttributeError`"
+      - "`None`"
+    answer: 2
+    explain: |
+      `@name.setter` returns a **new** property, which is bound to the decorated function's name, `set_name`. So `set_name` is a read/write property, while `name` is still the original getter-only one, and assigning to it fails.
+
+  - q: What does this print?
+    code: |
+      class Counter:
+          count = 0
+
+          @classmethod
+          def bump(cls):
+              cls.count += 1
+
+      c = Counter()
+      c.bump()
+      Counter.bump()
+      print(Counter.count, 'count' in c.__dict__)
+    options:
+      - "`1 True`"
+      - "`2 False`"
+      - "`1 False`"
+      - "`2 True`"
+    answer: 1
+    explain: |
+      A class method is bound to the **class** however it's called, so both calls increment `Counter.count`. No instance attribute is ever created.
+
+  - q: What does this print?
+    code: |
+      x = 'global'
+
+      class Demo:
+          x = 'class'
+          direct = x
+          listed = [x for _ in range(1)]
+
+          def method(self):
+              return x
+
+      print(Demo.direct, Demo.listed[0], Demo().method())
+    options:
+      - "`class class class`"
+      - "`class global global`"
+      - "`class class global`"
+      - "`global global global`"
+    answer: 1
+    explain: |
+      Plain statements in the class body see the class namespace. Functions **and** comprehensions skip the class scope when resolving names, so both find the global `x`.
+
+  - q: Which method type fits a helper that validates a value and needs neither the instance nor the class?
+    options:
+      - An instance method
+      - A class method
+      - A static method
+      - A property
+    answer: 2
+    explain: |
+      A `@staticmethod` is never bound: it receives exactly the arguments you pass. It keeps a class-specific helper inside the class without requiring an unused `self` or `cls`.
+
+exercises:
+  - id: temperature-properties
+    title: Validated, computed temperatures
+    prompt: |
+      Write a class `Temperature` that stores a temperature in degrees Celsius.
+
+      - `Temperature(celsius)` sets the initial value through the `celsius` property (so it's validated too).
+      - `celsius` is a read/write property. Setting it to something that isn't a real number (use `numbers.Real`, and reject `bool`) raises `TypeError`; setting it below absolute zero (`-273.15`) raises `ValueError`.
+      - `fahrenheit` is a read/write **computed** property: reading returns `celsius * 9 / 5 + 32`, assigning converts back and stores the result in `celsius` (with the same validation).
+      - `kelvin` is a **read-only** computed property: `celsius + 273.15`.
+
+      Don't store `fahrenheit` or `kelvin` anywhere: only the Celsius value is kept, in `_celsius`.
+    starter: |
+      import numbers
+
+      class Temperature:
+          def __init__(self, celsius):
+              self.celsius = celsius
+    tests: |
+      import math
+
+      def test_basic():
+          """celsius, fahrenheit and kelvin read correctly"""
+          t = Temperature(100)
+          assert t.celsius == 100
+          assert math.isclose(t.fahrenheit, 212), f"fahrenheit is {t.fahrenheit}"
+          assert math.isclose(t.kelvin, 373.15), f"kelvin is {t.kelvin}"
+
+      def test_celsius_is_property():
+          """celsius is a property and the value lives in _celsius"""
+          assert isinstance(Temperature.__dict__.get('celsius'), property), "celsius should be a property"
+          t = Temperature(20)
+          assert t.__dict__ == {'_celsius': 20}, f"instance dict is {t.__dict__}"
+
+      def test_set_fahrenheit():
+          """assigning fahrenheit updates celsius"""
+          t = Temperature(0)
+          t.fahrenheit = 50
+          assert math.isclose(t.celsius, 10), f"celsius is {t.celsius}"
+          assert 'fahrenheit' not in t.__dict__
+
+      def test_computed_follows_changes():
+          """computed values follow changes to celsius"""
+          t = Temperature(0)
+          t.celsius = 37
+          assert math.isclose(t.kelvin, 310.15)
+          assert math.isclose(t.fahrenheit, 98.6)
+
+      def test_kelvin_read_only():
+          """kelvin can't be assigned"""
+          t = Temperature(0)
+          try:
+              t.kelvin = 5
+          except AttributeError:
+              return
+          assert False, "assigning kelvin should raise AttributeError"
+
+      def test_below_absolute_zero():
+          """values below absolute zero raise ValueError, on init and on assignment"""
+          for make in (lambda: Temperature(-300), lambda: setattr(Temperature(0), 'celsius', -273.16),
+                       lambda: setattr(Temperature(0), 'fahrenheit', -500)):
+              try:
+                  make()
+              except ValueError:
+                  continue
+              assert False, "expected ValueError"
+          assert Temperature(-273.15).kelvin == 0
+
+      def test_type_check():
+          """non-numbers and booleans raise TypeError"""
+          for bad in ('20', None, True):
+              try:
+                  Temperature(bad)
+              except TypeError:
+                  continue
+              assert False, f"Temperature({bad!r}) should raise TypeError"
+    solution: |
+      import numbers
+
+      class Temperature:
+          ABSOLUTE_ZERO = -273.15
+
+          def __init__(self, celsius):
+              self.celsius = celsius
+
+          @property
+          def celsius(self):
+              return self._celsius
+
+          @celsius.setter
+          def celsius(self, value):
+              if not isinstance(value, numbers.Real) or isinstance(value, bool):
+                  raise TypeError('Temperature must be a real number.')
+              if value < Temperature.ABSOLUTE_ZERO:
+                  raise ValueError('Temperature cannot be below absolute zero.')
+              self._celsius = value
+
+          @property
+          def fahrenheit(self):
+              return self.celsius * 9 / 5 + 32
+
+          @fahrenheit.setter
+          def fahrenheit(self, value):
+              if not isinstance(value, numbers.Real) or isinstance(value, bool):
+                  raise TypeError('Temperature must be a real number.')
+              self.celsius = (value - 32) * 5 / 9
+
+          @property
+          def kelvin(self):
+              return self.celsius - Temperature.ABSOLUTE_ZERO
+    hints:
+      - Write `celsius` with `@property` and `@celsius.setter`; put all validation in the setter, and have `__init__` assign `self.celsius`.
+      - "`bool` is a subclass of `int`, so `isinstance(True, numbers.Real)` is `True`. Check for it explicitly."
+      - The `fahrenheit` setter can simply convert and assign `self.celsius = ...`, reusing the Celsius validation.
+
+  - id: product-constructors
+    title: Class attributes, class methods and static methods
+    prompt: |
+      Write a class `Product` with:
+
+      - `__init__(self, name, price)` storing `name` and `price` as instance attributes, and incrementing a **class** attribute `count` (starting at `0`) that tracks how many products have been created.
+      - a static method `parse_price(text)` that turns strings like `'$1,299.50'` or `' 12 '` into a `float` (strip whitespace, a leading `$`, and thousands commas).
+      - a class method `from_csv(cls, line)` that takes `'name,price'` (split on the **first** comma only, strip the name) and returns a new instance of `cls`, using `parse_price` for the price.
+
+      `from_csv` must use `cls`, so it also works for subclasses.
+    starter: |
+      class Product:
+          count = 0
+
+          def __init__(self, name, price):
+              self.name = name
+              self.price = price
+
+          def from_csv(self, line):
+              name, price = line.split(',')
+              return Product(name, float(price))
+    tests: |
+      def test_init_and_count():
+          """__init__ stores attributes and increments the class counter"""
+          start = Product.count
+          p = Product('pen', 1.5)
+          Product('ink', 3.0)
+          assert (p.name, p.price) == ('pen', 1.5)
+          assert Product.count == start + 2, f"count went from {start} to {Product.count}"
+          assert 'count' not in p.__dict__, "count must stay a class attribute"
+
+      def test_parse_price_static():
+          """parse_price is a static method that cleans the text"""
+          assert isinstance(Product.__dict__.get('parse_price'), staticmethod), "use @staticmethod"
+          assert Product.parse_price('$1,299.50') == 1299.5
+          assert Product.parse_price(' 12 ') == 12.0
+          assert Product('x', 1).parse_price('$3') == 3.0
+
+      def test_from_csv():
+          """from_csv builds an instance from 'name,price'"""
+          p = Product.from_csv('  Laptop , $1,299.00')
+          assert isinstance(p, Product)
+          assert p.name == 'Laptop', f"name is {p.name!r}"
+          assert p.price == 1299.0, f"price is {p.price!r}"
+
+      def test_from_csv_classmethod():
+          """from_csv is a class method that uses cls"""
+          assert isinstance(Product.__dict__.get('from_csv'), classmethod), "use @classmethod"
+
+          class Book(Product):
+              pass
+
+          b = Book.from_csv('Dune,9.99')
+          assert type(b) is Book, f"expected a Book, got {type(b).__name__}"
+
+      def test_from_csv_counts():
+          """from_csv goes through __init__, so it is counted"""
+          start = Product.count
+          Product.from_csv('a,1')
+          assert Product.count == start + 1
+    solution: |
+      class Product:
+          count = 0
+
+          def __init__(self, name, price):
+              self.name = name
+              self.price = price
+              Product.count += 1
+
+          @staticmethod
+          def parse_price(text):
+              return float(text.strip().lstrip('$').replace(',', ''))
+
+          @classmethod
+          def from_csv(cls, line):
+              name, price = line.split(',', 1)
+              return cls(name.strip(), cls.parse_price(price))
+    hints:
+      - "Increment the counter on the class: `Product.count += 1`. Writing `self.count += 1` would create an instance attribute instead."
+      - "`line.split(',', 1)` splits on the first comma only, so the price may contain thousands separators."
+      - Inside `from_csv`, call `cls(...)`, not `Product(...)`, so subclasses get instances of themselves.
+
+  - id: cached-area
+    title: A cached computed property
+    prompt: |
+      Write a class `Rectangle(width, height)` where:
+
+      - `width` and `height` are read/write properties. Setting either to a number that isn't positive raises `ValueError`.
+      - `area` is a **read-only** property computed as `width * height`. It must be **cached**: computed only on the first read, and then again only after `width` or `height` has been changed.
+      - every time the area is actually computed, increment an instance attribute `computations` (start it at `0`), so the tests can check the cache.
+      - `del r.area` clears the cache, so the next read recomputes.
+    starter: |
+      class Rectangle:
+          def __init__(self, width, height):
+              self.width = width
+              self.height = height
+              self.computations = 0
+
+          @property
+          def area(self):
+              self.computations += 1
+              return self.width * self.height
+    tests: |
+      def test_area():
+          """area is width * height"""
+          assert Rectangle(3, 4).area == 12
+
+      def test_cached():
+          """repeated reads don't recompute"""
+          r = Rectangle(3, 4)
+          r.area; r.area; r.area
+          assert r.computations == 1, f"computed {r.computations} times"
+
+      def test_invalidated():
+          """changing width or height invalidates the cache"""
+          r = Rectangle(3, 4)
+          r.area
+          r.width = 5
+          assert r.area == 20
+          r.height = 2
+          assert r.area == 10
+          r.area
+          assert r.computations == 3, f"computed {r.computations} times, expected 3"
+
+      def test_lazy():
+          """nothing is computed until area is read"""
+          r = Rectangle(3, 4)
+          r.width = 6
+          assert r.computations == 0, "area should not be computed eagerly"
+
+      def test_read_only():
+          """area can't be assigned"""
+          r = Rectangle(1, 1)
+          try:
+              r.area = 10
+          except AttributeError:
+              return
+          assert False, "assigning area should raise AttributeError"
+
+      def test_delete_resets():
+          """del r.area clears the cache"""
+          r = Rectangle(2, 2)
+          r.area
+          del r.area
+          assert r.area == 4
+          assert r.computations == 2
+          assert isinstance(Rectangle.__dict__['area'], property), "area must still be a property"
+
+      def test_validation():
+          """non-positive sizes raise ValueError"""
+          for args in ((0, 1), (1, -2)):
+              try:
+                  Rectangle(*args)
+              except ValueError:
+                  continue
+              assert False, f"Rectangle{args} should raise ValueError"
+          r = Rectangle(1, 1)
+          try:
+              r.width = -1
+          except ValueError:
+              return
+          assert False, "setting width = -1 should raise ValueError"
+    solution: |
+      class Rectangle:
+          def __init__(self, width, height):
+              self.computations = 0
+              self.width = width
+              self.height = height
+
+          @staticmethod
+          def _validate(value):
+              if value <= 0:
+                  raise ValueError('Sizes must be positive.')
+              return value
+
+          @property
+          def width(self):
+              return self._width
+
+          @width.setter
+          def width(self, value):
+              self._width = self._validate(value)
+              self._area = None
+
+          @property
+          def height(self):
+              return self._height
+
+          @height.setter
+          def height(self, value):
+              self._height = self._validate(value)
+              self._area = None
+
+          @property
+          def area(self):
+              if self._area is None:
+                  self.computations += 1
+                  self._area = self.width * self.height
+              return self._area
+
+          @area.deleter
+          def area(self):
+              self._area = None
+    hints:
+      - Keep the cached value in `_area`, with `None` meaning "not computed yet".
+      - The `width` and `height` setters should reset `_area` to `None`. Since `__init__` assigns through the setters, that also initializes the cache.
+      - "Add `@area.deleter` to reset the cache. Without an `@area.setter`, the property stays read-only."
+
+  - id: bind-plugin
+    title: Per-instance methods with MethodType
+    prompt: |
+      Write a class `Robot` with:
+
+      - `__init__(self, name)` storing `name`.
+      - `install(self, action_name, func)`: binds `func` to **this** robot with `types.MethodType` and stores the bound method on the instance under `action_name`, so `robot.<action_name>(...)` calls `func(robot, ...)`.
+      - `perform(self, action_name, *args)`: calls the installed action with `args` and returns its result. If no such action was installed on this robot, raise `AttributeError` with a message that includes `action_name`.
+
+      Other robots must not be affected by an install, and `Robot` itself must not gain new attributes.
+    starter: |
+      class Robot:
+          def __init__(self, name):
+              self.name = name
+
+          def install(self, action_name, func):
+              setattr(self, action_name, func)
+
+          def perform(self, action_name, *args):
+              return getattr(self, action_name)(*args)
+    tests: |
+      import types
+
+      def wave(self, times=1):
+          return f"{self.name} waves {'!' * times}"
+
+      def test_install_and_call():
+          """installed actions receive the robot as self"""
+          r = Robot('R2')
+          r.install('wave', wave)
+          assert r.wave() == 'R2 waves !', f"got {r.wave()!r}"
+          assert r.wave(3) == 'R2 waves !!!'
+
+      def test_bound_method():
+          """the stored attribute is a method bound to the robot"""
+          r = Robot('C3')
+          r.install('wave', wave)
+          m = r.__dict__.get('wave')
+          assert isinstance(m, types.MethodType), f"stored {type(m).__name__}, expected a bound method"
+          assert m.__self__ is r and m.__func__ is wave
+
+      def test_isolated():
+          """other robots and the class are unaffected"""
+          a, b = Robot('A'), Robot('B')
+          a.install('wave', wave)
+          assert not hasattr(b, 'wave'), "b should not have a wave action"
+          assert 'wave' not in Robot.__dict__, "the class should not change"
+
+      def test_perform():
+          """perform calls the action with arguments"""
+          r = Robot('K9')
+          r.install('wave', wave)
+          r.install('add', lambda self, x, y: x + y)
+          assert r.perform('wave', 2) == 'K9 waves !!'
+          assert r.perform('add', 2, 3) == 5
+
+      def test_perform_missing():
+          """perform raises AttributeError naming the missing action"""
+          r = Robot('X')
+          try:
+              r.perform('dance')
+          except AttributeError as ex:
+              assert 'dance' in str(ex), f"message was {ex!r}"
+              return
+          assert False, "expected AttributeError"
+    solution: |
+      from types import MethodType
+
+      class Robot:
+          def __init__(self, name):
+              self.name = name
+
+          def install(self, action_name, func):
+              setattr(self, action_name, MethodType(func, self))
+
+          def perform(self, action_name, *args):
+              action = self.__dict__.get(action_name)
+              if action is None:
+                  raise AttributeError(f'{self.name} has no action {action_name!r}')
+              return action(*args)
+    hints:
+      - "`MethodType(func, self)` creates a method bound to this robot; store it with `setattr(self, action_name, ...)`."
+      - "Look the action up in `self.__dict__` (not with `getattr`), so methods of the class like `install` don't count as installed actions."

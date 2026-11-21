@@ -1,0 +1,532 @@
+quiz:
+  - q: What happens when this code runs?
+    code: |
+      x = 10
+
+      def f():
+          print(x)
+          x = 20
+
+      try:
+          f()
+      except Exception as ex:
+          print(type(ex).__name__)
+    options:
+      - It prints `10`
+      - It prints `20`
+      - It prints `UnboundLocalError`
+      - It prints `NameError`
+    answer: 2
+    explain: |
+      The assignment `x = 20` makes `x` local to `f` for the **whole** function, decided at compile time. So `print(x)` tries to read the local `x` before it has a value, raising `UnboundLocalError` (a subclass of `NameError`). Python never falls back to the global `x`.
+
+  - q: What does this print?
+    code: |
+      def outer():
+          x = 'a'
+          def middle():
+              x = 'b'
+              def inner():
+                  nonlocal x
+                  x = 'c'
+              inner()
+              return x
+          return middle(), x
+
+      print(outer())
+    options:
+      - "`('c', 'a')`"
+      - "`('c', 'c')`"
+      - "`('b', 'a')`"
+      - "`('b', 'c')`"
+    answer: 0
+    explain: |
+      `nonlocal x` binds to the **nearest** enclosing function that has a local `x`, which is `middle`. So `inner` changes `middle`'s `x` to `'c'`, and `outer`'s `x` stays `'a'`.
+
+  - q: Which statement about `nonlocal` is correct?
+    options:
+      - It can refer to a module-level (global) variable if no enclosing function defines the name
+      - It creates the variable in the enclosing function if it doesn't exist yet
+      - It is needed to call `.append()` on a list defined in an enclosing function
+      - It refers to a local variable of an enclosing function, and an invalid use is a `SyntaxError` at compile time
+    answer: 3
+    explain: |
+      `nonlocal` only looks at enclosing **function** scopes and requires an existing binding there; otherwise compilation fails with a `SyntaxError`. Unlike `global`, it can't create variables. Mutating an object (like `.append()`) needs no declaration at all.
+
+  - q: What does this print?
+    code: |
+      funcs = []
+      for i in range(3):
+          funcs.append(lambda: i)
+
+      print([f() for f in funcs])
+    options:
+      - "`[0, 1, 2]`"
+      - "`[2, 2, 2]`"
+      - "`[3, 3, 3]`"
+      - "`[0, 0, 0]`"
+    answer: 1
+    explain: |
+      All three lambdas refer to the **same** variable `i`, and its value is looked up when each lambda is *called*. By then the loop has finished with `i == 2`. Writing `lambda i=i: i` captures the current value as a default argument instead.
+
+  - q: What does this print?
+    code: |
+      def counter():
+          count = 0
+          def inc():
+              nonlocal count
+              count += 1
+              return count
+          return inc
+
+      c1 = counter()
+      c2 = counter()
+      c1()
+      c1()
+      print(c1(), c2())
+    options:
+      - "`3 1`"
+      - "`3 4`"
+      - "`1 1`"
+      - "`3 3`"
+    answer: 0
+    explain: |
+      Every call to `counter()` creates a new local `count` and therefore a new cell. `c1` and `c2` have independent state: `c1` has been called three times, `c2` once.
+
+  - q: What does a function's `__closure__` attribute contain when the function is a closure?
+    options:
+      - A tuple of **cell** objects, one per free variable, each referring to the variable's current value
+      - A copy of the enclosing function's local namespace, taken when the closure was created
+      - The source code of the enclosing function
+      - A dictionary mapping free variable names to their values
+    answer: 0
+    explain: |
+      The closure holds a tuple of cells (in the order of `__code__.co_freevars`). The enclosing scope and the closure share these cells, which is why re-binding the variable in one is visible in the other. Nothing is copied; `cell.cell_contents` gives the current value.
+
+  - q: What is the order of the printed lines?
+    code: |
+      def dec(fn):
+          print('decorating')
+          def inner():
+              print('before')
+              return fn()
+          return inner
+
+      @dec
+      def f():
+          print('calling f')
+
+      print('defined')
+      f()
+    options:
+      - "`defined`, `decorating`, `before`, `calling f`"
+      - "`decorating`, `defined`, `before`, `calling f`"
+      - "`defined`, `before`, `decorating`, `calling f`"
+      - "`decorating`, `before`, `calling f`, `defined`"
+    answer: 1
+    explain: |
+      `@dec` means `f = dec(f)`, which runs immediately when `f` is defined, so `decorating` comes first. The closure `inner` only runs when `f()` is called.
+
+  - q: What does this print?
+    code: |
+      def shout(fn):
+          def inner(*args, **kwargs):
+              print('calling', fn.__name__)
+              fn(*args, **kwargs)
+          return inner
+
+      @shout
+      def add(a, b):
+          return a + b
+
+      print(add(1, 2), add.__name__)
+    options:
+      - "`calling add`, then `3 add`"
+      - "`calling add`, then `3 inner`"
+      - "`calling add`, then `None inner`"
+      - "`calling add`, then `None add`"
+    answer: 2
+    explain: |
+      `inner` calls `fn` but never **returns** its result, so the decorated `add` returns `None`. And without `@functools.wraps(fn)`, the decorated function's `__name__` is `'inner'`.
+
+  - q: What does this print?
+    code: |
+      def tag(name):
+          def decorator(fn):
+              def inner():
+                  return f'<{name}>' + fn() + f'</{name}>'
+              return inner
+          return decorator
+
+      @tag('b')
+      @tag('i')
+      def hello():
+          return 'hi'
+
+      print(hello())
+    options:
+      - "`<i><b>hi</b></i>`"
+      - "`<b><i>hi</i></b>`"
+      - "`<b>hi</b>`"
+      - "`<i>hi</i>`"
+    answer: 1
+    explain: |
+      `tag('b')` and `tag('i')` are decorator factories returning decorators. Stacked decorators apply bottom-up: `hello = tag('b')(tag('i')(hello))`, so the `b` wrapper is outermost.
+
+  - q: Which statement about `functools` caching decorators is **false**?
+    options:
+      - "`@functools.cache` (3.9+) is equivalent to `@functools.lru_cache(maxsize=None)`"
+      - "`lru_cache` discards the least recently used entries when the cache is full"
+      - Memoized functions can be called with any arguments, including lists
+      - "`fib.cache_info()` reports hits, misses and the current cache size"
+    answer: 2
+    explain: |
+      The arguments become dictionary keys, so they must be **hashable**. Calling a cached function with a list raises `TypeError: unhashable type: 'list'`. The other three statements are true.
+
+  - q: What does this print?
+    code: |
+      from functools import singledispatch
+
+      @singledispatch
+      def kind(x):
+          return 'object'
+
+      @kind.register(int)
+      def _(x):
+          return 'int'
+
+      @kind.register(str)
+      def _(x):
+          return 'str'
+
+      print(kind(True), kind(3.5), kind('3'))
+    options:
+      - "`int object str`"
+      - "`object object str`"
+      - "`int int str`"
+      - "`bool object str`"
+    answer: 0
+    explain: |
+      `bool` is a subclass of `int`, and `singledispatch` follows the class hierarchy to the most specific registered type, so `True` uses the `int` implementation. `float` has no registered type in its hierarchy except `object`, so it gets the default.
+
+  - q: |
+      A class decorator `@register_plugin` is applied to `class Csv: ...`. What must `register_plugin` return so that the name `Csv` still refers to the class?
+    options:
+      - Nothing; class decorators don't need a return value
+      - The class it received (possibly modified)
+      - An instance of the class
+      - A closure that creates the class when called
+    answer: 1
+    explain: |
+      `@register_plugin` above a class means `Csv = register_plugin(Csv)`. Whatever the decorator returns is bound to the name, so a class decorator that modifies or records the class must `return cls`. Returning nothing would bind `Csv` to `None`.
+
+exercises:
+  - id: running-total
+    title: A running total with a closure
+    prompt: |
+      Write `make_accumulator(start=0)` that returns a function `add(value)`. Each call adds `value` to a running total (which begins at `start`) and returns the new total.
+
+      Use a closure (no classes, no globals). Accumulators created by separate calls must be independent.
+    starter: |
+      def make_accumulator(start=0):
+          total = start
+          def add(value):
+              total = total + value
+              return total
+          return add
+    tests: |
+      def test_basic():
+          """adds values cumulatively"""
+          acc = make_accumulator()
+          assert acc(10) == 10
+          assert acc(5) == 15, "the total should carry over between calls"
+
+      def test_start():
+          """respects the start value"""
+          acc = make_accumulator(100)
+          assert acc(1) == 101
+
+      def test_independent():
+          """separate accumulators don't share state"""
+          a, b = make_accumulator(), make_accumulator()
+          a(1); a(2)
+          assert b(10) == 10, f"b should start from 0, got {b(0)}"
+          assert a(0) == 3
+
+      def test_is_closure():
+          """total is a free variable of the returned function"""
+          acc = make_accumulator()
+          assert 'total' in acc.__code__.co_freevars
+    solution: |
+      def make_accumulator(start=0):
+          total = start
+          def add(value):
+              nonlocal total
+              total += value
+              return total
+          return add
+    hints:
+      - The starter raises `UnboundLocalError`. Why does `total = total + value` make `total` local to `add`?
+      - Declare `nonlocal total` inside `add` so the assignment re-binds the enclosing variable.
+
+  - id: call-limit
+    title: A decorator factory that limits calls
+    prompt: |
+      Write a decorator factory `call_limit(n)`. A function decorated with `@call_limit(n)` works normally for its first `n` calls; after that, every call raises `RuntimeError` (without calling the original function).
+
+      Use `functools.wraps` so the decorated function keeps its `__name__` and `__doc__`. Each decorated function has its own call count.
+    starter: |
+      from functools import wraps
+
+      def call_limit(n):
+          def decorator(fn):
+              def inner(*args, **kwargs):
+                  return fn(*args, **kwargs)
+              return inner
+          return decorator
+    tests: |
+      def test_allows_n_calls():
+          """the first n calls work and return the result"""
+          @call_limit(2)
+          def add(a, b):
+              return a + b
+          assert add(1, 2) == 3
+          assert add(b=5, a=1) == 6, "keyword arguments must be passed through"
+
+      def test_raises_after_limit():
+          """call n+1 raises RuntimeError"""
+          @call_limit(1)
+          def ping():
+              return 'pong'
+          ping()
+          try:
+              ping()
+          except RuntimeError:
+              return
+          assert False, "the second call should raise RuntimeError"
+
+      def test_original_not_called():
+          """the original function is not run once the limit is reached"""
+          calls = []
+          @call_limit(1)
+          def record():
+              calls.append(1)
+          record()
+          try:
+              record()
+          except RuntimeError:
+              pass
+          assert len(calls) == 1, f"original ran {len(calls)} times"
+
+      def test_independent_counts():
+          """each decorated function counts separately"""
+          limit = call_limit(1)
+          f = limit(lambda: 'f')
+          g = limit(lambda: 'g')
+          assert f() == 'f' and g() == 'g', "f and g should each get one call"
+
+      def test_metadata():
+          """wraps preserves name and docstring"""
+          @call_limit(3)
+          def greet():
+              """Say hello."""
+          assert greet.__name__ == 'greet', f"got {greet.__name__!r}"
+          assert greet.__doc__ == 'Say hello.'
+    solution: |
+      from functools import wraps
+
+      def call_limit(n):
+          def decorator(fn):
+              count = 0
+              @wraps(fn)
+              def inner(*args, **kwargs):
+                  nonlocal count
+                  if count >= n:
+                      raise RuntimeError(f'{fn.__name__} can only be called {n} times')
+                  count += 1
+                  return fn(*args, **kwargs)
+              return inner
+          return decorator
+    hints:
+      - Three layers. `call_limit(n)` returns `decorator`, `decorator(fn)` returns `inner`.
+      - Put the counter inside `decorator` (not inside `call_limit`), so every decorated function gets its own count.
+      - "Check the count **before** calling `fn`, and use `nonlocal` to update it."
+
+  - id: memoize-kwargs
+    title: A memoizer that understands keyword arguments
+    prompt: |
+      Write a decorator `memoize` that caches results for both positional and keyword arguments. Calls with the same arguments must run the original function only once.
+
+      Requirements:
+
+      - expose the cache dictionary as an attribute `cache` on the decorated function,
+      - treat `f(1, b=2)` and `f(1, b=2)` as the same call, and `f(a=1, b=2)` and `f(b=2, a=1)` as the same call too (keyword order doesn't matter),
+      - use `functools.wraps`.
+
+      Tip: positional args are a tuple; for the keywords, build something hashable whose value doesn't depend on order, e.g. `tuple(sorted(kwargs.items()))`.
+    starter: |
+      from functools import wraps
+
+      def memoize(fn):
+          cache = {}
+          @wraps(fn)
+          def inner(*args, **kwargs):
+              return fn(*args, **kwargs)
+          inner.cache = cache
+          return inner
+    tests: |
+      def test_caches_positional():
+          """repeated positional calls run once"""
+          runs = []
+          @memoize
+          def square(x):
+              runs.append(x)
+              return x * x
+          assert square(4) == 16 and square(4) == 16
+          assert runs == [4], f"square ran for {runs}"
+
+      def test_caches_keywords_any_order():
+          """keyword order doesn't create new cache entries"""
+          runs = []
+          @memoize
+          def power(base, exp):
+              runs.append((base, exp))
+              return base ** exp
+          assert power(base=2, exp=10) == 1024
+          assert power(exp=10, base=2) == 1024
+          assert len(runs) == 1, f"ran {len(runs)} times"
+
+      def test_different_args():
+          """different arguments are cached separately"""
+          @memoize
+          def add(a, b=0):
+              return a + b
+          assert add(1, b=2) == 3
+          assert add(1, b=5) == 6
+          assert add(1) == 1
+          assert len(add.cache) == 3, f"cache has {len(add.cache)} entries"
+
+      def test_recursion_uses_cache():
+          """recursive calls go through the cache"""
+          runs = []
+          @memoize
+          def fib(n):
+              runs.append(n)
+              return 1 if n < 3 else fib(n - 1) + fib(n - 2)
+          assert fib(20) == 6765
+          assert len(runs) == 20, f"fib's body ran {len(runs)} times, expected 20"
+          assert len(fib.cache) == 20
+
+      def test_metadata():
+          """wraps keeps the name"""
+          @memoize
+          def thing():
+              pass
+          assert thing.__name__ == 'thing'
+    solution: |
+      from functools import wraps
+
+      def memoize(fn):
+          cache = {}
+          @wraps(fn)
+          def inner(*args, **kwargs):
+              key = (args, tuple(sorted(kwargs.items())))
+              if key not in cache:
+                  cache[key] = fn(*args, **kwargs)
+              return cache[key]
+          inner.cache = cache
+          return inner
+    hints:
+      - "Build one key from both parts: `key = (args, tuple(sorted(kwargs.items())))`."
+      - Look the key up in `cache` before calling `fn`; store the result after.
+      - Decorating the recursive function means the recursive calls (which look up the global name) also use the cache.
+
+  - id: dispatch-to-json
+    title: A tiny JSON encoder with singledispatch
+    prompt: |
+      Using `functools.singledispatch`, write `to_json(value)` that returns a JSON string:
+
+      - `None` → `null`; `True`/`False` → `true`/`false`
+      - `int` and `float` → their `repr`, e.g. `3` → `3`, `2.5` → `2.5`
+      - `str` → wrapped in double quotes (you may ignore escaping)
+      - `list` and `tuple` → `[...]` with items encoded recursively, separated by `, `
+      - `dict` → `{...}` with `"key": value` pairs separated by `, ` (keys are strings; encode values recursively)
+      - anything else → raise `TypeError`
+
+      Careful: `bool` is a subclass of `int`.
+    starter: |
+      from functools import singledispatch
+
+      @singledispatch
+      def to_json(value):
+          raise TypeError(f'cannot encode {type(value).__name__}')
+
+      @to_json.register(int)
+      def _(value):
+          return repr(value)
+    tests: |
+      def test_scalars():
+          """numbers, strings and None"""
+          assert to_json(3) == '3'
+          assert to_json(2.5) == '2.5'
+          assert to_json('hi') == '"hi"'
+          assert to_json(None) == 'null', f"got {to_json(None)!r}"
+
+      def test_bools():
+          """bools are true/false, not 1/0"""
+          assert to_json(True) == 'true', f"got {to_json(True)!r}"
+          assert to_json(False) == 'false'
+
+      def test_sequences():
+          """lists and tuples become arrays, recursively"""
+          assert to_json([1, 'a', None]) == '[1, "a", null]'
+          assert to_json((True, [2.0])) == '[true, [2.0]]'
+
+      def test_dict():
+          """dicts become objects"""
+          assert to_json({'a': 1, 'b': [False]}) == '{"a": 1, "b": [false]}'
+
+      def test_unsupported():
+          """other types raise TypeError"""
+          try:
+              to_json({1, 2})
+          except TypeError:
+              return
+          assert False, "a set should raise TypeError"
+    solution: |
+      from functools import singledispatch
+
+      @singledispatch
+      def to_json(value):
+          raise TypeError(f'cannot encode {type(value).__name__}')
+
+      @to_json.register(type(None))
+      def _(value):
+          return 'null'
+
+      @to_json.register(bool)
+      def _(value):
+          return 'true' if value else 'false'
+
+      @to_json.register(int)
+      @to_json.register(float)
+      def _(value):
+          return repr(value)
+
+      @to_json.register(str)
+      def _(value):
+          return f'"{value}"'
+
+      @to_json.register(list)
+      @to_json.register(tuple)
+      def _(value):
+          return '[' + ', '.join(to_json(v) for v in value) + ']'
+
+      @to_json.register(dict)
+      def _(value):
+          pairs = (f'{to_json(k)}: {to_json(v)}' for k, v in value.items())
+          return '{' + ', '.join(pairs) + '}'
+    hints:
+      - Register `bool` separately. `singledispatch` picks the most specific type, so it wins over `int` for `True` and `False`.
+      - "`None`'s type is `type(None)`, and you can register it like any other type."
+      - The list and dict implementations call `to_json` on their items, so nested values are dispatched again.

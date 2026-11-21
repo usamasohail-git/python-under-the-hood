@@ -1,0 +1,899 @@
+quiz:
+  - q: Why can the lazy properties of `Polygon` cache their values without ever needing to reset them?
+    options:
+      - Because `math.sin` and `math.cos` always return the same result
+      - Because cached values are stored on the class, not the instance
+      - Because properties are computed only once by Python automatically
+      - Because `Polygon` is immutable, so `n` and `R` can't change after creation
+    answer: 3
+    explain: |
+      A cached value goes stale only if the inputs it was computed from change. `Polygon` has no setters, so `_n` and `_R` are fixed for the object's lifetime and a computed area or perimeter stays correct forever. The `Circle` class, whose radius can change, had to reset its cache in the setter.
+
+  - q: What does this print?
+    code: |
+      class Square:
+          def __init__(self, side):
+              self._side = side
+              self._area = None
+
+          @property
+          def area(self):
+              if self._area is None:
+                  print('computing')
+                  self._area = self._side ** 2
+              return self._area
+
+      sq = Square(3)
+      print(sq.area + sq.area)
+    options:
+      - "`computing` then `18`"
+      - "`computing`, `computing` then `18`"
+      - "`18` only"
+      - "`computing` then `9`"
+    answer: 0
+    explain: |
+      The first access finds `_area` is `None`, computes and caches `9` (printing once). The second access returns the cached value, so the sum is `18` with a single `computing` line.
+
+  - q: What does this print?
+    code: |
+      class Shapes:
+          def __init__(self, m):
+              self._m = m
+              self._i = 3
+          def __iter__(self):
+              return self
+          def __next__(self):
+              if self._i > self._m:
+                  raise StopIteration
+              self._i += 1
+              return self._i - 1
+
+      s = Shapes(5)
+      print(list(s), len(list(s)))
+    options:
+      - "`[3, 4, 5] 3`"
+      - "`[3, 4, 5] 0`"
+      - "`[3, 4] 2`"
+      - "A `TypeError`"
+    answer: 1
+    explain: |
+      `Shapes` is its own iterator (`__iter__` returns `self`), so the first `list()` exhausts it and the second is empty. That's why the project splits the work into an iterable `Polygons` and a separate `PolygonsIterator`.
+
+  - q: In the refactored `Polygons`, why does `__iter__` return `PolygonsIterator(self._m, self._R)` instead of `self`?
+    options:
+      - So that each loop gets a fresh iterator and the collection can be iterated any number of times
+      - So that iterating is faster
+      - Because `__iter__` is not allowed to return `self`
+      - So that `len()` keeps working
+    answer: 0
+    explain: |
+      An iterable must hand out a **new** iterator for each iteration. Returning `self` would make `Polygons` a single-use iterator: the second `for` loop over the same object would produce nothing.
+
+  - q: What does this print?
+    code: |
+      polygons = iter(['tri', 'square', 'pentagon'])
+      best = max(polygons, key=len)
+      print(best, list(polygons))
+    options:
+      - "`pentagon ['tri', 'square', 'pentagon']`"
+      - "`square []`"
+      - "`pentagon []`"
+      - "`tri ['square', 'pentagon']`"
+    answer: 2
+    explain: |
+      `max` consumes the whole iterator to find the longest string, so nothing is left for `list()`. Inside `max_efficiency_polygon` this is fine because `max(self, ...)` asks the *iterable* for a brand-new iterator.
+
+  - q: The lazy `Polygons(m, R)` stores no polygons. How can `len()` still work?
+    options:
+      - It can't; `__len__` must be removed
+      - "`__len__` iterates over all polygons and counts them"
+      - "`__len__` computes `m - 2` directly from the stored parameters"
+      - "Python counts the items automatically for iterables"
+    answer: 2
+    explain: |
+      The number of polygons with 3 to `m` vertices is `m - 2`, which needs no polygons at all. Iterables don't get `len()` automatically; you implement `__len__` when the size is known cheaply.
+
+  - q: What does this print?
+    code: |
+      from functools import cached_property
+
+      class Hexagon:
+          @cached_property
+          def area(self):
+              print('computing')
+              return 42
+
+      h = Hexagon()
+      h.area
+      h.area
+      print('area' in vars(h))
+    options:
+      - "`computing`, `computing`, `False`"
+      - "`computing`, `False`"
+      - "`True` only"
+      - "`computing`, `True`"
+    answer: 3
+    explain: |
+      `cached_property` runs the method on first access and stores the result in the instance's `__dict__` under the same name, so the second access finds it there directly without calling the method.
+
+exercises:
+  - id: lazy-polygon
+    title: "Goal 1: lazy Polygon properties"
+    prompt: |
+      Refactor the `Polygon` class so that every calculated property (`interior_angle`, `side_length`, `apothem`, `area`, `perimeter`) is **lazy**:
+
+      - nothing is calculated when a `Polygon` is created
+      - each value is calculated on first access and cached
+      - later accesses return the cached value without recalculating
+
+      Validation (`n < 3` raises `ValueError`), the `repr`, equality and ordering must keep working exactly as before.
+
+      The tests check results *and* laziness: they count how often `math.sin` and `math.cos` are called.
+    starter: |
+      import math
+
+      class Polygon:
+          def __init__(self, n, R):
+              if n < 3:
+                  raise ValueError('Polygon must have at least 3 vertices.')
+              self._n = n
+              self._R = R
+
+          def __repr__(self):
+              return f'Polygon(n={self._n}, R={self._R})'
+
+          @property
+          def count_vertices(self):
+              return self._n
+
+          @property
+          def count_edges(self):
+              return self._n
+
+          @property
+          def circumradius(self):
+              return self._R
+
+          @property
+          def interior_angle(self):
+              return (self._n - 2) * 180 / self._n
+
+          @property
+          def side_length(self):
+              return 2 * self._R * math.sin(math.pi / self._n)
+
+          @property
+          def apothem(self):
+              return self._R * math.cos(math.pi / self._n)
+
+          @property
+          def area(self):
+              return self._n / 2 * self.side_length * self.apothem
+
+          @property
+          def perimeter(self):
+              return self._n * self.side_length
+
+          def __eq__(self, other):
+              if isinstance(other, self.__class__):
+                  return (self.count_edges == other.count_edges
+                          and self.circumradius == other.circumradius)
+              return NotImplemented
+
+          def __gt__(self, other):
+              if isinstance(other, self.__class__):
+                  return self.count_vertices > other.count_vertices
+              return NotImplemented
+    tests: |
+      import math
+
+      def _counted(action):
+          calls = {'sin': 0, 'cos': 0}
+          real_sin, real_cos = math.sin, math.cos
+          def sin(x):
+              calls['sin'] += 1
+              return real_sin(x)
+          def cos(x):
+              calls['cos'] += 1
+              return real_cos(x)
+          math.sin, math.cos = sin, cos
+          try:
+              action()
+          finally:
+              math.sin, math.cos = real_sin, real_cos
+          return calls
+
+      def close(a, b):
+          return math.isclose(a, b, rel_tol=0.001, abs_tol=0.001)
+
+      def test_validation_and_repr():
+          """n < 3 raises ValueError; repr unchanged"""
+          try:
+              Polygon(2, 10)
+              assert False, "Polygon(2, 10) should raise ValueError"
+          except ValueError:
+              pass
+          assert repr(Polygon(3, 1)) == 'Polygon(n=3, R=1)', f"got {Polygon(3, 1)!r}"
+
+      def test_values_square():
+          """correct values for a square with R=1"""
+          p = Polygon(4, 1)
+          assert p.count_vertices == 4 and p.count_edges == 4 and p.circumradius == 1
+          assert p.interior_angle == 90, f"interior_angle: {p.interior_angle}"
+          assert close(p.side_length, math.sqrt(2)), f"side_length: {p.side_length}"
+          assert close(p.apothem, 0.707), f"apothem: {p.apothem}"
+          assert close(p.area, 2), f"area: {p.area}"
+          assert close(p.perimeter, 4 * math.sqrt(2)), f"perimeter: {p.perimeter}"
+
+      def test_values_dodecagon():
+          """correct values for Polygon(12, 3)"""
+          p = Polygon(12, 3)
+          assert close(p.side_length, 1.55291), f"side_length: {p.side_length}"
+          assert close(p.apothem, 2.89778), f"apothem: {p.apothem}"
+          assert close(p.area, 27), f"area: {p.area}"
+          assert close(p.perimeter, 18.635), f"perimeter: {p.perimeter}"
+          assert close(p.interior_angle, 150), f"interior_angle: {p.interior_angle}"
+
+      def test_comparisons():
+          """equality and ordering still work"""
+          p1, p2, p3 = Polygon(3, 10), Polygon(10, 10), Polygon(15, 10)
+          p4, p5 = Polygon(15, 100), Polygon(15, 100)
+          assert p2 > p1 and p2 < p3
+          assert p3 != p4 and p1 != p4 and p4 == p5
+
+      def test_nothing_computed_at_creation():
+          """creating a Polygon calculates nothing"""
+          calls = _counted(lambda: Polygon(7, 2))
+          assert calls == {'sin': 0, 'cos': 0}, f"calls during __init__: {calls}"
+
+      def test_computed_at_most_once():
+          """repeated access calls sin/cos at most once each"""
+          p = Polygon(8, 1)
+          def access():
+              for _ in range(20):
+                  p.area, p.perimeter, p.side_length, p.apothem, p.interior_angle
+          calls = _counted(access)
+          assert calls['sin'] <= 1 and calls['cos'] <= 1, f"calls after 20 rounds: {calls}"
+
+      def test_cached_values_consistent():
+          """cached values equal freshly computed ones"""
+          p = Polygon(6, 2)
+          first = (p.area, p.perimeter)
+          assert (p.area, p.perimeter) == first
+          assert close(p.area, 10.3923) and close(p.perimeter, 12)
+    solution: |
+      import math
+
+      class Polygon:
+          def __init__(self, n, R):
+              if n < 3:
+                  raise ValueError('Polygon must have at least 3 vertices.')
+              self._n = n
+              self._R = R
+              self._interior_angle = None
+              self._side_length = None
+              self._apothem = None
+              self._area = None
+              self._perimeter = None
+
+          def __repr__(self):
+              return f'Polygon(n={self._n}, R={self._R})'
+
+          @property
+          def count_vertices(self):
+              return self._n
+
+          @property
+          def count_edges(self):
+              return self._n
+
+          @property
+          def circumradius(self):
+              return self._R
+
+          @property
+          def interior_angle(self):
+              if self._interior_angle is None:
+                  self._interior_angle = (self._n - 2) * 180 / self._n
+              return self._interior_angle
+
+          @property
+          def side_length(self):
+              if self._side_length is None:
+                  self._side_length = 2 * self._R * math.sin(math.pi / self._n)
+              return self._side_length
+
+          @property
+          def apothem(self):
+              if self._apothem is None:
+                  self._apothem = self._R * math.cos(math.pi / self._n)
+              return self._apothem
+
+          @property
+          def area(self):
+              if self._area is None:
+                  self._area = self._n / 2 * self.side_length * self.apothem
+              return self._area
+
+          @property
+          def perimeter(self):
+              if self._perimeter is None:
+                  self._perimeter = self._n * self.side_length
+              return self._perimeter
+
+          def __eq__(self, other):
+              if isinstance(other, self.__class__):
+                  return (self.count_edges == other.count_edges
+                          and self.circumradius == other.circumradius)
+              return NotImplemented
+
+          def __gt__(self, other):
+              if isinstance(other, self.__class__):
+                  return self.count_vertices > other.count_vertices
+              return NotImplemented
+    hints:
+      - "In `__init__`, add a backing attribute per calculated property, e.g. `self._area = None`."
+      - "In each property: `if self._area is None: self._area = ...` and then `return self._area`."
+      - "Let `area` and `perimeter` use the `side_length` and `apothem` properties, so they reuse the cached values."
+
+  - id: lazy-polygons-iterable
+    title: "Goal 2: Polygons as a lazy iterable"
+    prompt: |
+      `Polygons(m, R)` is currently a sequence that builds a list of every polygon up front. Refactor it into an **iterable**:
+
+      - write an iterator class `PolygonsIterator(m, R)` that returns `Polygon(3, R)`, `Polygon(4, R)`, …, `Polygon(m, R)` and then raises `StopIteration`; it must create each polygon only when `next()` is called
+      - `Polygons.__iter__` must return a **new** `PolygonsIterator` every time
+      - `Polygons` must not create or store any polygons itself
+      - keep `len()` (which is `m - 2`), the `repr`, and the `ValueError` for `m < 3`
+
+      The lazy `Polygon` class from Goal 1 is provided. (`max_efficiency_polygon` is the next exercise.)
+    starter: |
+      import math
+
+      class Polygon:
+          def __init__(self, n, R):
+              if n < 3:
+                  raise ValueError('Polygon must have at least 3 vertices.')
+              self._n = n
+              self._R = R
+              self._interior_angle = None
+              self._side_length = None
+              self._apothem = None
+              self._area = None
+              self._perimeter = None
+
+          def __repr__(self):
+              return f'Polygon(n={self._n}, R={self._R})'
+
+          @property
+          def count_vertices(self):
+              return self._n
+
+          @property
+          def count_edges(self):
+              return self._n
+
+          @property
+          def circumradius(self):
+              return self._R
+
+          @property
+          def interior_angle(self):
+              if self._interior_angle is None:
+                  self._interior_angle = (self._n - 2) * 180 / self._n
+              return self._interior_angle
+
+          @property
+          def side_length(self):
+              if self._side_length is None:
+                  self._side_length = 2 * self._R * math.sin(math.pi / self._n)
+              return self._side_length
+
+          @property
+          def apothem(self):
+              if self._apothem is None:
+                  self._apothem = self._R * math.cos(math.pi / self._n)
+              return self._apothem
+
+          @property
+          def area(self):
+              if self._area is None:
+                  self._area = self._n / 2 * self.side_length * self.apothem
+              return self._area
+
+          @property
+          def perimeter(self):
+              if self._perimeter is None:
+                  self._perimeter = self._n * self.side_length
+              return self._perimeter
+
+          def __eq__(self, other):
+              if isinstance(other, self.__class__):
+                  return (self.count_edges == other.count_edges
+                          and self.circumradius == other.circumradius)
+              return NotImplemented
+
+          def __gt__(self, other):
+              if isinstance(other, self.__class__):
+                  return self.count_vertices > other.count_vertices
+              return NotImplemented
+
+
+      class Polygons:
+          def __init__(self, m, R):
+              if m < 3:
+                  raise ValueError('m must be greater than 3')
+              self._m = m
+              self._R = R
+              self._polygons = [Polygon(i, R) for i in range(3, m + 1)]
+
+          def __len__(self):
+              return self._m - 2
+
+          def __repr__(self):
+              return f'Polygons(m={self._m}, R={self._R})'
+
+          def __getitem__(self, s):
+              return self._polygons[s]
+    tests: |
+      def _count_polygons(action):
+          global Polygon
+          created = []
+          original = Polygon
+          class CountingPolygon(original):
+              def __init__(self, n, R):
+                  created.append(n)
+                  super().__init__(n, R)
+          Polygon = CountingPolygon
+          try:
+              result = action()
+          finally:
+              Polygon = original
+          return result, created
+
+      def test_values():
+          """iterating gives polygons with 3..m vertices"""
+          result = [(p.count_vertices, p.circumradius) for p in Polygons(6, 2)]
+          assert result == [(3, 2), (4, 2), (5, 2), (6, 2)], f"got {result}"
+
+      def test_reiterable():
+          """a Polygons object can be iterated more than once"""
+          polygons = Polygons(5, 1)
+          first = [repr(p) for p in polygons]
+          second = [repr(p) for p in polygons]
+          assert first == second == ['Polygon(n=3, R=1)', 'Polygon(n=4, R=1)', 'Polygon(n=5, R=1)'], f"got {first} then {second}"
+
+      def test_new_iterator_each_time():
+          """iter() returns a new PolygonsIterator each time"""
+          polygons = Polygons(5, 1)
+          it1, it2 = iter(polygons), iter(polygons)
+          assert it1 is not polygons, "iter(polygons) returned the Polygons object itself"
+          assert it1 is not it2, "iter() returned the same iterator twice"
+          assert type(it1).__name__ == 'PolygonsIterator', f"iterator type is {type(it1).__name__}"
+
+      def test_iterator_protocol():
+          """PolygonsIterator is a proper, exhaustible iterator"""
+          it = PolygonsIterator(4, 1)
+          assert iter(it) is it, "PolygonsIterator.__iter__ must return self"
+          assert repr(next(it)) == 'Polygon(n=3, R=1)'
+          assert repr(next(it)) == 'Polygon(n=4, R=1)'
+          try:
+              next(it)
+              assert False, "expected StopIteration after Polygon(n=4, ...)"
+          except StopIteration:
+              pass
+          assert list(it) == [], "an exhausted iterator should stay empty"
+
+      def test_len_repr_validation():
+          """len, repr and m < 3 validation"""
+          assert len(Polygons(10, 1)) == 8, f"len: {len(Polygons(10, 1))}"
+          assert repr(Polygons(10, 1)) == 'Polygons(m=10, R=1)', f"repr: {Polygons(10, 1)!r}"
+          try:
+              Polygons(2, 1)
+              assert False, "Polygons(2, 1) should raise ValueError"
+          except ValueError:
+              pass
+
+      def test_no_polygons_created_up_front():
+          """creating Polygons creates no Polygon objects"""
+          _, created = _count_polygons(lambda: Polygons(50, 1))
+          assert created == [], f"Polygons(50, 1) created polygons with n = {created[:5]}..."
+
+      def test_created_on_demand():
+          """next() creates exactly one polygon per call"""
+          def action():
+              it = iter(Polygons(50, 1))
+              return next(it), next(it)
+          (a, b), created = _count_polygons(action)
+          assert created == [3, 4], f"polygons created: {created[:10]}"
+          assert a.count_vertices == 3 and b.count_vertices == 4
+    solution: |
+      import math
+
+      class Polygon:
+          def __init__(self, n, R):
+              if n < 3:
+                  raise ValueError('Polygon must have at least 3 vertices.')
+              self._n = n
+              self._R = R
+              self._interior_angle = None
+              self._side_length = None
+              self._apothem = None
+              self._area = None
+              self._perimeter = None
+
+          def __repr__(self):
+              return f'Polygon(n={self._n}, R={self._R})'
+
+          @property
+          def count_vertices(self):
+              return self._n
+
+          @property
+          def count_edges(self):
+              return self._n
+
+          @property
+          def circumradius(self):
+              return self._R
+
+          @property
+          def interior_angle(self):
+              if self._interior_angle is None:
+                  self._interior_angle = (self._n - 2) * 180 / self._n
+              return self._interior_angle
+
+          @property
+          def side_length(self):
+              if self._side_length is None:
+                  self._side_length = 2 * self._R * math.sin(math.pi / self._n)
+              return self._side_length
+
+          @property
+          def apothem(self):
+              if self._apothem is None:
+                  self._apothem = self._R * math.cos(math.pi / self._n)
+              return self._apothem
+
+          @property
+          def area(self):
+              if self._area is None:
+                  self._area = self._n / 2 * self.side_length * self.apothem
+              return self._area
+
+          @property
+          def perimeter(self):
+              if self._perimeter is None:
+                  self._perimeter = self._n * self.side_length
+              return self._perimeter
+
+          def __eq__(self, other):
+              if isinstance(other, self.__class__):
+                  return (self.count_edges == other.count_edges
+                          and self.circumradius == other.circumradius)
+              return NotImplemented
+
+          def __gt__(self, other):
+              if isinstance(other, self.__class__):
+                  return self.count_vertices > other.count_vertices
+              return NotImplemented
+
+
+      class PolygonsIterator:
+          def __init__(self, m, R):
+              if m < 3:
+                  raise ValueError('m must be greater than 3')
+              self._m = m
+              self._R = R
+              self._i = 3
+
+          def __iter__(self):
+              return self
+
+          def __next__(self):
+              if self._i > self._m:
+                  raise StopIteration
+              result = Polygon(self._i, self._R)
+              self._i += 1
+              return result
+
+
+      class Polygons:
+          def __init__(self, m, R):
+              if m < 3:
+                  raise ValueError('m must be greater than 3')
+              self._m = m
+              self._R = R
+
+          def __len__(self):
+              return self._m - 2
+
+          def __repr__(self):
+              return f'Polygons(m={self._m}, R={self._R})'
+
+          def __iter__(self):
+              return PolygonsIterator(self._m, self._R)
+    hints:
+      - "`PolygonsIterator` needs `_m`, `_R` and a counter `_i` starting at 3. `__next__` raises `StopIteration` once `_i > _m`."
+      - "Create the `Polygon` inside `__next__`, not in `__init__`."
+      - "In `Polygons`, delete the list and `__getitem__`, and add `def __iter__(self): return PolygonsIterator(self._m, self._R)`."
+
+  - id: lazy-max-efficiency
+    title: "Goal 2: a lazy max_efficiency_polygon"
+    prompt: |
+      `Polygons` is now a lazy iterable, but its `max_efficiency_polygon` property still iterates over every polygon **each time** it's read.
+
+      Make it a lazy property: compute the polygon with the highest `area / perimeter` ratio on the first access only, cache it, and return the cached polygon afterwards. Creating a `Polygons` object must still not create any polygons.
+    starter: |
+      import math
+
+      class Polygon:
+          def __init__(self, n, R):
+              if n < 3:
+                  raise ValueError('Polygon must have at least 3 vertices.')
+              self._n = n
+              self._R = R
+              self._interior_angle = None
+              self._side_length = None
+              self._apothem = None
+              self._area = None
+              self._perimeter = None
+
+          def __repr__(self):
+              return f'Polygon(n={self._n}, R={self._R})'
+
+          @property
+          def count_vertices(self):
+              return self._n
+
+          @property
+          def count_edges(self):
+              return self._n
+
+          @property
+          def circumradius(self):
+              return self._R
+
+          @property
+          def interior_angle(self):
+              if self._interior_angle is None:
+                  self._interior_angle = (self._n - 2) * 180 / self._n
+              return self._interior_angle
+
+          @property
+          def side_length(self):
+              if self._side_length is None:
+                  self._side_length = 2 * self._R * math.sin(math.pi / self._n)
+              return self._side_length
+
+          @property
+          def apothem(self):
+              if self._apothem is None:
+                  self._apothem = self._R * math.cos(math.pi / self._n)
+              return self._apothem
+
+          @property
+          def area(self):
+              if self._area is None:
+                  self._area = self._n / 2 * self.side_length * self.apothem
+              return self._area
+
+          @property
+          def perimeter(self):
+              if self._perimeter is None:
+                  self._perimeter = self._n * self.side_length
+              return self._perimeter
+
+          def __eq__(self, other):
+              if isinstance(other, self.__class__):
+                  return (self.count_edges == other.count_edges
+                          and self.circumradius == other.circumradius)
+              return NotImplemented
+
+          def __gt__(self, other):
+              if isinstance(other, self.__class__):
+                  return self.count_vertices > other.count_vertices
+              return NotImplemented
+
+
+      class PolygonsIterator:
+          def __init__(self, m, R):
+              if m < 3:
+                  raise ValueError('m must be greater than 3')
+              self._m = m
+              self._R = R
+              self._i = 3
+
+          def __iter__(self):
+              return self
+
+          def __next__(self):
+              if self._i > self._m:
+                  raise StopIteration
+              result = Polygon(self._i, self._R)
+              self._i += 1
+              return result
+
+
+      class Polygons:
+          def __init__(self, m, R):
+              if m < 3:
+                  raise ValueError('m must be greater than 3')
+              self._m = m
+              self._R = R
+
+          def __len__(self):
+              return self._m - 2
+
+          def __repr__(self):
+              return f'Polygons(m={self._m}, R={self._R})'
+
+          def __iter__(self):
+              return PolygonsIterator(self._m, self._R)
+
+          @property
+          def max_efficiency_polygon(self):
+              sorted_polygons = sorted(self, key=lambda p: p.area / p.perimeter,
+                                       reverse=True)
+              return sorted_polygons[0]
+    tests: |
+      def _count_polygons(action):
+          global Polygon
+          created = []
+          original = Polygon
+          class CountingPolygon(original):
+              def __init__(self, n, R):
+                  created.append(n)
+                  super().__init__(n, R)
+          Polygon = CountingPolygon
+          try:
+              result = action()
+          finally:
+              Polygon = original
+          return result, created
+
+      def test_correct_result():
+          """returns the polygon with the most vertices"""
+          best = Polygons(10, 1).max_efficiency_polygon
+          assert repr(best) == 'Polygon(n=10, R=1)', f"got {best!r}"
+          best = Polygons(3, 5).max_efficiency_polygon
+          assert repr(best) == 'Polygon(n=3, R=5)', f"got {best!r}"
+
+      def test_not_computed_at_creation():
+          """creating Polygons doesn't compute it"""
+          _, created = _count_polygons(lambda: Polygons(20, 1))
+          assert created == [], f"polygons created in __init__: {created[:5]}..."
+
+      def test_computed_once():
+          """second access creates no new polygons"""
+          polygons = Polygons(12, 1)
+          first, created_first = _count_polygons(lambda: polygons.max_efficiency_polygon)
+          second, created_second = _count_polygons(lambda: polygons.max_efficiency_polygon)
+          assert len(created_first) >= 1, "first access should iterate the polygons"
+          assert created_second == [], f"second access created {len(created_second)} polygons"
+          assert second is first, "second access should return the cached polygon object"
+
+      def test_still_iterable():
+          """the collection is still a re-iterable"""
+          polygons = Polygons(5, 1)
+          polygons.max_efficiency_polygon
+          assert [p.count_vertices for p in polygons] == [3, 4, 5]
+          assert [p.count_vertices for p in polygons] == [3, 4, 5]
+    solution: |
+      import math
+
+      class Polygon:
+          def __init__(self, n, R):
+              if n < 3:
+                  raise ValueError('Polygon must have at least 3 vertices.')
+              self._n = n
+              self._R = R
+              self._interior_angle = None
+              self._side_length = None
+              self._apothem = None
+              self._area = None
+              self._perimeter = None
+
+          def __repr__(self):
+              return f'Polygon(n={self._n}, R={self._R})'
+
+          @property
+          def count_vertices(self):
+              return self._n
+
+          @property
+          def count_edges(self):
+              return self._n
+
+          @property
+          def circumradius(self):
+              return self._R
+
+          @property
+          def interior_angle(self):
+              if self._interior_angle is None:
+                  self._interior_angle = (self._n - 2) * 180 / self._n
+              return self._interior_angle
+
+          @property
+          def side_length(self):
+              if self._side_length is None:
+                  self._side_length = 2 * self._R * math.sin(math.pi / self._n)
+              return self._side_length
+
+          @property
+          def apothem(self):
+              if self._apothem is None:
+                  self._apothem = self._R * math.cos(math.pi / self._n)
+              return self._apothem
+
+          @property
+          def area(self):
+              if self._area is None:
+                  self._area = self._n / 2 * self.side_length * self.apothem
+              return self._area
+
+          @property
+          def perimeter(self):
+              if self._perimeter is None:
+                  self._perimeter = self._n * self.side_length
+              return self._perimeter
+
+          def __eq__(self, other):
+              if isinstance(other, self.__class__):
+                  return (self.count_edges == other.count_edges
+                          and self.circumradius == other.circumradius)
+              return NotImplemented
+
+          def __gt__(self, other):
+              if isinstance(other, self.__class__):
+                  return self.count_vertices > other.count_vertices
+              return NotImplemented
+
+
+      class PolygonsIterator:
+          def __init__(self, m, R):
+              if m < 3:
+                  raise ValueError('m must be greater than 3')
+              self._m = m
+              self._R = R
+              self._i = 3
+
+          def __iter__(self):
+              return self
+
+          def __next__(self):
+              if self._i > self._m:
+                  raise StopIteration
+              result = Polygon(self._i, self._R)
+              self._i += 1
+              return result
+
+
+      class Polygons:
+          def __init__(self, m, R):
+              if m < 3:
+                  raise ValueError('m must be greater than 3')
+              self._m = m
+              self._R = R
+              self._max_efficiency_polygon = None
+
+          def __len__(self):
+              return self._m - 2
+
+          def __repr__(self):
+              return f'Polygons(m={self._m}, R={self._R})'
+
+          def __iter__(self):
+              return PolygonsIterator(self._m, self._R)
+
+          @property
+          def max_efficiency_polygon(self):
+              if self._max_efficiency_polygon is None:
+                  self._max_efficiency_polygon = max(
+                      self, key=lambda p: p.area / p.perimeter)
+              return self._max_efficiency_polygon
+    hints:
+      - "Add `self._max_efficiency_polygon = None` in `__init__`."
+      - "In the property, compute only `if self._max_efficiency_polygon is None`."
+      - "`max(self, key=lambda p: p.area / p.perimeter)` finds the best polygon in one pass, because `self` is iterable."

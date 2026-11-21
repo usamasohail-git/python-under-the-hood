@@ -1,0 +1,63 @@
+---
+import Base from '../../../layouts/Base.astro';
+import SectionSidebar from '../../../components/SectionSidebar.astro';
+import { render } from 'astro:content';
+import { parts, url, contentIndex, lectureId, sectionId, sectionLabel } from '../../../lib/course';
+
+export async function getStaticPaths() {
+  const { lessons, practice } = await contentIndex();
+  return parts.flatMap((part) => part.sections.flatMap((section) => {
+    const available = section.lectures.filter((l) => lessons.has(lectureId(part, section, l)));
+    return available.map((lecture, i) => ({
+      params: { part: part.slug, section: section.slug, lecture: lecture.slug },
+      props: {
+        part, section, lecture,
+        entry: lessons.get(lectureId(part, section, lecture))!,
+        prev: available[i - 1] ?? null,
+        next: available[i + 1] ?? null,
+        available: new Set(available.map((l) => lectureId(part, section, l))),
+        hasPractice: practice.has(sectionId(part, section)),
+      },
+    }));
+  }));
+}
+
+const { part, section, lecture, entry, prev, next, available, hasPractice } = Astro.props;
+const { Content } = await render(entry);
+const id = lectureId(part, section, lecture);
+const sid = sectionId(part, section);
+---
+<Base title={entry.data.title} description={entry.data.summary} activePart={part.slug} ns={id} files={{ section: sid, files: entry.data.files, packages: entry.data.packages }}>
+  <nav class="crumbs" aria-label="Breadcrumb">
+    <a href={url('/')}>Home</a> / <a href={url(part.slug)}>{part.title}</a> / <a href={url(sid)}>{sectionLabel(section)}</a> / <span>Lecture {lecture.num}</span>
+  </nav>
+  <div class="lesson">
+    <SectionSidebar part={part} section={section} current={id} available={available} hasPractice={hasPractice} />
+    <article>
+      <header class="lesson-head prose">
+        <p class="eyebrow">{section.title} · Lecture {String(lecture.num).padStart(2, '0')}{entry.data.minutes ? ` · ${entry.data.minutes} min` : ''}</p>
+        <h1>{entry.data.title}</h1>
+        <p class="summary">{entry.data.summary}</p>
+        <div class="lesson-tools">
+          <span class="pill" data-py-status>Python loads when you run a cell</span>
+          <button class="link-btn" type="button" data-py-restart>Restart Python</button>
+          <span>Shift+Enter runs a cell. Cells share variables, like a notebook.</span>
+        </div>
+      </header>
+      <div class="prose">
+        <Content />
+        <div class="done-row">
+          <button class="btn" type="button" data-mark-done={id} aria-pressed="false">Mark as complete</button>
+        </div>
+        <nav class="pager" aria-label="Lecture navigation">
+          {prev && <a href={url(lectureId(part, section, prev))}><small>← Previous</small>{prev.title}</a>}
+          {next ? <a class="next" href={url(lectureId(part, section, next))}><small>Next →</small>{next.title}</a>
+            : hasPractice ? <a class="next" href={url(`${sid}/practice`)}><small>Next →</small>Quiz & exercises</a> : null}
+        </nav>
+      </div>
+    </article>
+  </div>
+  <script>
+    import '../../../scripts/pycell';
+  </script>
+</Base>

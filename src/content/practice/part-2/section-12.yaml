@@ -1,0 +1,504 @@
+quiz:
+  - q: What makes coroutines *cooperative* multitasking, as opposed to threads?
+    options:
+      - Coroutines always run in parallel on several CPU cores
+      - The operating system decides when to switch between coroutines
+      - Each coroutine runs until it voluntarily yields control
+      - Coroutines can't share any data with each other
+    answer: 2
+    explain: |
+      Threads are **preemptive**: the OS can suspend them at any moment. A coroutine keeps running until it reaches a `yield` (or `await`) and hands control back on its own.
+
+  - q: What does this print?
+    code: |
+      from inspect import getgeneratorstate
+
+      def gen():
+          yield 1
+
+      g = gen()
+      print(getgeneratorstate(g), end=' ')
+      next(g)
+      print(getgeneratorstate(g), end=' ')
+      next(g, None)
+      print(getgeneratorstate(g))
+    options:
+      - "`GEN_CREATED GEN_SUSPENDED GEN_CLOSED`"
+      - "`GEN_RUNNING GEN_SUSPENDED GEN_CLOSED`"
+      - "`GEN_CREATED GEN_RUNNING GEN_CLOSED`"
+      - "`GEN_CREATED GEN_SUSPENDED GEN_SUSPENDED`"
+    answer: 0
+    explain: |
+      A new generator is created but not started. After the first `next()` it's paused at the `yield` (suspended). The second `next()` runs it to the end, so it's closed. `GEN_RUNNING` is only visible from inside the body.
+
+  - q: What does this print?
+    code: |
+      def gen():
+          print('A')
+          x = yield 1
+          print('B', x)
+          yield 2
+
+      g = gen()
+      print(next(g))
+      print(g.send('hi'))
+    options:
+      - "`A`, `1`, `B None`, `2`"
+      - "`A`, `1`, `B hi`, `2`"
+      - "`1`, `A`, `2`, `B hi`"
+      - "`A`, `B hi`, `1`, `2`"
+    answer: 1
+    explain: |
+      `next(g)` runs up to the first `yield`, printing `A` and returning `1`. `send('hi')` resumes it: the paused `yield` evaluates to `'hi'`, so it prints `B hi`, then the next `yield` hands `2` back as the return value of `send`.
+
+  - q: What happens here?
+    code: |
+      def echo():
+          while True:
+              received = yield
+              print(received)
+
+      e = echo()
+      try:
+          e.send('hello')
+      except TypeError as ex:
+          print('TypeError')
+    options:
+      - It prints `hello`
+      - It prints `None`
+      - It prints `TypeError`
+      - Nothing is printed
+    answer: 2
+    explain: |
+      The generator hasn't been **primed**: it's not paused at any `yield`, so there's nowhere for the value to go. Python raises `TypeError: can't send non-None value to a just-started generator`. Call `next(e)` first.
+
+  - q: Which call is exactly equivalent to `next(g)`?
+    options:
+      - "`g.throw(StopIteration)`"
+      - "`g.send(None)`"
+      - "`g.close()`"
+      - "`g.send()`"
+    answer: 1
+    explain: |
+      Resuming with `next()` makes the paused `yield` evaluate to `None`, which is what `send(None)` does. `send()` with no argument is a `TypeError`.
+
+  - q: What does this print?
+    code: |
+      def gen():
+          try:
+              while True:
+                  yield
+          except GeneratorExit:
+              print('closing')
+              yield 'one more'
+
+      g = gen()
+      next(g)
+      try:
+          g.close()
+      except RuntimeError:
+          print('RuntimeError')
+    options:
+      - "`closing`"
+      - "`closing` then `RuntimeError`"
+      - "`RuntimeError` only"
+      - "`one more`"
+    answer: 1
+    explain: |
+      `close()` raises `GeneratorExit` at the paused `yield`. The generator catches it but then **yields again** instead of stopping, so `close()` raises `RuntimeError: generator ignored GeneratorExit`.
+
+  - q: Why doesn't `except Exception:` inside a generator interfere with `close()`?
+    options:
+      - "`close()` doesn't raise anything inside the generator"
+      - "`GeneratorExit` inherits from `BaseException`, not `Exception`"
+      - "`except` clauses are skipped while a generator is closing"
+      - "Python removes `except` blocks from generators"
+    answer: 1
+    explain: |
+      `GeneratorExit` (like `KeyboardInterrupt`) derives directly from `BaseException`, so broad `except Exception` handlers don't swallow it and the generator can still be shut down.
+
+  - q: What does this print?
+    code: |
+      def gen():
+          while True:
+              try:
+                  yield 'ready'
+              except ValueError:
+                  print('handled')
+
+      g = gen()
+      next(g)
+      print(g.throw(ValueError('oops')))
+    options:
+      - "`handled` then `ready`"
+      - "`handled` then `None`"
+      - A `ValueError` traceback
+      - "`handled` then a `StopIteration` traceback"
+    answer: 0
+    explain: |
+      The generator catches the exception and loops back to its `yield`, which yields `'ready'`. When the generator handles a thrown exception and yields, that value is what `throw()` returns.
+
+  - q: What does this print?
+    code: |
+      def sub():
+          yield 1
+          return 'done'
+
+      def delegator():
+          result = yield from sub()
+          yield result
+
+      print(list(delegator()))
+    options:
+      - "`[1]`"
+      - "`[1, None]`"
+      - "`[1, 'done']`"
+      - "`['done']`"
+    answer: 2
+    explain: |
+      The subgenerator yields `1` (passed straight through to the caller), then returns `'done'`. `yield from` captures that return value as its result, and the delegator yields it.
+
+  - q: What does this print?
+    code: |
+      def sub():
+          try:
+              while True:
+                  yield
+          finally:
+              print('sub closed')
+
+      def delegator():
+          yield from sub()
+          print('after yield from')
+
+      d = delegator()
+      next(d)
+      d.close()
+    options:
+      - "`sub closed`"
+      - "`sub closed` then `after yield from`"
+      - "`after yield from`"
+      - Nothing
+    answer: 0
+    explain: |
+      Closing the delegator makes `yield from` close the subgenerator (running its `finally`) and then raise `GeneratorExit` in the delegator, so the delegator stops without running the code after `yield from`.
+
+  - q: In a push pipeline of coroutines like `source → transform → filter → sink`, which statement is true?
+    options:
+      - The sink requests each item from the stage before it with `next()`
+      - The stages are created starting with the sink, because each stage needs its target
+      - Each `send()` to the first stage only runs that stage; the others run later
+      - Push pipelines read all the data into memory before processing it
+    answer: 1
+    explain: |
+      In a push pipeline each coroutine is given its **target** when it's created, so you build it back to front. One `send()` at the head runs the item through every stage before returning.
+
+  - q: |
+      Modern asyncio code is written with `async def` and `await`. How do they relate to the generator-based coroutines in this section?
+    options:
+      - They are unrelated; asyncio never used generators
+      - "`async def` functions are ordinary generators, so `next()` works on them"
+      - "Native coroutines replaced generator-based ones (`@asyncio.coroutine` was removed in 3.11), but reuse the same suspend/resume machinery, including `send()`, `throw()` and `close()`"
+      - "`@asyncio.coroutine` is still the recommended way to write coroutines"
+    answer: 2
+    explain: |
+      asyncio was originally built on generators with `yield from`. Native coroutines are a separate type (no `next()`, no iteration), but they still have `send`, `throw` and `close`, and `await` delegates much like `yield from`.
+
+exercises:
+  - id: priming-decorator
+    title: A priming decorator
+    prompt: |
+      Write a decorator `coroutine` for generator functions. Calling the decorated function should create the generator, **prime** it (advance it to its first `yield`) and return it, so it's ready for `send()` straight away.
+
+      It must forward any positional and keyword arguments, and it should keep the decorated function's `__name__` and `__doc__`.
+    starter: |
+      def coroutine(gen_fn):
+          def inner(*args, **kwargs):
+              # create the generator and return it
+              return gen_fn(*args, **kwargs)
+          return inner
+    tests: |
+      from inspect import getgeneratorstate
+
+      @coroutine
+      def echo():
+          """Echo back what it receives."""
+          received = None
+          while True:
+              received = yield received
+
+      @coroutine
+      def scaler(factor, *, offset=0):
+          result = None
+          while True:
+              x = yield result
+              result = x * factor + offset
+
+      def test_primed():
+          """the returned generator is already suspended"""
+          e = echo()
+          assert getgeneratorstate(e) == 'GEN_SUSPENDED', f"state is {getgeneratorstate(e)}"
+
+      def test_send_works():
+          """send() works immediately"""
+          e = echo()
+          assert e.send('hi') == 'hi'
+
+      def test_arguments():
+          """positional and keyword arguments are forwarded"""
+          s = scaler(3, offset=1)
+          assert s.send(2) == 7, "expected 2 * 3 + 1"
+
+      def test_metadata():
+          """keeps __name__ and __doc__"""
+          assert echo.__name__ == 'echo', f"__name__ is {echo.__name__!r}"
+          assert echo.__doc__ == 'Echo back what it receives.'
+    solution: |
+      from functools import wraps
+
+      def coroutine(gen_fn):
+          @wraps(gen_fn)
+          def inner(*args, **kwargs):
+              gen = gen_fn(*args, **kwargs)
+              next(gen)
+              return gen
+          return inner
+    hints:
+      - Priming means calling `next()` once on the new generator before returning it.
+      - "`functools.wraps(gen_fn)` copies the name and docstring onto `inner`."
+
+  - id: resettable-total
+    title: A total you can reset and close
+    prompt: |
+      Write a generator-based coroutine `running_total()`:
+
+      - after priming, each `send(x)` adds `x` to a running total and **yields the new total**;
+      - throwing the provided `Reset` exception into it (`t.throw(Reset)`) sets the total back to `0`, and `throw` returns `0`; the coroutine keeps working afterwards;
+      - closing it with `t.close()` returns the final total (Python 3.13+ returns the value a generator returns while handling `GeneratorExit`).
+
+      Use a single `yield` in your loop.
+    starter: |
+      class Reset(Exception):
+          pass
+
+      def running_total():
+          total = 0
+          while True:
+              x = yield total
+              total += x
+    tests: |
+      def make():
+          t = running_total()
+          first = next(t)
+          return t, first
+
+      def test_prime_yields_zero():
+          """priming yields the initial total 0"""
+          t, first = make()
+          assert first == 0, f"priming yielded {first!r}"
+
+      def test_running_total():
+          """send() yields the running total"""
+          t, _ = make()
+          assert [t.send(x) for x in (5, 10, -3)] == [5, 15, 12]
+
+      def test_reset():
+          """throw(Reset) returns 0 and the coroutine keeps working"""
+          t, _ = make()
+          t.send(5)
+          t.send(5)
+          assert t.throw(Reset) == 0, "throw(Reset) should return 0"
+          assert t.send(4) == 4, "total should restart from 0 after a reset"
+
+      def test_close_returns_total():
+          """close() returns the final total"""
+          t, _ = make()
+          t.send(2)
+          t.send(3)
+          assert t.close() == 5, "close() should return the final total"
+
+      def test_closed_after_close():
+          """the coroutine is closed after close()"""
+          from inspect import getgeneratorstate
+          t, _ = make()
+          t.close()
+          assert getgeneratorstate(t) == 'GEN_CLOSED'
+    solution: |
+      class Reset(Exception):
+          pass
+
+      def running_total():
+          total = 0
+          try:
+              while True:
+                  try:
+                      x = yield total
+                      total += x
+                  except Reset:
+                      total = 0
+          except GeneratorExit:
+              return total
+    hints:
+      - "Put a `try/except Reset` around the `yield` **inside** the loop, so after a reset the loop comes back to the same `yield` (which then yields `0`)."
+      - Wrap the whole loop in `try/except GeneratorExit` and `return total` there. That value becomes the result of `close()`.
+
+  - id: flatten-strings
+    title: Flatten anything (but not strings)
+    prompt: |
+      Write a generator `flatten(item)` that lazily yields every non-iterable value from an arbitrarily nested structure of iterables (lists, tuples, sets, generators, …), in order, using recursive `yield from`.
+
+      **Strings are atoms:** yield a string whole, never its characters. A non-iterable top-level argument is yielded as is.
+    starter: |
+      def flatten(item):
+          if isinstance(item, list):
+              for x in item:
+                  yield from flatten(x)
+          else:
+              yield item
+    tests: |
+      def test_nested_lists():
+          """nested lists are flattened in order"""
+          assert list(flatten([1, [2, [3, [4]]], 5])) == [1, 2, 3, 4, 5]
+
+      def test_other_iterables():
+          """tuples and generators are flattened too"""
+          data = [1, (2, 3), [4, (x for x in (5, 6))]]
+          assert list(flatten(data)) == [1, 2, 3, 4, 5, 6]
+
+      def test_strings_are_atoms():
+          """strings are yielded whole"""
+          assert list(flatten(['ab', ['cd', ('e',)]])) == ['ab', 'cd', 'e']
+
+      def test_scalar():
+          """a non-iterable argument is yielded as is"""
+          assert list(flatten(42)) == [42]
+
+      def test_lazy():
+          """it is lazy: works on an infinite iterable"""
+          import itertools
+          out = list(itertools.islice(flatten([[0], itertools.count(1)]), 4))
+          assert out == [0, 1, 2, 3], f"got {out}"
+    solution: |
+      def flatten(item):
+          if isinstance(item, str):
+              yield item
+              return
+          try:
+              it = iter(item)
+          except TypeError:
+              yield item
+              return
+          for x in it:
+              yield from flatten(x)
+    hints:
+      - Test for "iterable" by trying `iter(item)` and catching `TypeError`.
+      - Check for `str` **before** the iterable test, otherwise single characters recurse forever.
+
+  - id: broadcast-pipeline
+    title: Broadcast and filter
+    prompt: |
+      Complete two auto-primed coroutines for a push pipeline (the `coroutine` decorator and a `collect` sink are provided):
+
+      - `filter_data(predicate, target)`: for every received item, `send` it to `target` only if `predicate(item)` is true;
+      - `broadcast(targets)`: `send` every received item to **each** target, in order.
+
+      Both must **close their targets** when they are closed themselves, so closing the head of a pipeline shuts down every stage.
+    starter: |
+      def coroutine(fn):
+          def inner(*args, **kwargs):
+              g = fn(*args, **kwargs)
+              next(g)
+              return g
+          return inner
+
+      @coroutine
+      def collect(results):
+          while True:
+              results.append((yield))
+
+      @coroutine
+      def filter_data(predicate, target):
+          while True:
+              item = yield
+              # your code here
+
+      @coroutine
+      def broadcast(targets):
+          while True:
+              item = yield
+              # your code here
+    tests: |
+      from inspect import getgeneratorstate
+
+      def test_filter():
+          """filter_data forwards only matching items"""
+          out = []
+          f = filter_data(lambda x: x % 2 == 0, collect(out))
+          for i in range(7):
+              f.send(i)
+          assert out == [0, 2, 4, 6], f"got {out}"
+
+      def test_broadcast():
+          """broadcast sends every item to every target"""
+          a, b = [], []
+          bc = broadcast([collect(a), collect(b)])
+          for c in 'xyz':
+              bc.send(c)
+          assert a == ['x', 'y', 'z'] and b == ['x', 'y', 'z'], f"got {a}, {b}"
+
+      def test_split():
+          """broadcast into several filters splits one stream"""
+          evens, big = [], []
+          head = broadcast([
+              filter_data(lambda x: x % 2 == 0, collect(evens)),
+              filter_data(lambda x: x > 6, collect(big)),
+          ])
+          for i in range(10):
+              head.send(i)
+          assert evens == [0, 2, 4, 6, 8], f"evens: {evens}"
+          assert big == [7, 8, 9], f"big: {big}"
+
+      def test_close_chain():
+          """closing the head closes every stage"""
+          sink = collect([])
+          flt = filter_data(lambda x: True, sink)
+          head = broadcast([flt])
+          head.close()
+          assert getgeneratorstate(flt) == 'GEN_CLOSED', "filter was not closed"
+          assert getgeneratorstate(sink) == 'GEN_CLOSED', "sink was not closed"
+    solution: |
+      def coroutine(fn):
+          def inner(*args, **kwargs):
+              g = fn(*args, **kwargs)
+              next(g)
+              return g
+          return inner
+
+      @coroutine
+      def collect(results):
+          while True:
+              results.append((yield))
+
+      @coroutine
+      def filter_data(predicate, target):
+          try:
+              while True:
+                  item = yield
+                  if predicate(item):
+                      target.send(item)
+          finally:
+              target.close()
+
+      @coroutine
+      def broadcast(targets):
+          try:
+              while True:
+                  item = yield
+                  for target in targets:
+                      target.send(item)
+          finally:
+              for target in targets:
+                  target.close()
+    hints:
+      - Each stage forwards data with `target.send(item)`.
+      - "Wrap the loop in `try/finally` and call `close()` on the target(s) in the `finally` block. `close()` raises `GeneratorExit` at the `yield`, so the `finally` runs."

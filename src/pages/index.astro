@@ -1,0 +1,66 @@
+---
+import Base from '../layouts/Base.astro';
+import { parts, url, contentIndex, lectureId } from '../lib/course';
+
+const { lessons } = await contentIndex();
+const firstReady = parts.flatMap((p) => p.sections.flatMap((s) => s.lectures.map((l) => ({ p, s, l }))))
+  .find(({ p, s, l }) => lessons.has(lectureId(p, s, l)));
+const totalLectures = parts.reduce((n, p) => n + p.sections.reduce((m, s) => m + s.lectures.length, 0), 0);
+const totalSections = parts.reduce((n, p) => n + p.sections.length, 0);
+---
+<Base title="Python Deep Dive">
+  <section class="hero">
+    <p class="eyebrow">Free · Interactive · Runs in your browser</p>
+    <h1>Understand Python, not just use it.</h1>
+    <p class="lead">
+      A four-part deep dive into how Python really works: memory and references, functions and closures,
+      iterators and generators, hash maps, and object-oriented programming down to metaclasses.
+      Every example runs right here, with nothing to install.
+    </p>
+    <div class="row">
+      {firstReady && <a class="btn primary" href={url(lectureId(firstReady.p, firstReady.s, firstReady.l))}>Start learning →</a>}
+      <a class="btn" href="#parts">Browse the course</a>
+    </div>
+  </section>
+
+  <div class="grid" style="margin-bottom:2.5rem">
+    <div class="card"><h3>Read</h3><p class="muted">Clear lesson notes with diagrams, one lecture at a time.</p></div>
+    <div class="card"><h3>Run</h3><p class="muted">Edit and run every example. A real Python 3.13 interpreter runs in your browser.</p></div>
+    <div class="card"><h3>Practice</h3><p class="muted">Each section ends with a quiz and auto-graded coding exercises.</p></div>
+  </div>
+
+  <h2 id="parts">The course</h2>
+  <p class="muted">{parts.length} parts · {totalSections} sections · {totalLectures} lectures. Progress is saved in this browser.</p>
+  <div class="grid">
+    {parts.map((p) => {
+      const ids = p.sections.flatMap((s) => s.lectures.map((l) => lectureId(p, s, l)));
+      return (
+        <a class="card" href={url(p.slug)}>
+          <span class="eyebrow">{p.title}</span>
+          <h3>{p.subtitle}</h3>
+          <p class="muted">{p.blurb}</p>
+          <span class="tag">{p.sections.length} sections</span>
+          <div class="bar" data-progress-of={ids.join(' ')}><span></span></div>
+          <div class="bar-label" data-progress-of={ids.join(' ')}><span data-progress-label></span></div>
+        </a>
+      );
+    })}
+  </div>
+
+  <h2>Before you start</h2>
+  <p>
+    This course goes deep. It assumes you can already write basic Python: variables, <code>if</code>,
+    loops, functions. If you're rusty, start with <a href={url('part-1/section-02')}>Part 1 · Section 02: A Quick Refresher</a>.
+  </p>
+
+  <h2>Credits</h2>
+  <div class="credit">
+    <p>
+      This site follows the structure of <strong>Dr. Fred Baptiste's</strong> <em>Python 3: Deep Dive</em> course series
+      on Udemy (Parts 1–4) and builds on his GPL-3.0 licensed
+      <a href="https://github.com/fbaptiste/python-deepdive">python-deepdive</a> notebooks. The lesson notes, quizzes and
+      exercises here are written independently. For the full video lectures, take the original courses on Udemy.
+    </p>
+    <p style="margin:0"><a href={url('about')}>More about this site and its license →</a></p>
+  </div>
+</Base>

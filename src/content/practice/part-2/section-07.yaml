@@ -1,0 +1,667 @@
+files: ['nyc_parking_tickets_extract.csv']
+
+quiz:
+  - q: What does this print?
+    code: |
+      from collections import namedtuple
+      try:
+          T = namedtuple('T', ['Plate ID', 'Make'])
+          print('ok')
+      except ValueError as ex:
+          print('ValueError')
+    options:
+      - "`ok`"
+      - "`ValueError`"
+      - "`TypeError`"
+      - "`ok`, with the space silently replaced by `_`"
+    answer: 1
+    explain: |
+      Named tuple field names must be valid Python identifiers, and `'Plate ID'` contains a space. That's why the header is converted with `.replace(' ', '_').lower()` first. (`rename=True` would replace invalid names with `_0`, `_1`, … instead.)
+
+  - q: What does this print?
+    code: |
+      values = [4006478550, '', 0]
+      print(all(values), all(v is not None for v in values))
+    options:
+      - "`True True`"
+      - "`False False`"
+      - "`True False`"
+      - "`False True`"
+    answer: 3
+    explain: |
+      `all()` checks truthiness, and both `''` and `0` are falsy. The generator expression checks only for `None`, which is what "the row has no missing required fields" means when empty strings are allowed.
+
+  - q: What does this print?
+    code: |
+      from collections import defaultdict
+      d = defaultdict(int)
+      d['FORD'] += 1
+      d['FORD'] += 1
+      d['BMW']
+      print(dict(d))
+    options:
+      - "`{'FORD': 2, 'BMW': 0}`"
+      - "`{'FORD': 2}`"
+      - "A `KeyError` for `'FORD'`"
+      - "`{'FORD': 1, 'BMW': 0}`"
+    answer: 0
+    explain: |
+      A missing key is filled in with `int()`, which is `0`, so `+= 1` works the first time too. Note that merely **reading** `d['BMW']` also inserts the key with the default value.
+
+  - q: What does this print?
+    code: |
+      from functools import partial
+
+      def parse_string(value, *, default=None):
+          cleaned = value.strip()
+          return cleaned if cleaned else default
+
+      parse_optional = partial(parse_string, default='')
+      print(repr(parse_string('   ')), repr(parse_optional('   ')), repr(parse_optional(' NY ')))
+    options:
+      - "`'' '' 'NY'`"
+      - "`None None 'NY'`"
+      - "`None '' 'NY'`"
+      - "`None '' ' NY '`"
+    answer: 2
+    explain: |
+      `partial` freezes the keyword argument `default=''`, giving a one-argument callable that can sit in the tuple of column parsers. The plain function still uses its own default, `None`.
+
+  - q: What does this print?
+    code: |
+      counts = {'GMC': 35, 'TOYOT': 112, 'HYUND': 35, 'BMW': 34}
+      ranked = sorted(counts.items(), key=lambda t: t[1], reverse=True)
+      print([make for make, _ in ranked])
+    options:
+      - "`['TOYOT', 'HYUND', 'GMC', 'BMW']`"
+      - "`['TOYOT', 'GMC', 'HYUND', 'BMW']`"
+      - "`['BMW', 'GMC', 'HYUND', 'TOYOT']`"
+      - "`['TOYOT', 'GMC', 'BMW', 'HYUND']`"
+    answer: 1
+    explain: |
+      Sorting is **stable**, and `reverse=True` preserves that: `GMC` and `HYUND` tie at 35, so they stay in their original order. The result is descending by count.
+
+  - q: In the row parser, why is the parsed data built with a **list** comprehension rather than a generator expression?
+    options:
+      - Generator expressions can't call functions
+      - The values are iterated twice, once by `all()` to validate and once to build the `Ticket`, and a generator would already be consumed
+      - Lists use less memory than generators
+      - "`zip` only works with lists"
+    answer: 1
+    explain: |
+      A generator can be consumed only once. After `all(...)` has run through it, `Ticket(*parsed)` would get nothing (or only the leftover values). Nine values per row is a tiny, sensible amount to materialize.
+
+  - q: The issue dates are left as strings like `'10/5/2016'` and `'9/30/2016'`. What does `min(['10/5/2016', '9/30/2016'])` return?
+    options:
+      - "`'9/30/2016'`, the earlier date"
+      - "`'10/5/2016'`, because strings compare character by character"
+      - A `TypeError`
+      - "`datetime.date(2016, 9, 30)`"
+    answer: 1
+    explain: |
+      Strings compare lexicographically: `'1' < '9'`, so `'10/5/2016'` counts as "smaller" even though it's the later date. Converting to `datetime.date` with `strptime(value, '%m/%d/%Y').date()` makes comparisons chronological.
+
+exercises:
+  - id: field-parsers
+    title: Parsers with defaults
+    prompt: |
+      Write three parser functions. Each takes a string `value` and a **keyword-only** argument `default` (which defaults to `None`), and returns `default` instead of raising when the value can't be parsed.
+
+      - `parse_int(value, *, default=None)`: the value as an `int`.
+      - `parse_date(value, *, default=None)`: the value as a `datetime.date`; dates are in month/day/year format such as `'10/5/2016'`.
+      - `parse_string(value, *, default=None)`: the value with leading/trailing whitespace removed, or `default` if nothing is left.
+    starter: |
+      from datetime import datetime
+
+      def parse_int(value, default=None):
+          return int(value)
+
+      def parse_date(value, default=None):
+          return value
+
+      def parse_string(value, default=None):
+          return value
+    tests: |
+      from datetime import date
+
+      def test_parse_int():
+          """parse_int converts valid integers"""
+          assert parse_int('4006478550') == 4006478550
+          assert parse_int(' 46 ') == 46, "int() tolerates surrounding spaces"
+
+      def test_parse_int_bad():
+          """parse_int returns the default for bad values"""
+          assert parse_int('') is None, f"got {parse_int('')!r}"
+          assert parse_int('12A') is None
+          assert parse_int('x', default=-1) == -1
+
+      def test_parse_date():
+          """parse_date returns datetime.date objects"""
+          d = parse_date('10/5/2016')
+          assert type(d) is date, f"expected a date, got {type(d).__name__}"
+          assert d == date(2016, 10, 5), f"got {d!r}"
+          assert parse_date('12/31/2016') == date(2016, 12, 31)
+
+      def test_parse_date_bad():
+          """parse_date returns the default for bad values"""
+          assert parse_date('31/31/2000') is None
+          assert parse_date('') is None
+          assert parse_date('2016-10-05', default='N/A') == 'N/A'
+
+      def test_parse_string():
+          """parse_string strips and handles empty values"""
+          assert parse_string('  BUS LANE VIOLATION  ') == 'BUS LANE VIOLATION'
+          assert parse_string('   ') is None
+          assert parse_string('', default='') == ''
+
+      def test_keyword_only():
+          """default must be passed by keyword"""
+          for func in (parse_int, parse_date, parse_string):
+              try:
+                  func('x', 0)
+              except TypeError:
+                  continue
+              raise AssertionError(f"{func.__name__}('x', 0) should raise TypeError (use a bare * before default)")
+    solution: |
+      from datetime import datetime
+
+      def parse_int(value, *, default=None):
+          try:
+              return int(value)
+          except ValueError:
+              return default
+
+      def parse_date(value, *, default=None):
+          try:
+              return datetime.strptime(value, '%m/%d/%Y').date()
+          except ValueError:
+              return default
+
+      def parse_string(value, *, default=None):
+          cleaned = value.strip()
+          return cleaned if cleaned else default
+    hints:
+      - "Put a bare `*` before `default` in the parameter list to make it keyword-only."
+      - "Wrap the conversion in `try` / `except ValueError` and return `default` in the `except` branch."
+      - "`datetime.strptime(value, '%m/%d/%Y')` returns a `datetime`; call `.date()` on it."
+
+  - id: row-parser
+    title: Header and row parser
+    prompt: |
+      The parsers from the previous exercise and the tuple `column_parsers` (one parser per column) are provided.
+
+      1. Write `make_field_names(header_line)` that turns the raw header line (with its trailing `'\n'`) into a list of field names: split on commas, replace spaces with underscores, lower-case.
+      2. Create a named tuple class `Ticket` from the header of `nyc_parking_tickets_extract.csv`.
+      3. Write `parse_row(row, *, default=None)` that parses one raw data line (with its `'\n'`) into a `Ticket`, applying the *i*-th parser to the *i*-th field. If **any** parsed value is `None`, return `default` instead. Empty strings produced by the optional-column parsers are valid.
+    starter: |
+      from collections import namedtuple
+      from datetime import datetime
+      from functools import partial
+
+      def parse_int(value, *, default=None):
+          try:
+              return int(value)
+          except ValueError:
+              return default
+
+      def parse_date(value, *, default=None):
+          try:
+              return datetime.strptime(value, '%m/%d/%Y').date()
+          except ValueError:
+              return default
+
+      def parse_string(value, *, default=None):
+          cleaned = value.strip()
+          return cleaned if cleaned else default
+
+      column_parsers = (
+          parse_int,                              # summons_number
+          parse_string,                           # plate_id
+          partial(parse_string, default=''),      # registration_state
+          partial(parse_string, default=''),      # plate_type
+          parse_date,                             # issue_date
+          parse_int,                              # violation_code
+          partial(parse_string, default=''),      # vehicle_body_type
+          parse_string,                           # vehicle_make
+          partial(parse_string, default=''),      # violation_description
+      )
+
+      file_name = 'nyc_parking_tickets_extract.csv'
+
+      def make_field_names(header_line):
+          return header_line.split(',')
+
+      with open(file_name) as f:
+          Ticket = namedtuple('Ticket', make_field_names(next(f)), rename=True)
+
+      def parse_row(row, *, default=None):
+          fields = row.split(',')
+          return Ticket(*fields)
+    tests: |
+      from datetime import date
+
+      HEADER = 'Summons Number,Plate ID,Registration State,Plate Type,Issue Date,Violation Code,Vehicle Body Type,Vehicle Make,Violation Description\n'
+      GOOD = '4006478550,VAD7274,VA,PAS,10/5/2016,5,4D,BMW,BUS LANE VIOLATION\n'
+      NO_DESC = '1410726095,DEP4792,NC,PAS,7/15/2016,14,,BMW,\n'
+      NO_MAKE = '1413358512,54295PC,NY,APP,8/9/2016,19,BUS,,\n'
+      BAD_DATE = '1413358512,54295PC,NY,APP,13/45/2016,19,BUS,FORD,X\n'
+
+      def test_field_names():
+          """make_field_names builds identifiers from the header"""
+          names = make_field_names(HEADER)
+          assert names[0] == 'summons_number', f"got {names[0]!r}"
+          assert names[-1] == 'violation_description', f"got {names[-1]!r} (did you strip the newline?)"
+          assert len(names) == 9 and all(n.isidentifier() for n in names), f"got {names}"
+
+      def test_ticket_fields():
+          """Ticket has the nine cleaned field names"""
+          assert Ticket._fields == tuple(make_field_names(HEADER)), f"got {Ticket._fields}"
+
+      def test_good_row():
+          """a clean row becomes a typed Ticket"""
+          t = parse_row(GOOD)
+          assert isinstance(t, Ticket), f"expected a Ticket, got {t!r}"
+          assert t.summons_number == 4006478550
+          assert t.issue_date == date(2016, 10, 5)
+          assert t.violation_code == 5
+          assert t.vehicle_make == 'BMW'
+          assert t.violation_description == 'BUS LANE VIOLATION', f"got {t.violation_description!r}"
+
+      def test_optional_empty():
+          """empty optional fields become '' and the row is kept"""
+          t = parse_row(NO_DESC)
+          assert t is not None, "a row with no description or body type is still valid"
+          assert t.violation_description == '' and t.vehicle_body_type == ''
+
+      def test_missing_required():
+          """rows with a missing make or a bad date are rejected"""
+          assert parse_row(NO_MAKE) is None, f"got {parse_row(NO_MAKE)!r}"
+          assert parse_row(BAD_DATE) is None, f"got {parse_row(BAD_DATE)!r}"
+
+      def test_custom_default():
+          """the default argument is returned for invalid rows"""
+          assert parse_row(NO_MAKE, default='skip') == 'skip'
+    solution: |
+      from collections import namedtuple
+      from datetime import datetime
+      from functools import partial
+
+      def parse_int(value, *, default=None):
+          try:
+              return int(value)
+          except ValueError:
+              return default
+
+      def parse_date(value, *, default=None):
+          try:
+              return datetime.strptime(value, '%m/%d/%Y').date()
+          except ValueError:
+              return default
+
+      def parse_string(value, *, default=None):
+          cleaned = value.strip()
+          return cleaned if cleaned else default
+
+      column_parsers = (
+          parse_int,                              # summons_number
+          parse_string,                           # plate_id
+          partial(parse_string, default=''),      # registration_state
+          partial(parse_string, default=''),      # plate_type
+          parse_date,                             # issue_date
+          parse_int,                              # violation_code
+          partial(parse_string, default=''),      # vehicle_body_type
+          parse_string,                           # vehicle_make
+          partial(parse_string, default=''),      # violation_description
+      )
+
+      file_name = 'nyc_parking_tickets_extract.csv'
+
+      def make_field_names(header_line):
+          headers = header_line.strip('\n').split(',')
+          return [header.replace(' ', '_').lower() for header in headers]
+
+      with open(file_name) as f:
+          Ticket = namedtuple('Ticket', make_field_names(next(f)))
+
+      def parse_row(row, *, default=None):
+          fields = row.strip('\n').split(',')
+          parsed = [func(field) for func, field in zip(column_parsers, fields)]
+          if all(value is not None for value in parsed):
+              return Ticket(*parsed)
+          return default
+    hints:
+      - "Strip the `'\\n'` before splitting, both in the header and in each row."
+      - "`zip(column_parsers, fields)` pairs each parser with its field: `[func(field) for func, field in zip(...)]`."
+      - "Use `all(v is not None for v in parsed)`, not `all(parsed)`: empty strings are valid values."
+
+  - id: lazy-tickets
+    title: "Goal 1: the lazy Ticket iterator"
+    prompt: |
+      `Ticket` and `parse_row(row, *, default=None)` are provided (as in the previous exercise).
+
+      1. Write a generator `read_data(file_name)` that opens the file, skips the header line and yields the remaining raw lines. Use `yield from`.
+      2. Write a generator `parsed_data(file_name)` that yields a `Ticket` for every valid row of the file, skipping rows that `parse_row` rejects.
+
+      Both must be **lazy**: never read the whole file into a list.
+    starter: |
+      from collections import namedtuple
+      from datetime import datetime
+      from functools import partial
+
+      def parse_int(value, *, default=None):
+          try:
+              return int(value)
+          except ValueError:
+              return default
+
+      def parse_date(value, *, default=None):
+          try:
+              return datetime.strptime(value, '%m/%d/%Y').date()
+          except ValueError:
+              return default
+
+      def parse_string(value, *, default=None):
+          cleaned = value.strip()
+          return cleaned if cleaned else default
+
+      column_parsers = (
+          parse_int, parse_string,
+          partial(parse_string, default=''), partial(parse_string, default=''),
+          parse_date, parse_int,
+          partial(parse_string, default=''), parse_string,
+          partial(parse_string, default=''),
+      )
+
+      with open('nyc_parking_tickets_extract.csv') as f:
+          headers = next(f).strip('\n').split(',')
+      Ticket = namedtuple('Ticket', [h.replace(' ', '_').lower() for h in headers])
+
+      def parse_row(row, *, default=None):
+          fields = row.strip('\n').split(',')
+          parsed = [func(field) for func, field in zip(column_parsers, fields)]
+          if all(value is not None for value in parsed):
+              return Ticket(*parsed)
+          return default
+
+      # --- your code below ---
+
+      def read_data(file_name):
+          with open(file_name) as f:
+              return f.readlines()
+
+      def parsed_data(file_name):
+          return [parse_row(row) for row in read_data(file_name)]
+    tests: |
+      import csv, inspect
+      from datetime import date
+
+      FILE = 'nyc_parking_tickets_extract.csv'
+
+      def test_generators():
+          """read_data and parsed_data are generator functions"""
+          assert inspect.isgeneratorfunction(read_data), "read_data should use yield from"
+          assert inspect.isgeneratorfunction(parsed_data), "parsed_data should use yield"
+
+      def test_read_data():
+          """read_data skips the header and yields every data line"""
+          lines = list(read_data(FILE))
+          assert len(lines) == 1000, f"expected 1000 data lines, got {len(lines)}"
+          assert not lines[0].startswith('Summons'), "the header line should be skipped"
+          assert lines[0].startswith('4006478550,'), f"got {lines[0]!r}"
+
+      def test_counts():
+          """parsed_data yields only the valid rows"""
+          with open(FILE) as f:
+              rows = list(csv.reader(f))[1:]
+          expected = sum(1 for r in rows if r[7].strip())
+          got = sum(1 for _ in parsed_data(FILE))
+          assert got == expected == 995, f"expected {expected} tickets, got {got}"
+
+      def test_items():
+          """items are Tickets with proper types"""
+          gen = parsed_data(FILE)
+          first = next(gen)
+          assert isinstance(first, Ticket), f"expected a Ticket, got {type(first).__name__}"
+          assert first.issue_date == date(2016, 10, 5)
+          assert all(t is not None and t.vehicle_make for t in parsed_data(FILE)), "rejected rows leaked through"
+
+      def test_other_file():
+          """works for any file with the same layout"""
+          with open('mini.csv', 'w') as f:
+              f.write('Summons Number,Plate ID,Registration State,Plate Type,Issue Date,Violation Code,Vehicle Body Type,Vehicle Make,Violation Description\n')
+              f.write('1,AAA,NY,PAS,1/2/2017,5,SDN,FORD,X\n')
+              f.write('2,BBB,NY,PAS,1/3/2017,5,SDN,,X\n')
+              f.write('3,CCC,NJ,PAS,1/4/2017,7,,HONDA,\n')
+          got = [t.summons_number for t in parsed_data('mini.csv')]
+          assert got == [1, 3], f"got {got}"
+    solution: |
+      from collections import namedtuple
+      from datetime import datetime
+      from functools import partial
+
+      def parse_int(value, *, default=None):
+          try:
+              return int(value)
+          except ValueError:
+              return default
+
+      def parse_date(value, *, default=None):
+          try:
+              return datetime.strptime(value, '%m/%d/%Y').date()
+          except ValueError:
+              return default
+
+      def parse_string(value, *, default=None):
+          cleaned = value.strip()
+          return cleaned if cleaned else default
+
+      column_parsers = (
+          parse_int, parse_string,
+          partial(parse_string, default=''), partial(parse_string, default=''),
+          parse_date, parse_int,
+          partial(parse_string, default=''), parse_string,
+          partial(parse_string, default=''),
+      )
+
+      with open('nyc_parking_tickets_extract.csv') as f:
+          headers = next(f).strip('\n').split(',')
+      Ticket = namedtuple('Ticket', [h.replace(' ', '_').lower() for h in headers])
+
+      def parse_row(row, *, default=None):
+          fields = row.strip('\n').split(',')
+          parsed = [func(field) for func, field in zip(column_parsers, fields)]
+          if all(value is not None for value in parsed):
+              return Ticket(*parsed)
+          return default
+
+      # --- your code below ---
+
+      def read_data(file_name):
+          with open(file_name) as f:
+              next(f)          # skip the header
+              yield from f
+
+      def parsed_data(file_name):
+          for row in read_data(file_name):
+              ticket = parse_row(row)
+              if ticket is not None:
+                  yield ticket
+    hints:
+      - "Inside the `with` block, call `next(f)` once to skip the header, then `yield from f`."
+      - "`parsed_data` loops over `read_data(file_name)`, calls `parse_row` and yields only results that are not `None`."
+
+  - id: counts-by-make
+    title: "Goal 2: violations by car make"
+    prompt: |
+      The complete Goal 1 pipeline is provided: `parsed_data(file_name)` yields `Ticket` named tuples.
+
+      Write `violation_counts_by_make(file_name)` that returns a **dict** mapping each `vehicle_make` to its number of tickets, with the keys ordered from the highest count to the lowest. Consume the tickets lazily in a single pass; don't build a list of tickets.
+    starter: |
+      from collections import namedtuple, defaultdict, Counter
+      from datetime import datetime
+      from functools import partial
+
+      def parse_int(value, *, default=None):
+          try:
+              return int(value)
+          except ValueError:
+              return default
+
+      def parse_date(value, *, default=None):
+          try:
+              return datetime.strptime(value, '%m/%d/%Y').date()
+          except ValueError:
+              return default
+
+      def parse_string(value, *, default=None):
+          cleaned = value.strip()
+          return cleaned if cleaned else default
+
+      column_parsers = (
+          parse_int, parse_string,
+          partial(parse_string, default=''), partial(parse_string, default=''),
+          parse_date, parse_int,
+          partial(parse_string, default=''), parse_string,
+          partial(parse_string, default=''),
+      )
+
+      with open('nyc_parking_tickets_extract.csv') as f:
+          headers = next(f).strip('\n').split(',')
+      Ticket = namedtuple('Ticket', [h.replace(' ', '_').lower() for h in headers])
+
+      def parse_row(row, *, default=None):
+          fields = row.strip('\n').split(',')
+          parsed = [func(field) for func, field in zip(column_parsers, fields)]
+          if all(value is not None for value in parsed):
+              return Ticket(*parsed)
+          return default
+
+      def read_data(file_name):
+          with open(file_name) as f:
+              next(f)
+              yield from f
+
+      def parsed_data(file_name):
+          for row in read_data(file_name):
+              ticket = parse_row(row)
+              if ticket is not None:
+                  yield ticket
+
+      # --- your code below ---
+
+      def violation_counts_by_make(file_name):
+          counts = {}
+          for ticket in parsed_data(file_name):
+              counts[ticket.vehicle_make] = 1
+          return counts
+    tests: |
+      import csv
+      from collections import Counter as _Counter
+
+      FILE = 'nyc_parking_tickets_extract.csv'
+
+      def _expected():
+          with open(FILE) as f:
+              rows = list(csv.reader(f))[1:]
+          return _Counter(r[7].strip() for r in rows if r[7].strip())
+
+      def test_returns_dict():
+          """returns a dict"""
+          result = violation_counts_by_make(FILE)
+          assert isinstance(result, dict), f"expected a dict, got {type(result).__name__}"
+
+      def test_top_makes():
+          """the most common makes have the right counts"""
+          result = violation_counts_by_make(FILE)
+          assert result.get('TOYOT') == 112, f"TOYOT: got {result.get('TOYOT')}"
+          assert result.get('HONDA') == 106, f"HONDA: got {result.get('HONDA')}"
+          assert result.get('FORD') == 104, f"FORD: got {result.get('FORD')}"
+
+      def test_all_counts():
+          """every make is counted correctly"""
+          result = violation_counts_by_make(FILE)
+          expected = _expected()
+          assert len(result) == len(expected) == 60, f"expected 60 makes, got {len(result)}"
+          assert sum(result.values()) == 995, f"counts add up to {sum(result.values())}, expected 995"
+          wrong = {m: (result.get(m), c) for m, c in expected.items() if result.get(m) != c}
+          assert not wrong, f"wrong counts (got, expected): {dict(list(wrong.items())[:5])}"
+
+      def test_sorted_descending():
+          """keys are ordered from highest to lowest count"""
+          values = list(violation_counts_by_make(FILE).values())
+          assert values == sorted(values, reverse=True), f"not in descending order: {values[:10]}..."
+          assert next(iter(violation_counts_by_make(FILE))) == 'TOYOT'
+
+      def test_other_file():
+          """works on another file with the same layout"""
+          with open('mini2.csv', 'w') as f:
+              f.write('Summons Number,Plate ID,Registration State,Plate Type,Issue Date,Violation Code,Vehicle Body Type,Vehicle Make,Violation Description\n')
+              for i, make in enumerate(['KIA', 'FORD', 'KIA', '', 'KIA', 'FORD', 'AUDI']):
+                  f.write(f'{i},P{i},NY,PAS,1/2/2017,5,SDN,{make},X\n')
+          result = violation_counts_by_make('mini2.csv')
+          assert list(result.items()) == [('KIA', 3), ('FORD', 2), ('AUDI', 1)], f"got {result}"
+    solution: |
+      from collections import namedtuple, defaultdict, Counter
+      from datetime import datetime
+      from functools import partial
+
+      def parse_int(value, *, default=None):
+          try:
+              return int(value)
+          except ValueError:
+              return default
+
+      def parse_date(value, *, default=None):
+          try:
+              return datetime.strptime(value, '%m/%d/%Y').date()
+          except ValueError:
+              return default
+
+      def parse_string(value, *, default=None):
+          cleaned = value.strip()
+          return cleaned if cleaned else default
+
+      column_parsers = (
+          parse_int, parse_string,
+          partial(parse_string, default=''), partial(parse_string, default=''),
+          parse_date, parse_int,
+          partial(parse_string, default=''), parse_string,
+          partial(parse_string, default=''),
+      )
+
+      with open('nyc_parking_tickets_extract.csv') as f:
+          headers = next(f).strip('\n').split(',')
+      Ticket = namedtuple('Ticket', [h.replace(' ', '_').lower() for h in headers])
+
+      def parse_row(row, *, default=None):
+          fields = row.strip('\n').split(',')
+          parsed = [func(field) for func, field in zip(column_parsers, fields)]
+          if all(value is not None for value in parsed):
+              return Ticket(*parsed)
+          return default
+
+      def read_data(file_name):
+          with open(file_name) as f:
+              next(f)
+              yield from f
+
+      def parsed_data(file_name):
+          for row in read_data(file_name):
+              ticket = parse_row(row)
+              if ticket is not None:
+                  yield ticket
+
+      # --- your code below ---
+
+      def violation_counts_by_make(file_name):
+          counts = defaultdict(int)
+          for ticket in parsed_data(file_name):
+              counts[ticket.vehicle_make] += 1
+          return {make: count
+                  for make, count in sorted(counts.items(),
+                                            key=lambda item: item[1],
+                                            reverse=True)}
+    hints:
+      - "`defaultdict(int)` lets you write `counts[make] += 1` without checking whether the key exists."
+      - "Sort the items by count: `sorted(counts.items(), key=lambda item: item[1], reverse=True)`, then build a dict from the sorted pairs (dicts keep insertion order)."
+      - "Alternatively: `dict(Counter(t.vehicle_make for t in parsed_data(file_name)).most_common())`."

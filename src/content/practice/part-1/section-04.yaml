@@ -1,0 +1,345 @@
+quiz:
+  - q: What does this print?
+    code: |
+      print(-7 // 2, -7 % 2)
+    options:
+      - "`-3 -1`"
+      - "`-4 1`"
+      - "`-3 1`"
+      - "`-4 -1`"
+    answer: 1
+    explain: |
+      `//` is **floor** division: `-3.5` floors to `-4`. The remainder must satisfy `-7 == 2 * (-4) + r`, so `r` is `1`. For integers, `%` takes the sign of the divisor.
+
+  - q: What does this print?
+    code: |
+      print(round(2.5), round(3.5), round(-0.5))
+    options:
+      - "`3 4 -1`"
+      - "`2 3 0`"
+      - "`2 4 0`"
+      - "`3 4 0`"
+    answer: 2
+    explain: |
+      These are exact ties (halves are exact in binary), and Python breaks ties toward the **even** neighbor (banker's rounding): `2.5 → 2`, `3.5 → 4`, `-0.5 → 0`.
+
+  - q: Why does `round(2.675, 2)` return `2.67` rather than `2.68`?
+    options:
+      - The float `2.675` is stored as a value slightly below 2.675, so it isn't a tie at all
+      - Banker's rounding sends the tie to the even digit 6
+      - "`round()` always truncates when `ndigits` is positive"
+      - It's a known bug in `round()` that was fixed in Python 3.12
+    answer: 0
+    explain: |
+      `Decimal(2.675)` shows the stored value is `2.67499999…`. `round()` works on that exact value, which is simply closer to `2.67`. (If it were a genuine tie, half-to-even would actually give `2.68`, since 8 is even.)
+
+  - q: What does this print?
+    code: |
+      import math
+      print(0.1 + 0.2 == 0.3, math.isclose(0.1 + 0.2, 0.3))
+    options:
+      - "`True True`"
+      - "`False False`"
+      - "`True False`"
+      - "`False True`"
+    answer: 3
+    explain: |
+      `0.1` and `0.2` are stored approximately, and their sum is `0.30000000000000004`, one float away from the float `0.3`. `isclose` with its default `rel_tol=1e-09` tolerates that tiny difference.
+
+  - q: What does this print?
+    code: |
+      import math
+      print(math.isclose(1e-12, 0), math.isclose(1e-12, 0, abs_tol=1e-9))
+    options:
+      - "`True True`"
+      - "`False True`"
+      - "`True False`"
+      - "`False False`"
+    answer: 1
+    explain: |
+      The relative tolerance is scaled by the larger magnitude, here `1e-12`, so the allowed difference is only `1e-21`. With the default `abs_tol=0.0`, nothing but exactly `0` is close to `0`. An absolute tolerance fixes that.
+
+  - q: What does this print?
+    code: |
+      import decimal
+      from decimal import Decimal
+      with decimal.localcontext() as ctx:
+          ctx.prec = 3
+          a = Decimal('1.23456')
+          print(a, a + 0)
+    options:
+      - "`1.23456 1.23`"
+      - "`1.23 1.23`"
+      - "`1.23456 1.23456`"
+      - "`1.235 1.235`"
+    answer: 0
+    explain: |
+      Context precision doesn't affect **construction**, so `a` keeps all its digits. It applies to arithmetic results: `a + 0` is rounded to 3 **significant** digits.
+
+  - q: What does this print?
+    code: |
+      from decimal import Decimal
+      print(-7 // 2, Decimal(-7) // Decimal(2))
+    options:
+      - "`-4 -4`"
+      - "`-3 -3`"
+      - "`-4 -3`"
+      - "`-3 -4`"
+    answer: 2
+    explain: |
+      Integers use **floor** division (`-3.5 → -4`), while decimals **truncate** toward zero (`-3.5 → -3`). In both cases `n == d * (n // d) + n % d` still holds, so the remainders differ too.
+
+  - q: What does this print?
+    code: |
+      print(True + True, 1 == True, isinstance(False, int))
+    options:
+      - "A `TypeError`"
+      - "`True True True`"
+      - "`2 True False`"
+      - "`2 True True`"
+    answer: 3
+    explain: |
+      `bool` is a subclass of `int`, with `True` equal to `1` and `False` equal to `0`. So `True + True` is the integer `2`, and `False` is an instance of `int`.
+
+  - q: What does this print?
+    code: |
+      print([] or 0 or 'x', 0 and 1 / 0)
+    options:
+      - "`True False`"
+      - "`x 0`"
+      - "`x False`"
+      - "A `ZeroDivisionError`"
+    answer: 1
+    explain: |
+      `or` returns the first truthy operand (`'x'`), and `and` returns the first falsy one (`0`). Because `0` is falsy, `and` short-circuits, and `1 / 0` is never evaluated.
+
+  - q: Which of these values is **truthy**?
+    options:
+      - "`0.0`"
+      - "`Decimal('0')`"
+      - "`'0'`"
+      - "`set()`"
+    answer: 2
+    explain: |
+      `'0'` is a non-empty string, so it's truthy. Numeric zeros of every type and empty containers are falsy.
+
+  - q: What does this print?
+    code: |
+      print(int('11', 2) + int('11', 8) + int('11', 16))
+    options:
+      - "`29`"
+      - "`33`"
+      - "`'111111'`"
+      - "A `ValueError`"
+    answer: 0
+    explain: |
+      `'11'` means `1·2 + 1 = 3` in base 2, `1·8 + 1 = 9` in base 8 and `1·16 + 1 = 17` in base 16. `int()` returns integers, so they add up to `29`.
+
+  - q: What does this print?
+    code: |
+      from fractions import Fraction
+      print(Fraction(0.25) == Fraction(1, 4), Fraction(0.1) == Fraction(1, 10))
+    options:
+      - "`True True`"
+      - "`False False`"
+      - "`False True`"
+      - "`True False`"
+    answer: 3
+    explain: |
+      `0.25` is `1/4`, a power-of-two denominator, so the float is exact. `0.1` can't be stored exactly in binary, and `Fraction(0.1)` captures the float's approximation, not 1/10. Build fractions from integers or strings instead.
+
+exercises:
+  - id: to-base
+    title: Convert to any base
+    prompt: |
+      Write `to_base(n, base)` that returns the representation of the integer `n` in `base` (2 to 36) as a string, using the digits `0-9` and then `A-Z`.
+
+      - Negative numbers get a leading `'-'`; `0` is `'0'`.
+      - Raise `ValueError` if `base` is outside 2–36.
+      - The result must round-trip: `int(to_base(n, b), b) == n`.
+    starter: |
+      def to_base(n, base):
+          # your code here
+          pass
+    tests: |
+      def test_binary():
+          """10 in base 2 is '1010'"""
+          assert to_base(10, 2) == '1010', f"got {to_base(10, 2)!r}"
+
+      def test_hex():
+          """255 in base 16 is 'FF'"""
+          assert to_base(255, 16) == 'FF', f"got {to_base(255, 16)!r}"
+
+      def test_zero():
+          """0 is '0' in any base"""
+          assert to_base(0, 7) == '0', f"got {to_base(0, 7)!r}"
+
+      def test_negative():
+          """negative numbers get a leading minus"""
+          assert to_base(-10, 2) == '-1010', f"got {to_base(-10, 2)!r}"
+
+      def test_round_trip():
+          """int(to_base(n, b), b) == n for many values and bases"""
+          for b in (2, 3, 7, 11, 16, 36):
+              for n in (1, 35, 36, 1000, 123456789, -4095):
+                  s = to_base(n, b)
+                  assert int(s, b) == n, f"to_base({n}, {b}) = {s!r} doesn't round-trip"
+
+      def test_bad_base():
+          """bases outside 2-36 raise ValueError"""
+          for b in (1, 37):
+              try:
+                  to_base(10, b)
+              except ValueError:
+                  pass
+              else:
+                  raise AssertionError(f"base {b} should raise ValueError")
+    solution: |
+      def to_base(n, base):
+          digit_map = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+          if not 2 <= base <= 36:
+              raise ValueError('base must be between 2 and 36')
+          if n == 0:
+              return '0'
+          sign = '-' if n < 0 else ''
+          n = abs(n)
+          digits = []
+          while n > 0:
+              n, m = divmod(n, base)
+              digits.append(digit_map[m])
+          return sign + ''.join(reversed(digits))
+    hints:
+      - "`divmod(n, base)` gives the remaining number and the last digit in one step."
+      - Digits come out last-first, so reverse them (or insert each at the front).
+      - Handle the sign separately; work with `abs(n)`.
+
+  - id: round-half-away
+    title: School rounding
+    prompt: |
+      Python's `round()` sends exact ties to the even neighbor. Write `round_half_away(x)` that rounds a float to the nearest **integer** (returning an `int`), with ties rounded **away from zero**: `2.5 → 3`, `-2.5 → -3`.
+
+      Be careful with `0.49999999999999994` (the largest float below 0.5). It must round to `0`.
+    starter: |
+      def round_half_away(x):
+          return round(x)
+    tests: |
+      def test_ties():
+          """ties go away from zero"""
+          for x, expected in [(0.5, 1), (1.5, 2), (2.5, 3), (-0.5, -1), (-2.5, -3)]:
+              got = round_half_away(x)
+              assert got == expected, f"round_half_away({x}) = {got}, expected {expected}"
+
+      def test_non_ties():
+          """non-ties go to the nearest integer"""
+          for x, expected in [(2.4, 2), (2.6, 3), (-2.4, -2), (-2.6, -3), (7.0, 7), (0.0, 0)]:
+              got = round_half_away(x)
+              assert got == expected, f"round_half_away({x}) = {got}, expected {expected}"
+
+      def test_tricky_float():
+          """0.49999999999999994 rounds to 0, not 1"""
+          got = round_half_away(0.49999999999999994)
+          assert got == 0, f"got {got}: adding 0.5 rounds the sum up to 1.0"
+
+      def test_returns_int():
+          """the result is an int"""
+          assert type(round_half_away(2.5)) is int
+    solution: |
+      import math
+
+      def round_half_away(x):
+          a = abs(x)
+          whole = math.floor(a)
+          result = whole + 1 if a - whole >= 0.5 else whole
+          return result if x >= 0 else -result
+    hints:
+      - Work with `abs(x)` and put the sign back at the end.
+      - "`x + 0.5` can itself be rounded by floating point. Compare the fractional part `a - math.floor(a)` with `0.5` instead."
+
+  - id: split-bill
+    title: Split a bill to the cent
+    prompt: |
+      Write `split_bill(total, people)` where `total` is a `Decimal` amount with cents (such as `Decimal('100.00')`). Return a list of `people` shares, each a `Decimal` with exactly two decimal places, that add up **exactly** to `total`. Shares may differ by at most one cent, with the larger shares first.
+
+      For example, `split_bill(Decimal('100.00'), 3)` is `[Decimal('33.34'), Decimal('33.33'), Decimal('33.33')]`.
+    starter: |
+      from decimal import Decimal
+
+      def split_bill(total, people):
+          share = total / people
+          return [share] * people
+    tests: |
+      from decimal import Decimal
+
+      def test_example():
+          """100.00 split 3 ways"""
+          got = split_bill(Decimal('100.00'), 3)
+          assert got == [Decimal('33.34'), Decimal('33.33'), Decimal('33.33')], f"got {got}"
+
+      def test_sums_exactly():
+          """the shares always add up to the total"""
+          for total, n in [('100.00', 3), ('0.05', 2), ('19.99', 7), ('1000.01', 6), ('0.00', 4)]:
+              shares = split_bill(Decimal(total), n)
+              assert len(shares) == n, f"expected {n} shares, got {len(shares)}"
+              assert sum(shares) == Decimal(total), f"{total} / {n}: shares {shares} sum to {sum(shares)}"
+
+      def test_two_places():
+          """every share has exactly two decimal places"""
+          for s in split_bill(Decimal('19.99'), 7):
+              assert s.as_tuple().exponent == -2, f"{s!r} doesn't have two decimal places"
+
+      def test_fair():
+          """shares differ by at most one cent, largest first"""
+          shares = split_bill(Decimal('1000.01'), 6)
+          assert max(shares) - min(shares) <= Decimal('0.01'), f"unfair shares: {shares}"
+          assert shares == sorted(shares, reverse=True), f"larger shares should come first: {shares}"
+    solution: |
+      from decimal import Decimal
+
+      def split_bill(total, people):
+          cents = int(total * 100)
+          base, extra = divmod(cents, people)
+          cent = Decimal('0.01')
+          return [(Decimal(base + (1 if i < extra else 0)) * cent).quantize(cent)
+                  for i in range(people)]
+    hints:
+      - Work in whole cents (an `int`), where `divmod(cents, people)` tells you the base share and how many people pay one extra cent.
+      - "Convert back with `Decimal(c) * Decimal('0.01')`, then `.quantize(Decimal('0.01'))` to get exactly two decimal places."
+
+  - id: lists-close
+    title: Compare measurement lists
+    prompt: |
+      Write `all_close(xs, ys, rel_tol=1e-09, abs_tol=1e-12)` that returns `True` if the two lists of floats have the same length and every pair of corresponding elements is close according to `math.isclose` with the given tolerances, otherwise `False`.
+    starter: |
+      def all_close(xs, ys, rel_tol=1e-09, abs_tol=1e-12):
+          return xs == ys
+    tests: |
+      def test_float_error():
+          """tiny representation errors are tolerated"""
+          assert all_close([0.1 + 0.2, 0.1 * 3], [0.3, 0.3]) is True
+
+      def test_near_zero():
+          """values near zero use the absolute tolerance"""
+          assert all_close([1e-15, 0.0], [0.0, -1e-15]) is True
+
+      def test_real_difference():
+          """a genuine difference is detected"""
+          assert all_close([1.0, 2.0], [1.0, 2.001]) is False
+
+      def test_lengths():
+          """different lengths are never close"""
+          assert all_close([1.0, 2.0], [1.0]) is False
+
+      def test_custom_tolerance():
+          """rel_tol is passed through"""
+          assert all_close([100.0], [101.0], rel_tol=0.02) is True
+    solution: |
+      import math
+
+      def all_close(xs, ys, rel_tol=1e-09, abs_tol=1e-12):
+          if len(xs) != len(ys):
+              return False
+          return all(math.isclose(x, y, rel_tol=rel_tol, abs_tol=abs_tol)
+                     for x, y in zip(xs, ys))
+    hints:
+      - Check the lengths first. `zip` silently stops at the shorter list.
+      - "`all(...)` over a generator of `math.isclose(x, y, ...)` calls does the rest."

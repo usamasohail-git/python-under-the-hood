@@ -1,0 +1,478 @@
+files: ['cars.csv']
+
+quiz:
+  - q: In the push version of the car pipeline, which component drives the data flow?
+    options:
+      - The producer loop, which calls `send()` on the head of the pipeline for every row
+      - The sink, by calling `next()` on the filter before it
+      - The `csv.writer`, which requests rows when its buffer is empty
+      - The context manager, which iterates over the file
+    answer: 0
+    explain: |
+      In a push pipeline the producer drives: each `p.send(row)` runs that row through every filter and, if it survives, into the sink, before `send()` returns.
+
+  - q: Why must the chain of filter coroutines be built starting from the sink?
+    options:
+      - Because `csv.writer` must be created before `csv.reader`
+      - It doesn't matter; any order works
+      - Because coroutines run in reverse order of creation
+      - Because each filter needs its target when it's created, so the target has to exist first
+    answer: 3
+    explain: |
+      `filter_data(pred, target)` stores its target and primes itself immediately. So you create the sink, wrap it in a filter, wrap that in another filter, and so on: back to front.
+
+  - q: What does this print?
+    code: |
+      preds = []
+      for word in ('Chevrolet', 'Carlo'):
+          preds.append(lambda name: word in name)
+
+      print([p('Chevrolet Impala') for p in preds])
+    options:
+      - "`[True, False]`"
+      - "`[False, False]`"
+      - "`[True, True]`"
+      - "`[False, True]`"
+    answer: 1
+    explain: |
+      Both lambdas close over the **same** variable `word`, which is `'Carlo'` after the loop. `'Carlo' in 'Chevrolet Impala'` is `False` for both. Capture the value with a default argument: `lambda name, word=word: word in name`.
+
+  - q: What does this print?
+    code: |
+      import csv, io
+
+      buf = io.StringIO()
+      def save(f):
+          writer = csv.writer(f)
+          while True:
+              row = yield
+              writer.writerow(row)
+
+      s = save(buf)
+      next(s)
+      s.send(['Ford Torino', '17.0'])
+      s.send(['AMC Hornet', '18.0'])
+      print(repr(buf.getvalue()))
+    options:
+      - "`'Ford Torino,17.0\\r\\nAMC Hornet,18.0\\r\\n'`"
+      - "`'Ford Torino;17.0\\nAMC Hornet;18.0\\n'`"
+      - "`''`, because the coroutine hasn't been closed"
+      - "`\"['Ford Torino', '17.0']['AMC Hornet', '18.0']\"`"
+    answer: 0
+    explain: |
+      `csv.writer` uses commas and `\r\n` line endings by default (that's why files are opened with `newline=''`). A `StringIO` has no buffering to flush, so the text is there immediately; with a real file you'd need to close it to be sure it's on disk.
+
+  - q: The pipeline coroutine has received every row, but the output file is still empty when you read it. What's the most likely cause?
+    options:
+      - The filters rejected every row
+      - "`csv.writer` only writes when it receives `None`"
+      - The pipeline hasn't been closed, so the sink is still inside its `with` block and the file buffer hasn't been flushed
+      - Coroutines can't write to files
+    answer: 2
+    explain: |
+      The sink only leaves its `with open(...)` block (flushing and closing the file) when `GeneratorExit` is raised at its `yield`, i.e. when it's closed. Close the pipeline, ideally with a context manager.
+
+  - q: What does this print?
+    code: |
+      from contextlib import contextmanager
+
+      def coro():
+          try:
+              while True:
+                  yield
+          finally:
+              print('coro closed')
+
+      @contextmanager
+      def managed():
+          c = coro()
+          next(c)
+          try:
+              yield c
+          finally:
+              c.close()
+
+      try:
+          with managed() as c:
+              c.send(1)
+              raise ValueError('bad row')
+      except ValueError:
+          print('error handled')
+    options:
+      - "`error handled` only"
+      - "`coro closed` then `error handled`"
+      - "`error handled` then `coro closed`"
+      - "`coro closed` only"
+    answer: 1
+    explain: |
+      The exception is raised inside the `with` block, so the context manager's `finally` runs first and closes the coroutine (printing `coro closed`). Then the exception continues to the outer `except`.
+
+exercises:
+  - id: parse-data
+    title: The data source
+    prompt: |
+      Write a generator `parse_data(f_name)` that opens the CSV file `f_name`, detects its dialect with `csv.Sniffer` (from the first 2000 characters), **skips the header row**, and yields each data row as a list of strings.
+
+      It must close the file when it finishes or is closed early. `cars.csv` (semicolon-separated, 406 data rows) is available in the working directory.
+    starter: |
+      import csv
+
+      def parse_data(f_name):
+          with open(f_name) as f:
+              yield from csv.reader(f)
+    tests: |
+      import itertools
+
+      def test_first_row():
+          """the first row is the first car, split into fields"""
+          row = next(parse_data('cars.csv'))
+          assert row[0] == 'Chevrolet Chevelle Malibu', f"first row starts with {row[0]!r}"
+          assert len(row) == 9, f"expected 9 fields, got {len(row)}"
+
+      def test_row_count():
+          """yields all 406 data rows, without the header"""
+          rows = list(parse_data('cars.csv'))
+          assert len(rows) == 406, f"got {len(rows)} rows"
+          assert rows[0][0] != 'Car', "the header row was not skipped"
+
+      def test_lazy():
+          """it is a lazy generator"""
+          import types
+          assert isinstance(parse_data('cars.csv'), types.GeneratorType)
+
+      def test_fields_are_strings():
+          """fields are strings"""
+          row = next(itertools.islice(parse_data('cars.csv'), 5, None))
+          assert all(isinstance(v, str) for v in row)
+    solution: |
+      import csv
+
+      def parse_data(f_name):
+          f = open(f_name)
+          try:
+              dialect = csv.Sniffer().sniff(f.read(2000))
+              f.seek(0)
+              next(f)                         # skip the header row
+              yield from csv.reader(f, dialect=dialect)
+          finally:
+              f.close()
+    hints:
+      - "`csv.Sniffer().sniff(f.read(2000))` returns a dialect; call `f.seek(0)` afterwards to go back to the start."
+      - "Skip the header with `next(f)` (or `next(reader)`), then `yield from` the reader."
+
+  - id: save-csv
+    title: The CSV sink
+    prompt: |
+      Write an **auto-primed** coroutine `save_csv(f_name)` (a `coroutine` priming decorator is provided). It opens `f_name` for writing, and writes each row it receives with `csv.writer`. When the coroutine is closed, the file must be closed, so all rows are on disk.
+
+      Open the file with `newline=''`, as the `csv` module recommends.
+    starter: |
+      import csv
+
+      def coroutine(fn):
+          def inner(*args, **kwargs):
+              g = fn(*args, **kwargs)
+              next(g)
+              return g
+          return inner
+
+      def save_csv(f_name):
+          f = open(f_name, 'w', newline='')
+          writer = csv.writer(f)
+          while True:
+              row = yield
+              writer.writerow(row)
+    tests: |
+      from inspect import getgeneratorstate
+
+      def test_primed():
+          """save_csv returns a primed coroutine"""
+          s = save_csv('ex_out.csv')
+          assert getgeneratorstate(s) == 'GEN_SUSPENDED', "the coroutine was not primed"
+          s.close()
+
+      def test_writes_rows():
+          """rows sent in are written as CSV lines"""
+          s = save_csv('ex_out.csv')
+          s.send(['Ford Torino', '17.0', '8'])
+          s.send(['AMC Hornet', '18.0', '6'])
+          s.close()
+          with open('ex_out.csv') as f:
+              lines = f.read().splitlines()
+          assert lines == ['Ford Torino,17.0,8', 'AMC Hornet,18.0,6'], f"got {lines}"
+
+      def test_file_closed_on_close():
+          """closing the coroutine closes the file"""
+          s = save_csv('ex_out.csv')
+          s.send(['x'])
+          s.close()
+          with open('ex_out.csv') as f:
+              assert f.read().strip() == 'x', "the row was not flushed to disk"
+    solution: |
+      import csv
+
+      def coroutine(fn):
+          def inner(*args, **kwargs):
+              g = fn(*args, **kwargs)
+              next(g)
+              return g
+          return inner
+
+      @coroutine
+      def save_csv(f_name):
+          with open(f_name, 'w', newline='') as f:
+              writer = csv.writer(f)
+              while True:
+                  row = yield
+                  writer.writerow(row)
+    hints:
+      - Decorate the function with `@coroutine` so it's primed when created.
+      - "Open the file with `with`: `close()` raises `GeneratorExit` at the `yield`, which exits the `with` block and closes the file."
+
+  - id: filter-chain
+    title: Chain any number of name filters
+    prompt: |
+      `filter_data(pred, target)` should forward a row to `target` only if `pred(row)` is true, and close `target` when it is closed itself.
+
+      `build_chain(target, words)` should return the **head** of a chain of `filter_data` coroutines, one per word, ending in `target`. A row reaches `target` only if **every** word appears in its first field (`row[0]`).
+
+      The starter's `build_chain` has the classic closure-in-a-loop bug, and `filter_data` doesn't pass on `close()`. Fix both.
+    starter: |
+      def coroutine(fn):
+          def inner(*args, **kwargs):
+              g = fn(*args, **kwargs)
+              next(g)
+              return g
+          return inner
+
+      @coroutine
+      def filter_data(pred, target):
+          while True:
+              row = yield
+              if pred(row):
+                  target.send(row)
+
+      def build_chain(target, words):
+          for word in words:
+              target = filter_data(lambda row: word in row[0], target)
+          return target
+    tests: |
+      from inspect import getgeneratorstate
+
+      @coroutine
+      def collect(results):
+          while True:
+              results.append((yield))
+
+      def run(words, names):
+          out = []
+          head = build_chain(collect(out), words)
+          for name in names:
+              head.send([name, '1'])
+          return [row[0] for row in out]
+
+      NAMES = ['Chevrolet Monte Carlo Landau', 'Ford LTD Landau',
+               'Chevrolet Monte Carlo', 'Chevrolet Impala']
+
+      def test_single_word():
+          """one word filters on the first field"""
+          assert run(['Impala'], NAMES) == ['Chevrolet Impala']
+
+      def test_all_words_must_match():
+          """every word must appear (no closure bug)"""
+          got = run(['Chevrolet', 'Carlo', 'Landau'], NAMES)
+          assert got == ['Chevrolet Monte Carlo Landau'], f"got {got}"
+
+      def test_no_words():
+          """with no words every row passes"""
+          assert run([], NAMES) == NAMES
+
+      def test_close_reaches_sink():
+          """closing the head closes the target"""
+          sink = collect([])
+          head = build_chain(sink, ['a', 'b'])
+          head.close()
+          assert getgeneratorstate(sink) == 'GEN_CLOSED', "the target was not closed"
+    solution: |
+      def coroutine(fn):
+          def inner(*args, **kwargs):
+              g = fn(*args, **kwargs)
+              next(g)
+              return g
+          return inner
+
+      @coroutine
+      def filter_data(pred, target):
+          try:
+              while True:
+                  row = yield
+                  if pred(row):
+                      target.send(row)
+          finally:
+              target.close()
+
+      def build_chain(target, words):
+          for word in words:
+              target = filter_data(lambda row, word=word: word in row[0], target)
+          return target
+    hints:
+      - "All the lambdas share the single loop variable `word`. Freeze its current value with a default argument: `lambda row, word=word: ...`."
+      - "Wrap `filter_data`'s loop in `try/finally` and call `target.close()` in the `finally`."
+
+  - id: car-pipeline
+    title: The context-managed pipeline
+    prompt: |
+      Put it all together. `parse_data`, `coroutine`, `save_csv` and `filter_data` are provided (as in the earlier exercises). Write:
+
+      - `pipeline_coro(out_file, name_filters)`: an auto-primed coroutine that builds a chain of name filters ending in `save_csv(out_file)`, forwards every row it receives to the head of that chain, and closes the chain when it is closed;
+      - `pipeline(out_file, name_filters)`: a context manager that creates the pipeline coroutine, gives it to the `with` block, and **always** closes it afterwards.
+
+      With the filters `('Chevrolet', 'Carlo', 'Landau')` the output file must contain exactly the two Chevrolet Monte Carlo Landau rows, comma-separated.
+    starter: |
+      import csv
+      from contextlib import contextmanager
+
+      def parse_data(f_name):
+          f = open(f_name)
+          try:
+              dialect = csv.Sniffer().sniff(f.read(2000))
+              f.seek(0)
+              next(f)
+              yield from csv.reader(f, dialect=dialect)
+          finally:
+              f.close()
+
+      def coroutine(fn):
+          def inner(*args, **kwargs):
+              g = fn(*args, **kwargs)
+              next(g)
+              return g
+          return inner
+
+      @coroutine
+      def save_csv(f_name):
+          with open(f_name, 'w', newline='') as f:
+              writer = csv.writer(f)
+              while True:
+                  writer.writerow((yield))
+
+      @coroutine
+      def filter_data(pred, target):
+          try:
+              while True:
+                  row = yield
+                  if pred(row):
+                      target.send(row)
+          finally:
+              target.close()
+
+      @coroutine
+      def pipeline_coro(out_file, name_filters):
+          # build the chain, then forward rows to its head
+          while True:
+              row = yield
+
+      @contextmanager
+      def pipeline(out_file, name_filters):
+          yield pipeline_coro(out_file, name_filters)
+    tests: |
+      def read_lines(name):
+          with open(name) as f:
+              return f.read().splitlines()
+
+      def feed(out_file, words):
+          with pipeline(out_file, words) as p:
+              for row in parse_data('cars.csv'):
+                  p.send(row)
+
+      def test_landau():
+          """Chevrolet + Carlo + Landau gives the two expected rows"""
+          feed('p_out.csv', ('Chevrolet', 'Carlo', 'Landau'))
+          assert read_lines('p_out.csv') == [
+              'Chevrolet Monte Carlo Landau,15.5,8,350.0,170.0,4165.,11.4,77,US',
+              'Chevrolet Monte Carlo Landau,19.2,8,305.0,145.0,3425.,13.2,78,US',
+          ], f"got {read_lines('p_out.csv')}"
+
+      def test_filter_order_irrelevant():
+          """the order of the filter words doesn't matter"""
+          feed('p_out.csv', ('Landau', 'Chevrolet', 'Carlo'))
+          assert len(read_lines('p_out.csv')) == 2
+
+      def test_single_filter():
+          """a single filter keeps all 46 Chevrolets"""
+          feed('p_out.csv', ('Chevrolet',))
+          lines = read_lines('p_out.csv')
+          assert len(lines) == 46, f"got {len(lines)} rows"
+          assert all(line.startswith('Chevrolet') for line in lines)
+
+      def test_closed_on_error():
+          """rows sent before an exception are still saved"""
+          try:
+              with pipeline('p_out.csv', ('Ford',)) as p:
+                  p.send(['Ford Pinto', '25.0'])
+                  p.send(['AMC Gremlin', '21.0'])
+                  raise RuntimeError('boom')
+          except RuntimeError:
+              pass
+          assert read_lines('p_out.csv') == ['Ford Pinto,25.0'], f"got {read_lines('p_out.csv')}"
+    solution: |
+      import csv
+      from contextlib import contextmanager
+
+      def parse_data(f_name):
+          f = open(f_name)
+          try:
+              dialect = csv.Sniffer().sniff(f.read(2000))
+              f.seek(0)
+              next(f)
+              yield from csv.reader(f, dialect=dialect)
+          finally:
+              f.close()
+
+      def coroutine(fn):
+          def inner(*args, **kwargs):
+              g = fn(*args, **kwargs)
+              next(g)
+              return g
+          return inner
+
+      @coroutine
+      def save_csv(f_name):
+          with open(f_name, 'w', newline='') as f:
+              writer = csv.writer(f)
+              while True:
+                  writer.writerow((yield))
+
+      @coroutine
+      def filter_data(pred, target):
+          try:
+              while True:
+                  row = yield
+                  if pred(row):
+                      target.send(row)
+          finally:
+              target.close()
+
+      @coroutine
+      def pipeline_coro(out_file, name_filters):
+          head = save_csv(out_file)
+          for word in name_filters:
+              head = filter_data(lambda row, word=word: word in row[0], head)
+          try:
+              while True:
+                  row = yield
+                  head.send(row)
+          finally:
+              head.close()
+
+      @contextmanager
+      def pipeline(out_file, name_filters):
+          p = pipeline_coro(out_file, name_filters)
+          try:
+              yield p
+          finally:
+              p.close()
+    hints:
+      - "Start with `head = save_csv(out_file)`, then for each word wrap it: `head = filter_data(<predicate>, head)`. Remember the default-argument trick for the lambda."
+      - "In `pipeline_coro`, put the forwarding loop in `try/finally` and close `head` in the `finally`."
+      - "In `pipeline`, create the coroutine, `yield` it inside `try`, and close it in `finally`."

@@ -1,0 +1,1025 @@
+quiz:
+  - q: What does this print?
+    code: |
+      import itertools
+
+      class Account:
+          counter = itertools.count(1)
+
+          def new_id(self):
+              return next(Account.counter)
+
+      a, b = Account(), Account()
+      print(a.new_id(), b.new_id(), a.new_id())
+    options:
+      - "`1 1 2`"
+      - "`1 2 3`"
+      - "`1 2 1`"
+      - "`2 3 4`"
+    answer: 1
+    explain: |
+      `counter` is a class attribute, created once when the class body runs. Every instance reaches the **same** iterator, so the IDs keep increasing across accounts.
+
+  - q: What does this print?
+    code: |
+      class Account:
+          interest_rate = 0.5
+
+      a1, a2 = Account(), Account()
+      a1.interest_rate = 10
+      Account.interest_rate = 2
+      print(a1.interest_rate, a2.interest_rate)
+    options:
+      - "`2 2`"
+      - "`10 10`"
+      - "`10 2`"
+      - "`2 10`"
+    answer: 2
+    explain: |
+      Assigning through `a1` creates an **instance** attribute that shadows the class attribute for `a1` only. Changing the class attribute afterwards affects `a2`, but `a1` still finds its own `10` first.
+
+  - q: What does this print?
+    code: |
+      class Account:
+          _rate = 0.5
+
+          @classmethod
+          def set_rate(cls, value):
+              cls._rate = value
+
+      a1, a2 = Account(), Account()
+      a1.set_rate(3)
+      print(Account._rate, a2._rate, '_rate' in a1.__dict__)
+    options:
+      - "`0.5 0.5 True`"
+      - "`3 0.5 True`"
+      - "`3 3 True`"
+      - "`3 3 False`"
+    answer: 3
+    explain: |
+      A class method receives the **class** as `cls`, even when it's called through an instance. So `cls._rate = 3` updates the shared class attribute and nothing is stored on `a1`.
+
+  - q: Why is `parse_confirmation_code` best written as a `@staticmethod`?
+    options:
+      - Static methods run faster than instance methods
+      - It needs neither an account instance nor any class state; everything comes from its arguments
+      - Static methods are the only methods that can return a namedtuple
+      - So that it can modify the shared transaction counter
+    answer: 1
+    explain: |
+      The code string contains the account number, transaction code, time and ID, and the time zone is passed in. No instance or class data is needed, which is also why the time zone is an argument rather than an account's preferred zone.
+
+  - q: What does this print?
+    code: |
+      class Person:
+          def __init__(self, name):
+              self.name = name
+
+          @property
+          def name(self):
+              return self._name
+
+          @name.setter
+          def name(self, value):
+              if not value.strip():
+                  raise ValueError('empty name')
+              self._name = value.strip()
+
+      try:
+          p = Person('   ')
+          print('created', repr(p.name))
+      except ValueError as ex:
+          print('ValueError:', ex)
+    options:
+      - "`created '   '`"
+      - "`created ''`"
+      - "`ValueError: empty name`"
+      - "`AttributeError: 'Person' object has no attribute '_name'`"
+    answer: 2
+    explain: |
+      `self.name = name` inside `__init__` goes through the property **setter**, so construction gets the same validation as any later assignment.
+
+  - q: What does this print?
+    code: |
+      from datetime import timedelta
+
+      print(timedelta(hours=-1, minutes=30) == timedelta(minutes=-30))
+    options:
+      - "`True`"
+      - "`False`"
+      - A `ValueError`, because the signs don't match
+      - "`None`"
+    answer: 0
+    explain: |
+      `timedelta` simply **adds** its components: -60 minutes + 30 minutes is -30 minutes. That's why a negative offset like -1:30 must be written with both parts negative: `timedelta(hours=-1, minutes=-30)`.
+
+  - q: How many times is `setup` printed?
+    code: |
+      import io, unittest
+
+      class T(unittest.TestCase):
+          def setUp(self):
+              print('setup')
+          def test_a(self):
+              pass
+          def test_b(self):
+              self.assertTrue(False)
+          def helper(self):
+              pass
+
+      suite = unittest.TestLoader().loadTestsFromTestCase(T)
+      result = unittest.TextTestRunner(stream=io.StringIO()).run(suite)
+    options:
+      - "Once, before all the tests"
+      - "Twice: once before each test method"
+      - "Three times: once per method"
+      - "Once, because the second test fails"
+    answer: 1
+    explain: |
+      `setUp` runs before **each** test, whether it passes or fails. `helper` doesn't start with `test`, so it isn't a test and doesn't trigger `setUp`.
+
+  - q: "A test does `with self.assertRaises(TypeError): Account(...)`, but the code actually raises `ValueError`. How does `unittest` report the test?"
+    options:
+      - As passed, because an exception was raised
+      - As FAIL, because the assertion wasn't met
+      - As ERROR, because the `ValueError` escapes `assertRaises` as an unexpected exception
+      - It isn't reported; the test runner crashes
+    answer: 2
+    explain: |
+      `assertRaises(TypeError)` only catches `TypeError`. Any other exception propagates out of the test, and an unexpected exception is reported as an **ERROR** (a failed assertion would be a FAIL).
+
+exercises:
+  - id: timezone-class
+    title: The TimeZone class
+    prompt: |
+      Complete the `TimeZone` class.
+
+      - `TimeZone(name, offset_hours, offset_minutes)`. Store the name **stripped** of surrounding whitespace.
+      - Raise `ValueError` if the name is `None`, empty or only whitespace; if either offset isn't an integer (`numbers.Integral`); if the minutes are outside -59...59; or if the combined offset `timedelta(hours=offset_hours, minutes=offset_minutes)` is outside -12:00...+14:00 (both ends allowed).
+      - Read-only properties `name` and `offset` (a `timedelta`). Assigning to them must raise `AttributeError`.
+      - `__eq__`: equal when the other object is a `TimeZone` with the same name, hours and minutes. Comparing with any other type gives `False`.
+      - `__repr__` returns exactly `TimeZone(name='ABC', offset_hours=-2, offset_minutes=-15)` (for that example).
+    starter: |
+      import numbers
+      from datetime import timedelta
+
+      class TimeZone:
+          def __init__(self, name, offset_hours, offset_minutes):
+              self.name = name
+              self.offset = timedelta(hours=offset_hours, minutes=offset_minutes)
+    tests: |
+      from datetime import timedelta
+
+      def test_basic():
+          """name and offset are available"""
+          tz = TimeZone('ABC', -2, -15)
+          assert tz.name == 'ABC', f"name is {tz.name!r}"
+          assert tz.offset == timedelta(hours=-2, minutes=-15), f"offset is {tz.offset!r}"
+
+      def test_strip():
+          """the name is stripped"""
+          assert TimeZone('  MST ', -7, 0).name == 'MST'
+
+      def test_bad_names():
+          """empty, blank or None names raise ValueError"""
+          for bad in ('', '   ', None):
+              try:
+                  TimeZone(bad, 0, 0)
+              except ValueError:
+                  continue
+              assert False, f"TimeZone({bad!r}, 0, 0) did not raise ValueError"
+
+      def test_non_integer_offsets():
+          """non-integer offsets raise ValueError"""
+          for args in (('X', 1.5, 0), ('X', 0, 30.0), ('X', '3', 0)):
+              try:
+                  TimeZone(*args)
+              except ValueError:
+                  continue
+              assert False, f"TimeZone{args} did not raise ValueError"
+
+      def test_minutes_range():
+          """minutes must be in -59...59"""
+          assert TimeZone('X', 0, 59).offset == timedelta(minutes=59)
+          assert TimeZone('X', 0, -59).offset == timedelta(minutes=-59)
+          for m in (60, -60):
+              try:
+                  TimeZone('X', 0, m)
+              except ValueError:
+                  continue
+              assert False, f"minutes={m} did not raise ValueError"
+
+      def test_offset_bounds():
+          """offset must be within -12:00...+14:00"""
+          assert TimeZone('X', -12, 0).offset == timedelta(hours=-12)
+          assert TimeZone('X', 14, 0).offset == timedelta(hours=14)
+          for args in (('X', -12, -1), ('X', 14, 1), ('X', 15, 0)):
+              try:
+                  TimeZone(*args)
+              except ValueError:
+                  continue
+              assert False, f"TimeZone{args} did not raise ValueError"
+
+      def test_read_only():
+          """name and offset are read-only"""
+          tz = TimeZone('ABC', 1, 0)
+          for attr, value in (('name', 'XYZ'), ('offset', timedelta(0))):
+              try:
+                  setattr(tz, attr, value)
+              except AttributeError:
+                  continue
+              assert False, f"setting {attr} did not raise AttributeError"
+
+      def test_equality():
+          """equal by name, hours and minutes"""
+          assert TimeZone('ABC', -1, -30) == TimeZone('ABC', -1, -30)
+          assert TimeZone('ABC', -1, -30) != TimeZone('DEF', -1, -30)
+          assert TimeZone('ABC', -1, -30) != TimeZone('ABC', -1, 0)
+          assert TimeZone('ABC', -1, -30) != TimeZone('ABC', 1, -30)
+          assert TimeZone('ABC', 0, 0) != 'ABC', "comparing with a string should be False"
+
+      def test_repr():
+          """repr has the documented format"""
+          r = repr(TimeZone('ABC', -2, -15))
+          assert r == "TimeZone(name='ABC', offset_hours=-2, offset_minutes=-15)", f"got {r}"
+    solution: |
+      import numbers
+      from datetime import timedelta
+
+      class TimeZone:
+          def __init__(self, name, offset_hours, offset_minutes):
+              if name is None or len(str(name).strip()) == 0:
+                  raise ValueError('Timezone name cannot be empty.')
+              if not isinstance(offset_hours, numbers.Integral):
+                  raise ValueError('Hour offset must be an integer.')
+              if not isinstance(offset_minutes, numbers.Integral):
+                  raise ValueError('Minutes offset must be an integer.')
+              if offset_minutes < -59 or offset_minutes > 59:
+                  raise ValueError('Minutes offset must be between -59 and 59.')
+              offset = timedelta(hours=offset_hours, minutes=offset_minutes)
+              if offset < timedelta(hours=-12) or offset > timedelta(hours=14):
+                  raise ValueError('Offset must be between -12:00 and +14:00.')
+              self._name = str(name).strip()
+              self._offset_hours = offset_hours
+              self._offset_minutes = offset_minutes
+              self._offset = offset
+
+          @property
+          def name(self):
+              return self._name
+
+          @property
+          def offset(self):
+              return self._offset
+
+          def __eq__(self, other):
+              return (isinstance(other, TimeZone) and
+                      self.name == other.name and
+                      self._offset_hours == other._offset_hours and
+                      self._offset_minutes == other._offset_minutes)
+
+          def __repr__(self):
+              return (f"TimeZone(name='{self.name}', "
+                      f"offset_hours={self._offset_hours}, "
+                      f"offset_minutes={self._offset_minutes})")
+    hints:
+      - Store the values in "private" attributes (`_name`, `_offset`, ...) and expose them with getter-only `@property` methods.
+      - "`timedelta` objects compare with `<` and `>`, so `offset < timedelta(hours=-12)` checks the lower bound."
+      - "In `__eq__`, check `isinstance(other, TimeZone)` first, then compare the fields with `and` so the evaluation short-circuits."
+
+  - id: account-holder
+    title: The account holder
+    prompt: |
+      The `TimeZone` class is provided. Write the start of the `Account` class:
+
+      - `Account(account_number, first_name, last_name, timezone=None)`
+      - `account_number`: a **read-only** property.
+      - `first_name` and `last_name`: read/write properties. The setter strips surrounding whitespace and raises `ValueError` for `None`, empty or blank values, both in `__init__` and on later assignment.
+      - `full_name`: a read-only computed property, `'first last'`, always up to date.
+      - `timezone`: read/write property that defaults to `TimeZone('UTC', 0, 0)`. Assigning anything that isn't a `TimeZone` raises `ValueError`.
+    starter: |
+      import numbers
+      from datetime import timedelta
+
+      class TimeZone:
+          def __init__(self, name, offset_hours, offset_minutes):
+              if name is None or len(str(name).strip()) == 0:
+                  raise ValueError('Timezone name cannot be empty.')
+              self._name = str(name).strip()
+
+              if not isinstance(offset_hours, numbers.Integral):
+                  raise ValueError('Hour offset must be an integer.')
+              if not isinstance(offset_minutes, numbers.Integral):
+                  raise ValueError('Minutes offset must be an integer.')
+              if offset_minutes < -59 or offset_minutes > 59:
+                  raise ValueError('Minutes offset must be between -59 and 59 (inclusive).')
+
+              offset = timedelta(hours=offset_hours, minutes=offset_minutes)
+              # real-world UTC offsets range from -12:00 to +14:00
+              if offset < timedelta(hours=-12) or offset > timedelta(hours=14):
+                  raise ValueError('Offset must be between -12:00 and +14:00.')
+
+              self._offset_hours = offset_hours
+              self._offset_minutes = offset_minutes
+              self._offset = offset
+
+          @property
+          def offset(self):
+              return self._offset
+
+          @property
+          def name(self):
+              return self._name
+
+          def __eq__(self, other):
+              return (isinstance(other, TimeZone) and
+                      self.name == other.name and
+                      self._offset_hours == other._offset_hours and
+                      self._offset_minutes == other._offset_minutes)
+
+          def __repr__(self):
+              return (f"TimeZone(name='{self.name}', "
+                      f"offset_hours={self._offset_hours}, "
+                      f"offset_minutes={self._offset_minutes})")
+
+
+      class Account:
+          def __init__(self, account_number, first_name, last_name, timezone=None):
+              self.account_number = account_number
+              self.first_name = first_name
+              self.last_name = last_name
+              self.timezone = timezone
+    tests: |
+      def test_values():
+          """the initializer stores the values"""
+          a = Account('A100', 'Eric', 'Idle')
+          assert a.account_number == 'A100'
+          assert (a.first_name, a.last_name) == ('Eric', 'Idle'), f"got {(a.first_name, a.last_name)}"
+
+      def test_account_number_read_only():
+          """account_number is read-only"""
+          a = Account('A100', 'Eric', 'Idle')
+          try:
+              a.account_number = 'B200'
+          except AttributeError:
+              return
+          assert False, "assigning account_number did not raise AttributeError"
+
+      def test_names_stripped():
+          """names are stripped of surrounding whitespace"""
+          a = Account('A100', '  Eric ', ' Idle')
+          assert a.first_name == 'Eric', f"got {a.first_name!r}"
+          assert a.last_name == 'Idle', f"got {a.last_name!r}"
+
+      def test_bad_names_in_init():
+          """empty, blank or None names are rejected by __init__"""
+          for first, last in (('', 'Idle'), ('Eric', '   '), (None, 'Idle'), ('Eric', None)):
+              try:
+                  Account('A100', first, last)
+              except ValueError:
+                  continue
+              assert False, f"Account('A100', {first!r}, {last!r}) did not raise ValueError"
+
+      def test_bad_name_assignment():
+          """empty names are rejected on assignment too, and the old value is kept"""
+          a = Account('A100', 'Eric', 'Idle')
+          try:
+              a.last_name = ' '
+          except ValueError:
+              pass
+          else:
+              assert False, "assigning a blank last name did not raise ValueError"
+          assert a.last_name == 'Idle', f"last name changed to {a.last_name!r}"
+
+      def test_full_name():
+          """full_name is computed and tracks changes"""
+          a = Account('A100', 'Eric', 'Idle')
+          assert a.full_name == 'Eric Idle', f"got {a.full_name!r}"
+          a.first_name = 'John'
+          assert a.full_name == 'John Idle', f"after change got {a.full_name!r}"
+
+      def test_full_name_read_only():
+          """full_name can't be assigned"""
+          a = Account('A100', 'Eric', 'Idle')
+          try:
+              a.full_name = 'X Y'
+          except AttributeError:
+              return
+          assert False, "assigning full_name did not raise AttributeError"
+
+      def test_default_timezone():
+          """the default time zone is UTC"""
+          a = Account('A100', 'Eric', 'Idle')
+          assert a.timezone == TimeZone('UTC', 0, 0), f"got {a.timezone!r}"
+
+      def test_timezone_validation():
+          """timezone accepts TimeZone objects only"""
+          a = Account('A100', 'Eric', 'Idle', TimeZone('MST', -7, 0))
+          assert a.timezone == TimeZone('MST', -7, 0)
+          a.timezone = TimeZone('CET', 1, 0)
+          assert a.timezone.name == 'CET'
+          for bad in (-7, 'MST'):
+              try:
+                  a.timezone = bad
+              except ValueError:
+                  continue
+              assert False, f"timezone = {bad!r} did not raise ValueError"
+          try:
+              Account('A100', 'Eric', 'Idle', 'MST')
+          except ValueError:
+              return
+          assert False, "Account(..., timezone='MST') did not raise ValueError"
+    solution: |
+      import numbers
+      from datetime import timedelta
+
+      class TimeZone:
+          def __init__(self, name, offset_hours, offset_minutes):
+              if name is None or len(str(name).strip()) == 0:
+                  raise ValueError('Timezone name cannot be empty.')
+              self._name = str(name).strip()
+
+              if not isinstance(offset_hours, numbers.Integral):
+                  raise ValueError('Hour offset must be an integer.')
+              if not isinstance(offset_minutes, numbers.Integral):
+                  raise ValueError('Minutes offset must be an integer.')
+              if offset_minutes < -59 or offset_minutes > 59:
+                  raise ValueError('Minutes offset must be between -59 and 59 (inclusive).')
+
+              offset = timedelta(hours=offset_hours, minutes=offset_minutes)
+              # real-world UTC offsets range from -12:00 to +14:00
+              if offset < timedelta(hours=-12) or offset > timedelta(hours=14):
+                  raise ValueError('Offset must be between -12:00 and +14:00.')
+
+              self._offset_hours = offset_hours
+              self._offset_minutes = offset_minutes
+              self._offset = offset
+
+          @property
+          def offset(self):
+              return self._offset
+
+          @property
+          def name(self):
+              return self._name
+
+          def __eq__(self, other):
+              return (isinstance(other, TimeZone) and
+                      self.name == other.name and
+                      self._offset_hours == other._offset_hours and
+                      self._offset_minutes == other._offset_minutes)
+
+          def __repr__(self):
+              return (f"TimeZone(name='{self.name}', "
+                      f"offset_hours={self._offset_hours}, "
+                      f"offset_minutes={self._offset_minutes})")
+
+
+      class Account:
+          def __init__(self, account_number, first_name, last_name, timezone=None):
+              self._account_number = account_number
+              self.first_name = first_name
+              self.last_name = last_name
+              if timezone is None:
+                  timezone = TimeZone('UTC', 0, 0)
+              self.timezone = timezone
+
+          @property
+          def account_number(self):
+              return self._account_number
+
+          @property
+          def first_name(self):
+              return self._first_name
+
+          @first_name.setter
+          def first_name(self, value):
+              self._first_name = Account.validate_name(value, 'First name')
+
+          @property
+          def last_name(self):
+              return self._last_name
+
+          @last_name.setter
+          def last_name(self, value):
+              self._last_name = Account.validate_name(value, 'Last name')
+
+          @property
+          def full_name(self):
+              return f'{self.first_name} {self.last_name}'
+
+          @property
+          def timezone(self):
+              return self._timezone
+
+          @timezone.setter
+          def timezone(self, value):
+              if not isinstance(value, TimeZone):
+                  raise ValueError('Time zone must be a valid TimeZone object.')
+              self._timezone = value
+
+          @staticmethod
+          def validate_name(value, field_title):
+              if value is None or len(str(value).strip()) == 0:
+                  raise ValueError(f'{field_title} cannot be empty.')
+              return str(value).strip()
+    hints:
+      - In `__init__`, assign `self.first_name = first_name` (not `self._first_name`) so the setter's validation runs.
+      - Both name setters need the same check. Put it in one `@staticmethod` that validates and returns the stripped value.
+      - Default `timezone=None` in the signature and create `TimeZone('UTC', 0, 0)` inside `__init__`.
+
+  - id: balance-and-interest-rate
+    title: Balance and a shared interest rate
+    prompt: |
+      Here is a cut-down `Account` (just an account number and a balance) so you can focus on two pieces:
+
+      1. **Balance.** `Account(account_number, initial_balance=0)` stores the balance as a `float`, exposed through a **read-only** `balance` property. Raise `ValueError` if `initial_balance` isn't a real number (`numbers.Real`) or is negative.
+      2. **Interest rate.** A class attribute `_interest_rate = 0.5` (percent), shared by all accounts, with two **class methods**: `get_interest_rate()` and `set_interest_rate(value)`. The setter raises `ValueError` for non-real or negative values. Calling the setter through an instance must change the rate for **every** account.
+    starter: |
+      import numbers
+
+      class Account:
+          interest_rate = 0.5
+
+          def __init__(self, account_number, initial_balance=0):
+              self.account_number = account_number
+              self.balance = initial_balance
+    tests: |
+      def test_initial_balance():
+          """the balance defaults to 0.0 and is stored as a float"""
+          assert Account('A1').balance == 0.0
+          b = Account('A1', 100).balance
+          assert b == 100 and isinstance(b, float), f"got {b!r}"
+
+      def test_balance_read_only():
+          """balance can't be assigned"""
+          a = Account('A1', 100)
+          try:
+              a.balance = 1_000_000
+          except AttributeError:
+              pass
+          else:
+              assert False, "assigning balance did not raise AttributeError"
+          assert a.balance == 100
+
+      def test_bad_initial_balance():
+          """negative or non-numeric starting balances raise ValueError"""
+          for bad in (-0.01, -100, '100', None):
+              try:
+                  Account('A1', bad)
+              except ValueError:
+                  continue
+              assert False, f"initial_balance={bad!r} did not raise ValueError"
+
+      def test_default_rate():
+          """the default rate is 0.5"""
+          Account._interest_rate = 0.5
+          assert Account.get_interest_rate() == 0.5
+
+      def test_class_methods():
+          """get/set_interest_rate are class methods"""
+          for name in ('get_interest_rate', 'set_interest_rate'):
+              assert isinstance(Account.__dict__.get(name), classmethod), f"{name} is not a classmethod"
+
+      def test_rate_shared():
+          """setting the rate through an instance changes it for every account"""
+          a1, a2 = Account('A1'), Account('A2')
+          a1.set_interest_rate(1.25)
+          assert Account.get_interest_rate() == 1.25
+          assert a2.get_interest_rate() == 1.25
+          assert '_interest_rate' not in vars(a1), "the rate was stored on the instance"
+          Account.set_interest_rate(0.5)
+
+      def test_rate_validation():
+          """invalid rates raise ValueError and leave the rate unchanged"""
+          Account.set_interest_rate(2)
+          for bad in (-1, '10', None, 1j):
+              try:
+                  Account.set_interest_rate(bad)
+              except ValueError:
+                  continue
+              assert False, f"set_interest_rate({bad!r}) did not raise ValueError"
+          assert Account.get_interest_rate() == 2
+          Account.set_interest_rate(0)
+          assert Account.get_interest_rate() == 0, "a rate of 0 should be allowed"
+          Account.set_interest_rate(0.5)
+    solution: |
+      import numbers
+
+      class Account:
+          _interest_rate = 0.5  # percent
+
+          def __init__(self, account_number, initial_balance=0):
+              self.account_number = account_number
+              if not isinstance(initial_balance, numbers.Real):
+                  raise ValueError('Initial balance must be a real number.')
+              if initial_balance < 0:
+                  raise ValueError('Initial balance cannot be negative.')
+              self._balance = float(initial_balance)
+
+          @property
+          def balance(self):
+              return self._balance
+
+          @classmethod
+          def get_interest_rate(cls):
+              return cls._interest_rate
+
+          @classmethod
+          def set_interest_rate(cls, value):
+              if not isinstance(value, numbers.Real):
+                  raise ValueError('Interest rate must be a real number.')
+              if value < 0:
+                  raise ValueError('Interest rate cannot be negative.')
+              cls._interest_rate = value
+    hints:
+      - A getter-only `@property` named `balance`, backed by `self._balance`, makes the balance read-only.
+      - "`isinstance(value, numbers.Real)` accepts ints and floats but rejects strings, `None` and complex numbers."
+      - "In a `@classmethod`, assign `cls._interest_rate = value`. `cls` is the class even when the method is called through an instance."
+
+  - id: transactions
+    title: Transactions and confirmation codes
+    prompt: |
+      This cut-down `Account` already has a read-only `balance`, the shared `transaction_counter`, the `_interest_rate` (percent), the `_transaction_codes` table and a `validate_real_number` helper. Write:
+
+      - `generate_confirmation_code(self, transaction_code)`: returns `'<code>-<account_number>-<YYYYMMDDHHMMSS>-<id>'`, using the **current UTC time** (`datetime.now(timezone.utc)`) and the next value of `Account.transaction_counter`.
+      - `deposit(value)`: validate (a real number, at least `0.01`), add to the balance, return a `D` code.
+      - `withdraw(value)`: validate the same way. If the balance would go negative, return an `X` code and leave the balance unchanged; otherwise subtract and return a `W` code.
+      - `pay_interest()`: add `balance * rate / 100` to the balance and return an `I` code.
+
+      Invalid amounts raise `ValueError` without changing the balance.
+    starter: |
+      import itertools
+      import numbers
+      from datetime import datetime, timezone
+
+      class Account:
+          transaction_counter = itertools.count(100)
+          _interest_rate = 0.5  # percent
+          _transaction_codes = {'deposit': 'D', 'withdraw': 'W',
+                                'interest': 'I', 'rejected': 'X'}
+
+          def __init__(self, account_number, initial_balance=0):
+              self._account_number = account_number
+              self._balance = float(Account.validate_real_number(initial_balance, min_value=0))
+
+          @property
+          def account_number(self):
+              return self._account_number
+
+          @property
+          def balance(self):
+              return self._balance
+
+          @staticmethod
+          def validate_real_number(value, min_value=None):
+              if not isinstance(value, numbers.Real):
+                  raise ValueError('Value must be a real number.')
+              if min_value is not None and value < min_value:
+                  raise ValueError(f'Value must be at least {min_value}.')
+              return value
+
+          def generate_confirmation_code(self, transaction_code):
+              pass
+
+          def deposit(self, value):
+              pass
+
+          def withdraw(self, value):
+              pass
+
+          def pay_interest(self):
+              pass
+    tests: |
+      from datetime import datetime, timezone
+
+      def _parts(code):
+          assert isinstance(code, str), f"expected a confirmation code string, got {code!r}"
+          parts = code.split('-')
+          assert len(parts) == 4, f"{code!r} doesn't have 4 dash-separated parts"
+          return parts
+
+      def test_code_format():
+          """the confirmation code has the right parts"""
+          a = Account('A100', 100)
+          tc, acct, ts, tid = _parts(a.generate_confirmation_code('D'))
+          assert tc == 'D', f"transaction code is {tc!r}"
+          assert acct == 'A100', f"account number is {acct!r}"
+          assert len(ts) == 14 and ts.isdigit(), f"timestamp {ts!r} is not YYYYMMDDHHMMSS"
+          assert tid.isdigit(), f"transaction id {tid!r} is not a number"
+
+      def test_code_time_is_utc_now():
+          """the timestamp is the current UTC time"""
+          a = Account('A100')
+          ts = _parts(a.generate_confirmation_code('D'))[2]
+          dt = datetime.strptime(ts, '%Y%m%d%H%M%S').replace(tzinfo=timezone.utc)
+          diff = abs((datetime.now(timezone.utc) - dt).total_seconds())
+          assert diff < 5, f"timestamp {ts} is {diff:.0f}s away from the current UTC time"
+
+      def test_ids_shared():
+          """transaction ids increase by 1 across all accounts"""
+          a, b = Account('A1', 100), Account('B2', 100)
+          ids = [int(_parts(code)[3]) for code in
+                 (a.generate_confirmation_code('D'), b.deposit(1), a.withdraw(1), b.withdraw(1000))]
+          assert ids == list(range(ids[0], ids[0] + 4)), f"ids were {ids}"
+
+      def test_deposit():
+          """deposit adds to the balance and returns a D code"""
+          a = Account('A100', 100)
+          code = a.deposit(50.5)
+          assert _parts(code)[0] == 'D', f"got {code!r}"
+          assert a.balance == 150.5, f"balance is {a.balance}"
+
+      def test_bad_amounts():
+          """invalid amounts raise ValueError and leave the balance alone"""
+          a = Account('A100', 100)
+          for method in (a.deposit, a.withdraw):
+              for bad in (0, -10, '10', None):
+                  try:
+                      method(bad)
+                  except ValueError:
+                      continue
+                  assert False, f"{method.__name__}({bad!r}) did not raise ValueError"
+          assert a.balance == 100, f"balance changed to {a.balance}"
+
+      def test_withdraw():
+          """withdraw subtracts and returns a W code"""
+          a = Account('A100', 100)
+          code = a.withdraw(30)
+          assert _parts(code)[0] == 'W', f"got {code!r}"
+          assert a.balance == 70, f"balance is {a.balance}"
+          a.withdraw(70)
+          assert a.balance == 0, "withdrawing the whole balance should be allowed"
+
+      def test_withdraw_declined():
+          """an overdraft is declined with an X code"""
+          a = Account('A100', 100)
+          code = a.withdraw(100.01)
+          assert _parts(code)[0] == 'X', f"got {code!r}"
+          assert a.balance == 100, f"balance changed to {a.balance}"
+
+      def test_pay_interest():
+          """pay_interest adds balance * rate / 100 and returns an I code"""
+          Account._interest_rate = 0.5
+          a = Account('A100', 1000)
+          code = a.pay_interest()
+          assert _parts(code)[0] == 'I', f"got {code!r}"
+          assert abs(a.balance - 1005) < 1e-9, f"balance is {a.balance}"
+          Account._interest_rate = 2
+          a.pay_interest()
+          assert abs(a.balance - 1025.1) < 1e-9, f"with a 2% rate, balance is {a.balance}"
+          Account._interest_rate = 0.5
+    solution: |
+      import itertools
+      import numbers
+      from datetime import datetime, timezone
+
+      class Account:
+          transaction_counter = itertools.count(100)
+          _interest_rate = 0.5  # percent
+          _transaction_codes = {'deposit': 'D', 'withdraw': 'W',
+                                'interest': 'I', 'rejected': 'X'}
+
+          def __init__(self, account_number, initial_balance=0):
+              self._account_number = account_number
+              self._balance = float(Account.validate_real_number(initial_balance, min_value=0))
+
+          @property
+          def account_number(self):
+              return self._account_number
+
+          @property
+          def balance(self):
+              return self._balance
+
+          @staticmethod
+          def validate_real_number(value, min_value=None):
+              if not isinstance(value, numbers.Real):
+                  raise ValueError('Value must be a real number.')
+              if min_value is not None and value < min_value:
+                  raise ValueError(f'Value must be at least {min_value}.')
+              return value
+
+          def generate_confirmation_code(self, transaction_code):
+              dt_str = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')
+              transaction_id = next(Account.transaction_counter)
+              return f'{transaction_code}-{self.account_number}-{dt_str}-{transaction_id}'
+
+          def deposit(self, value):
+              value = Account.validate_real_number(value, min_value=0.01)
+              conf_code = self.generate_confirmation_code(Account._transaction_codes['deposit'])
+              self._balance += value
+              return conf_code
+
+          def withdraw(self, value):
+              value = Account.validate_real_number(value, min_value=0.01)
+              if self.balance - value < 0:
+                  return self.generate_confirmation_code(Account._transaction_codes['rejected'])
+              conf_code = self.generate_confirmation_code(Account._transaction_codes['withdraw'])
+              self._balance -= value
+              return conf_code
+
+          def pay_interest(self):
+              interest = self.balance * Account._interest_rate / 100
+              conf_code = self.generate_confirmation_code(Account._transaction_codes['interest'])
+              self._balance += interest
+              return conf_code
+    hints:
+      - "`datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')` gives the timestamp, and `next(Account.transaction_counter)` the next id."
+      - Every transaction method validates first, then generates the code, then updates the balance, then returns the code.
+      - A declined withdrawal still generates (and returns) a confirmation code, with the `'rejected'` transaction code.
+
+  - id: parse-confirmation-code
+    title: Parsing a confirmation code
+    prompt: |
+      `TimeZone` and the `Confirmation` namedtuple are provided. Add a **static method** `Account.parse_confirmation_code(confirmation_code, preferred_time_zone=None)` that returns a `Confirmation` with:
+
+      - `account_number`, `transaction_code`, `transaction_id`: strings taken from the code
+      - `time_utc`: the UTC time in ISO format, e.g. `'2019-03-15T14:59:00'`
+      - `time`: the time shifted by the time zone's offset, as `'2019-03-15 07:59:00 (MST)'`
+
+      The time zone defaults to `TimeZone('UTC', 0, 0)`. Raise `ValueError` if the code doesn't have exactly four dash-separated parts, if the timestamp isn't a valid `YYYYMMDDHHMMSS` date and time, or if the time zone isn't a `TimeZone`.
+    starter: |
+      import numbers
+      from collections import namedtuple
+      from datetime import datetime, timedelta
+
+      class TimeZone:
+          def __init__(self, name, offset_hours, offset_minutes):
+              if name is None or len(str(name).strip()) == 0:
+                  raise ValueError('Timezone name cannot be empty.')
+              self._name = str(name).strip()
+
+              if not isinstance(offset_hours, numbers.Integral):
+                  raise ValueError('Hour offset must be an integer.')
+              if not isinstance(offset_minutes, numbers.Integral):
+                  raise ValueError('Minutes offset must be an integer.')
+              if offset_minutes < -59 or offset_minutes > 59:
+                  raise ValueError('Minutes offset must be between -59 and 59 (inclusive).')
+
+              offset = timedelta(hours=offset_hours, minutes=offset_minutes)
+              # real-world UTC offsets range from -12:00 to +14:00
+              if offset < timedelta(hours=-12) or offset > timedelta(hours=14):
+                  raise ValueError('Offset must be between -12:00 and +14:00.')
+
+              self._offset_hours = offset_hours
+              self._offset_minutes = offset_minutes
+              self._offset = offset
+
+          @property
+          def offset(self):
+              return self._offset
+
+          @property
+          def name(self):
+              return self._name
+
+          def __eq__(self, other):
+              return (isinstance(other, TimeZone) and
+                      self.name == other.name and
+                      self._offset_hours == other._offset_hours and
+                      self._offset_minutes == other._offset_minutes)
+
+          def __repr__(self):
+              return (f"TimeZone(name='{self.name}', "
+                      f"offset_hours={self._offset_hours}, "
+                      f"offset_minutes={self._offset_minutes})")
+
+
+      Confirmation = namedtuple(
+          'Confirmation',
+          'account_number transaction_code transaction_id time_utc time'
+      )
+
+
+      class Account:
+          def parse_confirmation_code(confirmation_code, preferred_time_zone=None):
+              pass
+    tests: |
+      CODE = 'D-140568-20190315145900-124'
+
+      def test_returns_confirmation():
+          """returns a Confirmation with the code's parts"""
+          r = Account.parse_confirmation_code(CODE)
+          assert isinstance(r, Confirmation), f"got {r!r}"
+          assert (r.account_number, r.transaction_code, r.transaction_id) == ('140568', 'D', '124'), f"got {r!r}"
+
+      def test_default_utc():
+          """the default time zone is UTC"""
+          r = Account.parse_confirmation_code(CODE)
+          assert r.time_utc == '2019-03-15T14:59:00', f"time_utc is {r.time_utc!r}"
+          assert r.time == '2019-03-15 14:59:00 (UTC)', f"time is {r.time!r}"
+
+      def test_mst():
+          """times are converted to the given time zone"""
+          r = Account.parse_confirmation_code(CODE, TimeZone('MST', -7, 0))
+          assert r.time_utc == '2019-03-15T14:59:00', f"time_utc is {r.time_utc!r}"
+          assert r.time == '2019-03-15 07:59:00 (MST)', f"time is {r.time!r}"
+
+      def test_crosses_midnight():
+          """a half-hour offset can move the date forward"""
+          r = Account.parse_confirmation_code('W-A1-20191231220000-7', TimeZone('IST', 5, 30))
+          assert r.time == '2020-01-01 03:30:00 (IST)', f"time is {r.time!r}"
+
+      def test_is_static():
+          """parse_confirmation_code is a static method"""
+          assert isinstance(Account.__dict__.get('parse_confirmation_code'), staticmethod)
+          r = Account().parse_confirmation_code(CODE)
+          assert r.transaction_id == '124', "calling it through an instance should work too"
+
+      def test_invalid_codes():
+          """malformed codes raise ValueError"""
+          for bad in ('D-140568-124', 'D-140568-20190315145900-124-9', 'D-1-asdasd-1', 'D-1-20191345000000-1'):
+              try:
+                  Account.parse_confirmation_code(bad)
+              except ValueError:
+                  continue
+              assert False, f"{bad!r} did not raise ValueError"
+
+      def test_invalid_timezone():
+          """a time zone that isn't a TimeZone raises ValueError"""
+          try:
+              Account.parse_confirmation_code(CODE, -7)
+          except ValueError:
+              return
+          assert False, "preferred_time_zone=-7 did not raise ValueError"
+    solution: |
+      import numbers
+      from collections import namedtuple
+      from datetime import datetime, timedelta
+
+      class TimeZone:
+          def __init__(self, name, offset_hours, offset_minutes):
+              if name is None or len(str(name).strip()) == 0:
+                  raise ValueError('Timezone name cannot be empty.')
+              self._name = str(name).strip()
+
+              if not isinstance(offset_hours, numbers.Integral):
+                  raise ValueError('Hour offset must be an integer.')
+              if not isinstance(offset_minutes, numbers.Integral):
+                  raise ValueError('Minutes offset must be an integer.')
+              if offset_minutes < -59 or offset_minutes > 59:
+                  raise ValueError('Minutes offset must be between -59 and 59 (inclusive).')
+
+              offset = timedelta(hours=offset_hours, minutes=offset_minutes)
+              # real-world UTC offsets range from -12:00 to +14:00
+              if offset < timedelta(hours=-12) or offset > timedelta(hours=14):
+                  raise ValueError('Offset must be between -12:00 and +14:00.')
+
+              self._offset_hours = offset_hours
+              self._offset_minutes = offset_minutes
+              self._offset = offset
+
+          @property
+          def offset(self):
+              return self._offset
+
+          @property
+          def name(self):
+              return self._name
+
+          def __eq__(self, other):
+              return (isinstance(other, TimeZone) and
+                      self.name == other.name and
+                      self._offset_hours == other._offset_hours and
+                      self._offset_minutes == other._offset_minutes)
+
+          def __repr__(self):
+              return (f"TimeZone(name='{self.name}', "
+                      f"offset_hours={self._offset_hours}, "
+                      f"offset_minutes={self._offset_minutes})")
+
+
+      Confirmation = namedtuple(
+          'Confirmation',
+          'account_number transaction_code transaction_id time_utc time'
+      )
+
+
+      class Account:
+          @staticmethod
+          def parse_confirmation_code(confirmation_code, preferred_time_zone=None):
+              parts = confirmation_code.split('-')
+              if len(parts) != 4:
+                  raise ValueError('Invalid confirmation code.')
+              transaction_code, account_number, raw_dt_utc, transaction_id = parts
+
+              try:
+                  dt_utc = datetime.strptime(raw_dt_utc, '%Y%m%d%H%M%S')
+              except ValueError as ex:
+                  raise ValueError('Invalid transaction datetime.') from ex
+
+              if preferred_time_zone is None:
+                  preferred_time_zone = TimeZone('UTC', 0, 0)
+              if not isinstance(preferred_time_zone, TimeZone):
+                  raise ValueError('Invalid TimeZone specified.')
+
+              dt_preferred = dt_utc + preferred_time_zone.offset
+              dt_preferred_str = (f"{dt_preferred.strftime('%Y-%m-%d %H:%M:%S')} "
+                                  f"({preferred_time_zone.name})")
+              return Confirmation(account_number, transaction_code, transaction_id,
+                                  dt_utc.isoformat(), dt_preferred_str)
+    hints:
+      - "Split on `'-'`, check the length, then unpack: `transaction_code, account_number, raw_dt_utc, transaction_id = parts`."
+      - "`datetime.strptime(raw, '%Y%m%d%H%M%S')` parses the timestamp and raises `ValueError` if it's invalid. `.isoformat()` gives `time_utc`."
+      - "The local time is `dt_utc + tz.offset`; format it with `strftime('%Y-%m-%d %H:%M:%S')` and append the zone name in parentheses."

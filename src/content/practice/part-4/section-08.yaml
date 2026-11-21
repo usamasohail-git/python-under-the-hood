@@ -1,0 +1,534 @@
+quiz:
+  - q: Which of these makes an object a **data** descriptor?
+    options:
+      - Its class defines `__get__`
+      - Its class defines `__set_name__`
+      - It is stored in an instance's `__dict__`
+      - Its class defines `__set__` (or `__delete__`)
+    answer: 3
+    explain: |
+      A descriptor with only `__get__` is a **non-data** descriptor. Defining `__set__` or `__delete__` makes it a **data** descriptor, which gives it priority over the instance dictionary during lookup.
+
+  - q: What does this print?
+    code: |
+      class Counter:
+          def __init__(self):
+              self.count = 0
+          def __get__(self, instance, owner):
+              if instance is None:
+                  return self
+              self.count += 1
+              return self.count
+
+      class Widget:
+          clicks = Counter()
+
+      a, b = Widget(), Widget()
+      print(a.clicks, b.clicks, a.clicks)
+    options:
+      - "`1 1 2`"
+      - "`1 2 3`"
+      - "`1 1 1`"
+      - "`0 0 1`"
+    answer: 1
+    explain: |
+      There is only **one** `Counter` object, stored as a class attribute and shared by every `Widget`. State kept on the descriptor's `self` is shared, so the count keeps rising across instances.
+
+  - q: What does this print?
+    code: |
+      class D:
+          def __get__(self, instance, owner):
+              return 'descriptor'
+          def __set__(self, instance, value):
+              pass
+
+      class C:
+          x = D()
+
+      c = C()
+      c.__dict__['x'] = 'instance'
+      print(c.x)
+    options:
+      - "`descriptor`"
+      - "`instance`"
+      - "`None`"
+      - An `AttributeError`
+    answer: 0
+    explain: |
+      `D` defines `__set__`, so it's a data descriptor. Data descriptors take precedence over the instance `__dict__`, so the `'instance'` entry is ignored.
+
+  - q: What does this print?
+    code: |
+      class D:
+          def __get__(self, instance, owner):
+              return 'descriptor'
+
+      class C:
+          x = D()
+
+      c = C()
+      c.__dict__['x'] = 'instance'
+      print(c.x)
+    options:
+      - "`descriptor`"
+      - "`None`"
+      - "`instance`"
+      - A `RecursionError`
+    answer: 2
+    explain: |
+      With only `__get__`, `D` is a non-data descriptor. The instance dictionary is checked before non-data descriptors, so the instance attribute shadows it.
+
+  - q: For `obj.attr`, in which order does Python consider the possible sources?
+    options:
+      - instance `__dict__` → data descriptor → non-data descriptor → class attribute
+      - data descriptor → non-data descriptor → instance `__dict__` → class attribute
+      - data descriptor → instance `__dict__` → non-data descriptor → class attribute
+      - class attribute → instance `__dict__` → any descriptor
+    answer: 2
+    explain: |
+      `object.__getattribute__` first finds `attr` on the class (via the MRO). If that's a data descriptor it wins; otherwise the instance `__dict__` is used if it has the key; otherwise a non-data descriptor's `__get__` is called; otherwise the plain class attribute is returned. Only after all that does `__getattr__` get a chance.
+
+  - q: What does this print?
+    code: |
+      class D:
+          def __get__(self, instance, owner):
+              return 'got it'
+
+      class C:
+          pass
+
+      c = C()
+      c.d = D()
+      print(c.d == 'got it')
+    options:
+      - "`True`"
+      - "`False`"
+      - An `AttributeError`
+      - A `TypeError`
+    answer: 1
+    explain: |
+      Descriptors only work as **class** attributes. Stored in the instance dictionary, the `D` object is an ordinary value, so `c.d` is the `D` instance itself, which isn't equal to the string.
+
+  - q: When is a descriptor's `__set_name__` called?
+    options:
+      - Once, when the owner class is created
+      - Every time the attribute is assigned
+      - When the first instance of the owner class is created
+      - Only if you call it explicitly
+    answer: 0
+    explain: |
+      `type.__new__` calls `__set_name__(owner, name)` on every descriptor in the class namespace while it builds the class. Attaching a descriptor to a class **after** it's created does not trigger it.
+
+  - q: What does this print?
+    code: |
+      import gc, weakref
+
+      class Node:
+          pass
+
+      n = Node()
+      r = weakref.ref(n)
+      before = r() is n
+      del n
+      gc.collect()
+      print(before, r() is None)
+    options:
+      - "`True False`"
+      - "`False True`"
+      - "`True True`"
+      - "`False False`"
+    answer: 2
+    explain: |
+      While the object is alive, calling the weak reference returns it. A weak reference doesn't keep its target alive, so after the last strong reference is deleted the object is destroyed and `r()` returns `None`.
+
+  - q: Which of these objects can be used as a key in a `weakref.WeakKeyDictionary`?
+    options:
+      - The string `'python'`
+      - A list `[1, 2]`
+      - An instance of a class that defines `__eq__` but not `__hash__`
+      - "An instance of `class P: pass`"
+    answer: 3
+    explain: |
+      Keys must be both weak-referenceable and hashable. `str` and `list` don't support weak references, and defining `__eq__` without `__hash__` makes instances unhashable. A plain custom instance satisfies both requirements.
+
+  - q: A data descriptor stores values with `setattr(instance, self.name, value)` in its `__set__`, where `self.name` is the descriptor's own attribute name. What happens on assignment?
+    options:
+      - The value is stored in the instance `__dict__`
+      - "`__set__` calls itself again and again until a `RecursionError`"
+      - The descriptor is replaced by the value
+      - "Nothing: the assignment is silently ignored"
+    answer: 1
+    explain: |
+      `setattr` with that name finds the data descriptor on the class and calls its `__set__`, which calls `setattr` again, forever. Write to `instance.__dict__[self.name]` directly instead.
+
+  - q: What does this print?
+    code: |
+      class T:
+          @property
+          def value(self):
+              return 'computed'
+
+      t = T()
+      t.__dict__['value'] = 'stored'
+      print(t.value)
+    options:
+      - "`computed`"
+      - "`stored`"
+      - An `AttributeError`
+      - "`None`"
+    answer: 0
+    explain: |
+      A `property` is always a data descriptor, even without a setter (its `__set__` just raises `AttributeError`). Data descriptors aren't shadowed by the instance dictionary.
+
+  - q: What does this print?
+    code: |
+      class P:
+          def f(self):
+              return 1
+
+      p = P()
+      print(p.f is p.f, p.f.__func__ is P.f, p.f.__self__ is p)
+    options:
+      - "`True True True`"
+      - "`False False True`"
+      - "`True False False`"
+      - "`False True True`"
+    answer: 3
+    explain: |
+      Each access `p.f` calls the function's `__get__`, which creates a **new** bound method object, so the two are different objects. Every bound method refers to the same underlying function (`__func__`) and instance (`__self__`).
+
+exercises:
+  - id: descriptor-kind
+    title: Data or non-data?
+    prompt: |
+      Write `descriptor_kind(obj)` that classifies an object the way attribute lookup does:
+
+      - `'data'` if it is a data descriptor (its **type** has `__get__` and also `__set__` or `__delete__`)
+      - `'non-data'` if its type has `__get__` but neither `__set__` nor `__delete__`
+      - `None` if it isn't a descriptor at all
+
+      Check the object's **type**, not the object itself: Python looks special methods up on the type, so a `__get__` stored as an instance attribute doesn't count.
+    starter: |
+      def descriptor_kind(obj):
+          # your code here
+          pass
+    tests: |
+      def test_property():
+          """a property is a data descriptor"""
+          assert descriptor_kind(property(lambda self: 1)) == 'data', f"got {descriptor_kind(property(lambda self: 1))!r}"
+
+      def test_function():
+          """a plain function is a non-data descriptor"""
+          def f(): pass
+          assert descriptor_kind(f) == 'non-data', f"got {descriptor_kind(f)!r}"
+
+      def test_static_and_class_methods():
+          """staticmethod and classmethod objects are non-data descriptors"""
+          assert descriptor_kind(staticmethod(len)) == 'non-data'
+          assert descriptor_kind(classmethod(len)) == 'non-data'
+
+      def test_plain_values():
+          """ints, strings and plain objects are not descriptors"""
+          for value in (42, 'text', [1, 2], object()):
+              assert descriptor_kind(value) is None, f"{value!r} gave {descriptor_kind(value)!r}"
+
+      def test_custom_classes():
+          """custom descriptors, including one with __delete__ but no __set__"""
+          class GetOnly:
+              def __get__(self, instance, owner): pass
+          class GetSet:
+              def __get__(self, instance, owner): pass
+              def __set__(self, instance, value): pass
+          class GetDelete:
+              def __get__(self, instance, owner): pass
+              def __delete__(self, instance): pass
+          assert descriptor_kind(GetOnly()) == 'non-data'
+          assert descriptor_kind(GetSet()) == 'data'
+          assert descriptor_kind(GetDelete()) == 'data', "__delete__ also makes a data descriptor"
+
+      def test_uses_type():
+          """a __get__ attribute on the instance doesn't make it a descriptor"""
+          class Plain:
+              pass
+          obj = Plain()
+          obj.__get__ = lambda *args: None
+          obj.__set__ = lambda *args: None
+          assert descriptor_kind(obj) is None, "look the methods up on type(obj), not on obj"
+    solution: |
+      def descriptor_kind(obj):
+          cls = type(obj)
+          if not hasattr(cls, '__get__'):
+              return None
+          if hasattr(cls, '__set__') or hasattr(cls, '__delete__'):
+              return 'data'
+          return 'non-data'
+    hints:
+      - "Start with `cls = type(obj)` and use `hasattr(cls, '__get__')`."
+      - Check for `__set__` **or** `__delete__` to decide between data and non-data.
+
+  - id: positive-number
+    title: A reusable validated attribute
+    prompt: |
+      Write a data descriptor `Positive` for numeric attributes that must be greater than zero.
+
+      - Use `__set_name__` to learn the attribute name.
+      - `__set__` raises `ValueError` if the value isn't an `int` or `float` (reject `bool`), or if it is not `> 0`. The message must contain the attribute name, e.g. `'width must be positive'`.
+      - Store the value in the instance's `__dict__` **under the attribute's own name**.
+      - `__get__` returns the descriptor itself for class access, the stored value for instance access, and `None` if no value was set yet.
+
+      The `Rectangle` class in the starter shows how it's used.
+    starter: |
+      class Positive:
+          pass
+
+
+      class Rectangle:
+          width = Positive()
+          height = Positive()
+
+          def __init__(self, width, height):
+              self.width = width
+              self.height = height
+    tests: |
+      def test_valid_values():
+          """valid values are stored and returned"""
+          r = Rectangle(2, 3.5)
+          assert (r.width, r.height) == (2, 3.5), f"got {(r.width, r.height)}"
+
+      def test_storage_under_same_name():
+          """values live in the instance __dict__ under the attribute name"""
+          r = Rectangle(2, 3)
+          assert r.__dict__ == {'width': 2, 'height': 3}, f"__dict__ is {r.__dict__}"
+
+      def test_independent_instances():
+          """each instance keeps its own values"""
+          a, b = Rectangle(1, 2), Rectangle(10, 20)
+          assert (a.width, b.width) == (1, 10), "instances share values: don't store them on the descriptor"
+
+      def test_rejects_bad_values():
+          """zero, negatives, strings and bools raise ValueError naming the attribute"""
+          r = Rectangle(1, 1)
+          for bad in (0, -5, 'wide', True, None):
+              try:
+                  r.width = bad
+              except ValueError as ex:
+                  assert 'width' in str(ex), f"message {str(ex)!r} should mention 'width'"
+              else:
+                  raise AssertionError(f"r.width = {bad!r} should raise ValueError")
+
+      def test_class_access():
+          """class access returns the descriptor"""
+          assert isinstance(Rectangle.width, Positive), f"Rectangle.width is {Rectangle.width!r}"
+
+      def test_unset_is_none():
+          """reading an attribute that was never set gives None"""
+          class Box:
+              depth = Positive()
+          assert Box().depth is None
+
+      def test_not_shadowed():
+          """the descriptor still validates after a value is stored"""
+          r = Rectangle(1, 1)
+          try:
+              r.height = -1
+          except ValueError:
+              pass
+          else:
+              raise AssertionError("second assignment bypassed the descriptor (is __set__ defined?)")
+          assert r.height == 1
+    solution: |
+      class Positive:
+          def __set_name__(self, owner_class, name):
+              self.name = name
+
+          def __set__(self, instance, value):
+              if isinstance(value, bool) or not isinstance(value, (int, float)):
+                  raise ValueError(f'{self.name} must be a number')
+              if value <= 0:
+                  raise ValueError(f'{self.name} must be positive')
+              instance.__dict__[self.name] = value
+
+          def __get__(self, instance, owner_class):
+              if instance is None:
+                  return self
+              return instance.__dict__.get(self.name)
+
+
+      class Rectangle:
+          width = Positive()
+          height = Positive()
+
+          def __init__(self, width, height):
+              self.width = width
+              self.height = height
+    hints:
+      - "`__set_name__(self, owner_class, name)` runs when `Rectangle` is created; save `name` on `self`."
+      - "Write with `instance.__dict__[self.name] = value`, not `setattr`, or you'll recurse forever."
+      - "`isinstance(True, int)` is `True`, so check for `bool` first."
+
+  - id: weak-storage
+    title: Leak-free storage for slotted classes
+    prompt: |
+      Some classes use `__slots__` and have no instance `__dict__`, so a descriptor must keep their values itself.
+
+      Write a data descriptor `Tracked` that stores each instance's value **in the descriptor**, in a `weakref.WeakKeyDictionary` named `values`, so that destroyed instances don't stay in memory.
+
+      - `__get__` returns the descriptor for class access, and the instance's value (or `None` if unset) otherwise.
+      - `__set__` stores the value for that instance.
+
+      The starter uses a plain `dict`, which leaks. Also fix the `Sensor` class: it uses `__slots__`, and as written its instances can't be weakly referenced.
+    starter: |
+      import weakref
+
+      class Tracked:
+          def __init__(self):
+              self.values = {}
+
+          def __set__(self, instance, value):
+              self.values[instance] = value
+
+          def __get__(self, instance, owner_class):
+              if instance is None:
+                  return self
+              return self.values.get(instance)
+
+
+      class Sensor:
+          __slots__ = ('serial',)
+          reading = Tracked()
+    tests: |
+      import gc, weakref
+
+      def test_get_and_set():
+          """values are stored per instance"""
+          a, b = Sensor(), Sensor()
+          a.reading, b.reading = 1.5, 2.5
+          assert (a.reading, b.reading) == (1.5, 2.5), f"got {(a.reading, b.reading)}"
+
+      def test_unset():
+          """unset value reads as None, class access gives the descriptor"""
+          assert Sensor().reading is None
+          assert isinstance(Sensor.reading, Tracked)
+
+      def test_weak_key_dictionary():
+          """the descriptor uses a WeakKeyDictionary"""
+          assert isinstance(Sensor.reading.values, weakref.WeakKeyDictionary), "values should be a weakref.WeakKeyDictionary"
+
+      def test_no_leak():
+          """entries disappear when the instance is destroyed"""
+          s = Sensor()
+          s.reading = 99
+          before = len(Sensor.reading.values)
+          del s
+          gc.collect()
+          after = len(Sensor.reading.values)
+          assert after == before - 1, f"entry count went from {before} to {after}: the instance is being kept alive"
+
+      def test_still_slotted():
+          """Sensor still uses __slots__ (no instance __dict__)"""
+          assert not hasattr(Sensor(), '__dict__'), "keep using __slots__ without '__dict__'"
+          assert 'serial' in Sensor.__slots__
+    solution: |
+      import weakref
+
+      class Tracked:
+          def __init__(self):
+              self.values = weakref.WeakKeyDictionary()
+
+          def __set__(self, instance, value):
+              self.values[instance] = value
+
+          def __get__(self, instance, owner_class):
+              if instance is None:
+                  return self
+              return self.values.get(instance)
+
+
+      class Sensor:
+          __slots__ = ('serial', '__weakref__')
+          reading = Tracked()
+    hints:
+      - "`weakref.WeakKeyDictionary()` is a drop-in replacement for `{}` here."
+      - "A class with `__slots__` supports weak references only if `'__weakref__'` is one of the slots."
+
+  - id: lazy-attribute
+    title: A compute-once attribute
+    prompt: |
+      Write a **non-data** descriptor `lazy` that can decorate a method, like `functools.cached_property`:
+
+      - The first time the attribute is read on an instance, call the decorated function with the instance, store the result in the instance's `__dict__` **under the same name**, and return it.
+      - On later reads the instance dictionary should be found **before** the descriptor, so the function isn't called again. (That's why `lazy` must not define `__set__`.)
+      - Class access returns the descriptor itself.
+
+      Deleting the attribute from the instance (`del obj.attr`) should make the next read compute it again.
+    starter: |
+      class lazy:
+          def __init__(self, func):
+              self.func = func
+
+          def __get__(self, instance, owner_class):
+              if instance is None:
+                  return self
+              return self.func(instance)    # recomputes every time
+    tests: |
+      class Report:
+          def __init__(self):
+              self.calls = 0
+
+          @lazy
+          def total(self):
+              self.calls += 1
+              return 42
+
+      def test_value():
+          """returns the computed value"""
+          assert Report().total == 42
+
+      def test_computed_once():
+          """the function runs only once per instance"""
+          r = Report()
+          r.total; r.total; r.total
+          assert r.calls == 1, f"function ran {r.calls} times"
+
+      def test_cached_in_instance_dict():
+          """the result is stored in the instance __dict__ under the attribute name"""
+          r = Report()
+          r.total
+          assert r.__dict__.get('total') == 42, f"__dict__ is {r.__dict__}"
+
+      def test_per_instance():
+          """each instance computes its own value"""
+          a, b = Report(), Report()
+          a.total; b.total
+          assert (a.calls, b.calls) == (1, 1)
+
+      def test_reset_with_del():
+          """deleting the cached value makes the next read recompute"""
+          r = Report()
+          r.total
+          del r.total
+          r.total
+          assert r.calls == 2, f"expected 2 calls, got {r.calls}"
+
+      def test_class_access_and_non_data():
+          """class access gives the descriptor, and it has no __set__"""
+          assert isinstance(Report.__dict__['total'], lazy)
+          assert isinstance(Report.total, lazy)
+          assert not hasattr(lazy, '__set__'), "a __set__ would make lazy a data descriptor that the instance dict can't shadow"
+    solution: |
+      class lazy:
+          def __init__(self, func):
+              self.func = func
+
+          def __set_name__(self, owner_class, name):
+              self.name = name
+
+          def __get__(self, instance, owner_class):
+              if instance is None:
+                  return self
+              value = self.func(instance)
+              instance.__dict__[self.name] = value
+              return value
+    hints:
+      - Use `__set_name__` to learn the attribute name (or use `self.func.__name__`).
+      - "After computing the value, store it with `instance.__dict__[name] = value`. Because `lazy` is a non-data descriptor, the next lookup finds the instance entry first."

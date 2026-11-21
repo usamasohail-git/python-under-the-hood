@@ -1,0 +1,43 @@
+---
+import Base from '../layouts/Base.astro';
+---
+<Base title="About">
+  <div class="prose" style="padding-top:2rem">
+    <h1>About</h1>
+    <p>
+      Python Deep Dive is a free, interactive course. You read short lessons, run and edit every example in a
+      real Python interpreter in your browser (<a href="https://pyodide.org">Pyodide</a>, CPython compiled to
+      WebAssembly), then check what you learned with quizzes and auto-graded exercises.
+    </p>
+
+    <h2>Credits</h2>
+    <p>
+      The course structure (four parts and their sections and lectures) follows <strong>Dr. Fred Baptiste's</strong>
+      <em>Python 3: Deep Dive</em> series on Udemy:
+    </p>
+    <ul>
+      <li><a href="https://www.udemy.com/course/python-3-deep-dive-part-1/">Part 1: Functional</a></li>
+      <li><a href="https://www.udemy.com/course/python-3-deep-dive-part-2/">Part 2: Iteration, Generators</a></li>
+      <li><a href="https://www.udemy.com/course/python-3-deep-dive-part-3/">Part 3: Hash Maps</a></li>
+      <li><a href="https://www.udemy.com/course/python-3-deep-dive-part-4/">Part 4: OOP</a></li>
+    </ul>
+    <p>
+      Code examples are adapted from his <a href="https://github.com/fbaptiste/python-deepdive">python-deepdive</a>
+      repository. Lesson text, diagrams, quizzes and exercises are original to this site. Examples are updated for
+      modern Python (3.13) where behavior has changed since the videos were recorded.
+    </p>
+
+    <h2 id="license">License</h2>
+    <p>
+      The python-deepdive repository is licensed under the
+      <a href="https://www.gnu.org/licenses/gpl-3.0.html">GNU General Public License v3.0</a>. This site, including
+      its adapted code, is distributed under the same license (GPL-3.0-or-later).
+    </p>
+
+    <h2>Your progress</h2>
+    <p>
+      Completed lectures, quiz scores and exercise drafts are stored only in your browser (localStorage). Nothing is
+      sent to a server. Clearing your browser's site data resets your progress.
+    </p>
+  </div>
+</Base>

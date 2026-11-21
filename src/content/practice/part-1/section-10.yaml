@@ -1,0 +1,299 @@
+quiz:
+  - q: What does this print?
+    code: |
+      def classify(cmd):
+          match cmd:
+              case ["go", direction]:
+                  return f"go {direction}"
+              case ["go", *rest]:
+                  return f"multi {len(rest)}"
+              case _:
+                  return "unknown"
+
+      print(classify(["go", "north"]), classify(["go", "a", "b"]), classify("go north"))
+    options:
+      - "`go north multi 2 go north`"
+      - "`go north multi 2 unknown`"
+      - "`multi 1 multi 2 unknown`"
+      - "`go north go a unknown`"
+    answer: 1
+    explain: |
+      Cases are tried top to bottom and the first match wins, so a two-item list hits the first case. Three items need the starred pattern. A plain string never matches a sequence pattern, so `"go north"` falls through to the wildcard.
+
+  - q: What does this print?
+    code: |
+      l1 = [1, 2, 3]
+      l2 = 'ab'
+      try:
+          print(list(zip(l1, l2, strict=True)))
+      except ValueError:
+          print('mismatch')
+    options:
+      - "`[(1, 'a'), (2, 'b')]`"
+      - "`[(1, 'a'), (2, 'b'), (3, None)]`"
+      - "`mismatch`"
+      - "`[]`"
+    answer: 2
+    explain: |
+      With `strict=True` (Python 3.10+), `zip` raises `ValueError` when one input runs out before the others, instead of silently stopping at the shortest.
+
+  - q: What does this print?
+    code: |
+      d1 = {'a': 1, 'b': 2}
+      d2 = {'b': 20, 'c': 30}
+      print(d2 | d1)
+    options:
+      - "`{'a': 1, 'b': 2, 'c': 30}`"
+      - "`{'b': 20, 'c': 30, 'a': 1}`"
+      - "`{'b': 2, 'c': 30, 'a': 1}`"
+      - "`{'a': 1, 'b': 20, 'c': 30}`"
+    answer: 2
+    explain: |
+      The right-hand dict (`d1`) wins for the shared key `b`, so its value is `2`. Key order follows first appearance: `b` and `c` come from `d2`, then the new key `a` is appended.
+
+  - q: What does this print?
+    code: |
+      s = 'mississippi'
+      print(s.lstrip('mis'), s.removeprefix('mis'))
+    options:
+      - "`sissippi sissippi`"
+      - "`ppi sissippi`"
+      - "`ppi ppi`"
+      - "`issippi sissippi`"
+    answer: 1
+    explain: |
+      `lstrip` treats its argument as a **set of characters** and keeps removing any `m`, `i` or `s` from the left until it hits `p`. `removeprefix` removes the exact substring `'mis'` once.
+
+  - q: What does this print?
+    code: |
+      values = [n for x in range(6) if (n := x * 2) > 6]
+      print(values, n)
+    options:
+      - "`[8, 10] 10`"
+      - "`[4, 5] 10`"
+      - "A `NameError`, because `n` only exists inside the comprehension"
+      - "`[8, 10] 8`"
+    answer: 0
+    explain: |
+      The walrus binds `n` in the **enclosing** scope, so it survives the comprehension and holds the last value assigned, `10` (from `x = 5`).
+
+  - q: "Given `def f(a, b, /, c, *, d): ...`, which call is valid?"
+    options:
+      - "`f(1, 2, 3, 4)`"
+      - "`f(a=1, b=2, c=3, d=4)`"
+      - "`f(1, 2, c=3, d=4)`"
+      - "`f(1, b=2, c=3, d=4)`"
+    answer: 2
+    explain: |
+      `a` and `b` are positional-only (before `/`), `c` can be passed either way, and `d` is keyword-only (after `*`). Only `f(1, 2, c=3, d=4)` respects all three rules.
+
+  - q: What does this print?
+    code: |
+      x = 3.5
+      label = 'pi'
+      print(f'{x=}, {label=}')
+    options:
+      - "`x=3.5, label=pi`"
+      - "`3.5, pi`"
+      - "`x=3.5, label='pi'`"
+      - "`{x=}, {label=}`"
+    answer: 2
+    explain: |
+      The `=` specifier (Python 3.8+) prints the expression text, `=`, and the value's `repr()` by default, so the string shows its quotes.
+
+  - q: What does this print?
+    code: |
+      from collections import namedtuple
+      P = namedtuple('P', 'x y z', defaults=(0, 1))
+      print(P(5))
+    options:
+      - "`P(x=5, y=0, z=1)`"
+      - "`P(x=0, y=1, z=5)`"
+      - "A `TypeError`: missing arguments"
+      - "`P(x=5, y=1, z=0)`"
+    answer: 0
+    explain: |
+      Defaults apply to the **rightmost** fields, just like function parameter defaults. With two defaults, `y` gets `0` and `z` gets `1`; `x` is required.
+
+  - q: What does this print?
+    code: |
+      d = {'a': 1, 'b': 2, 'c': 3}
+      del d['a']
+      d['a'] = 10
+      d['b'] = 20
+      print(list(d))
+    options:
+      - "`['a', 'b', 'c']`"
+      - "`['b', 'c', 'a']`"
+      - "`['c', 'a', 'b']`"
+      - "`['a', 'c', 'b']`"
+    answer: 1
+    explain: |
+      Re-inserting a deleted key puts it at the **end**. Updating the value of an existing key (`b`) leaves it where it is.
+
+  - q: Which statement about dictionary ordering is correct?
+    options:
+      - It has been guaranteed since Python 3.0
+      - CPython 3.6 preserved insertion order as an implementation detail; Python 3.7 made it a language guarantee
+      - It is only guaranteed for `OrderedDict`; plain dicts merely happen to be ordered
+      - Dicts are ordered, but `**kwargs` are not
+    answer: 1
+    explain: |
+      The compact dict of CPython 3.6 kept insertion order as a side effect, and 3.7 made it official. Separately, PEP 468 (3.6) guarantees that `**kwargs` preserve the caller's order.
+
+  - q: Which of these is **not** a valid numeric literal?
+    options:
+      - "`0x_FF_FF`"
+      - "`1_000.000_1`"
+      - "`0b_1010_1010`"
+      - "`10__000`"
+    answer: 3
+    explain: |
+      An underscore must sit between two digits (or right after a base prefix such as `0x`). Two underscores in a row are a `SyntaxError`.
+
+  - q: What does this print?
+    code: |
+      n = 255
+      print(f'{n:_b}', f'{1234567:_}')
+    options:
+      - "`11111111 1234567`"
+      - "`1111_1111 1_234_567`"
+      - "`11_111_111 1_234_567`"
+      - "`1111_1111 1234_567`"
+    answer: 1
+    explain: |
+      The `_` option groups binary, octal and hex digits in fours, and decimal digits in threes.
+
+exercises:
+  - id: parse-command
+    title: A command interpreter with match
+    prompt: |
+      Write `run(command)` that takes a list of words and uses a `match` statement to return:
+
+      - `["add", a, b]` → the sum of the two numbers, e.g. `run(["add", "2", "3"])` returns `5` (convert with `int`)
+      - `["echo", *words]` → the words joined with single spaces, e.g. `run(["echo", "hi", "there"])` returns `'hi there'`
+      - `["quit"]` or `["exit"]` → the string `'bye'`
+      - anything else → raise `ValueError`
+    starter: |
+      def run(command):
+          # use match/case here
+          pass
+    tests: |
+      def test_add():
+          """add sums two numbers"""
+          assert run(["add", "2", "3"]) == 5, f"got {run(['add', '2', '3'])!r}"
+
+      def test_echo():
+          """echo joins the remaining words"""
+          assert run(["echo", "hi", "there"]) == "hi there"
+          assert run(["echo"]) == "", "echo with no words should return ''"
+
+      def test_quit_exit():
+          """quit and exit both return 'bye'"""
+          assert run(["quit"]) == "bye" and run(["exit"]) == "bye"
+
+      def test_unknown():
+          """unknown commands raise ValueError"""
+          for bad in (["fly"], ["add", "1"], ["quit", "now"], []):
+              try:
+                  run(bad)
+              except ValueError:
+                  continue
+              raise AssertionError(f"{bad!r} should raise ValueError")
+    solution: |
+      def run(command):
+          match command:
+              case ["add", a, b]:
+                  return int(a) + int(b)
+              case ["echo", *words]:
+                  return " ".join(words)
+              case ["quit"] | ["exit"]:
+                  return "bye"
+              case _:
+                  raise ValueError(f"unknown command: {command!r}")
+    hints:
+      - "A pattern like `[\"add\", a, b]` only matches a sequence of exactly three items, binding the last two."
+      - "Use `*words` to collect any number of remaining items, and `|` to combine `[\"quit\"]` and `[\"exit\"]` in one case."
+      - The wildcard `_` catches everything else; raise the error there.
+
+  - id: walrus-filter
+    title: Compute once, filter, keep
+    prompt: |
+      `normalize(s)` is an "expensive" function. Write `long_words(words, min_len)` that returns a list of the **normalized** versions of the words whose normalized length is at least `min_len`, in the original order.
+
+      Call `normalize` **exactly once per word**. A list comprehension with `:=` is the neat way to do it.
+    starter: |
+      calls = 0
+
+      def normalize(s):
+          global calls
+          calls += 1
+          return s.strip().lower()
+
+      def long_words(words, min_len):
+          return [normalize(w) for w in words if len(normalize(w)) >= min_len]
+    tests: |
+      def test_result():
+          """returns the normalized long words in order"""
+          result = long_words(["  Apple ", "fig", "BANANA", " kiwi"], 5)
+          assert result == ["apple", "banana"], f"got {result!r}"
+
+      def test_calls_once_per_word():
+          """normalize is called exactly once per word"""
+          global calls
+          calls = 0
+          long_words(["  Apple ", "fig", "BANANA", " kiwi"], 5)
+          assert calls == 4, f"normalize was called {calls} times for 4 words"
+
+      def test_empty():
+          """an empty input gives an empty list"""
+          assert long_words([], 3) == []
+    solution: |
+      calls = 0
+
+      def normalize(s):
+          global calls
+          calls += 1
+          return s.strip().lower()
+
+      def long_words(words, min_len):
+          return [n for w in words if len(n := normalize(w)) >= min_len]
+    hints:
+      - The starter calls `normalize` twice for every word that passes the test.
+      - "The `if` clause runs before the output expression, so do the assignment there: `if len(n := normalize(w)) >= min_len`."
+
+  - id: ordered-defaults
+    title: A named tuple factory from kwargs
+    prompt: |
+      Write `make_record(class_name, **fields)` that returns a named tuple class whose field names are the keyword names **in the order given**, and whose default values are the keyword values.
+
+      For example, `Point = make_record('Point', x=0, y=0, label='')` should allow `Point(5)` to produce `Point(x=5, y=0, label='')`.
+    starter: |
+      from collections import namedtuple
+
+      def make_record(class_name, **fields):
+          return namedtuple(class_name, sorted(fields))
+    tests: |
+      def test_field_order():
+          """fields follow the keyword order"""
+          Point = make_record('Point', x=0, y=0, label='')
+          assert Point._fields == ('x', 'y', 'label'), f"got {Point._fields}"
+
+      def test_defaults():
+          """all fields have the given defaults"""
+          Point = make_record('Point', x=0, y=0, label='')
+          assert Point() == (0, 0, ''), f"got {Point()!r}"
+          assert Point(5) == (5, 0, ''), f"got {Point(5)!r}"
+
+      def test_name():
+          """the class gets the requested name"""
+          Rec = make_record('Rec', a=1)
+          assert Rec.__name__ == 'Rec' and repr(Rec()) == 'Rec(a=1)'
+    solution: |
+      from collections import namedtuple
+
+      def make_record(class_name, **fields):
+          return namedtuple(class_name, fields.keys(), defaults=fields.values())
+    hints:
+      - "Since Python 3.6, `fields` keeps the caller's order, so don't sort it."
+      - "`namedtuple` accepts a `defaults=` argument (3.7+). Alternatively set `Struct.__new__.__defaults__ = tuple(fields.values())`."

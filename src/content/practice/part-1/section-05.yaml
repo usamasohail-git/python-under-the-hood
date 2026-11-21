@@ -1,0 +1,343 @@
+quiz:
+  - q: "In `def area(width, height): ...` followed by the call `area(w, 5)`, which statement is correct?"
+    options:
+      - "`w` and `5` are parameters; `width` and `height` are arguments"
+      - "`width` and `height` are parameters; `w` and `5` are arguments"
+      - All four are called arguments
+      - "`width` is a copy of `w`"
+    answer: 1
+    explain: |
+      Parameters are the names in the definition; arguments are the values supplied in the call. And no copy is made: `width` becomes another reference to the object `w` refers to.
+
+  - q: What does this print?
+    code: |
+      def f(a, b=2, c=3):
+          print(a, b, c)
+
+      f(10, c=30)
+    options:
+      - "`10 30 3`"
+      - "`10 2 30`"
+      - A `TypeError`
+      - "`10 c 30`"
+    answer: 1
+    explain: |
+      `a` is filled by position, `c` by name, and `b` falls back to its default of 2.
+
+  - q: Which of these function definitions is a **syntax error**?
+    options:
+      - "`def f(a, b=1, *args, c, d=2): pass`"
+      - "`def f(*, a=1, b): pass`"
+      - "`def f(a=1, b): pass`"
+      - "`def f(a, /, b, **kwargs): pass`"
+    answer: 2
+    explain: |
+      Among positional parameters, a parameter without a default can't follow one with a default. Keyword-only parameters (after `*`) are exempt from that rule, which is why `def f(*, a=1, b)` is fine.
+
+  - q: What does this print?
+    code: |
+      a, b = 1, 2
+      a, b = b, a + b
+      print(a, b)
+    options:
+      - "`2 4`"
+      - "`1 3`"
+      - "`2 2`"
+      - "`2 3`"
+    answer: 3
+    explain: |
+      The whole right-hand side is evaluated first, using the *old* values: `(2, 1 + 2)`. Only then are `a` and `b` re-bound, giving `a = 2` and `b = 3`.
+
+  - q: What does this print?
+    code: |
+      a, *b, c = 'hello'
+      print(b)
+    options:
+      - "`'ell'`"
+      - "`('e', 'l', 'l')`"
+      - "`['e', 'l', 'l']`"
+      - "`['e', 'l', 'l', 'o']`"
+    answer: 2
+    explain: |
+      `a` gets `'h'`, `c` gets the last character `'o'`, and the starred name collects the middle. A starred target is always a **list**, even when unpacking a string or tuple.
+
+  - q: What does this print?
+    code: |
+      d1 = {'a': 1, 'b': 2}
+      d2 = {'b': 20, 'c': 30}
+      print({**d2, **d1})
+    options:
+      - "`{'b': 20, 'c': 30, 'a': 1}`"
+      - "`{'a': 1, 'b': 2, 'c': 30}`"
+      - "`{'b': 2, 'c': 30, 'a': 1}`"
+      - A `TypeError` because of the duplicate key `'b'`
+    answer: 2
+    explain: |
+      Keys are inserted in order: `b` and `c` from `d2`, then `a` from `d1`. The second occurrence of `b` (from `d1`) overwrites the value but keeps the key's original position, so the result is `{'b': 2, 'c': 30, 'a': 1}`.
+
+  - q: What does this print?
+    code: |
+      def f(a, b=2, *args):
+          print(a, b, args)
+
+      f(1, 'x', 'y')
+    options:
+      - "`1 2 ('x', 'y')`"
+      - "`1 x y`"
+      - A `TypeError`
+      - "`1 x ('y',)`"
+    answer: 3
+    explain: |
+      Positional arguments fill named positional parameters before anything reaches `*args`, so `b` receives `'x'` and only `'y'` is left over. `args` is a one-element tuple.
+
+  - q: What happens with this code?
+    code: |
+      def f(*args, sep):
+          print(args, sep)
+
+      f(1, 2, 3)
+    options:
+      - "It prints `(1, 2) 3`"
+      - "It prints `(1, 2, 3) None`"
+      - A `TypeError` saying a keyword-only argument is missing
+      - A `SyntaxError` at the `def`
+    answer: 2
+    explain: |
+      `*args` absorbs **all** positional arguments, so `sep` can only be passed by name. It has no default, so calling without `sep=` raises `TypeError: f() missing 1 required keyword-only argument: 'sep'`.
+
+  - q: What does this print?
+    code: |
+      def f(a, **kwargs):
+          print(a, kwargs)
+
+      f(b=2, a=1, c=3)
+    options:
+      - "`1 {'b': 2, 'c': 3}`"
+      - "`1 {'b': 2, 'a': 1, 'c': 3}`"
+      - "`{'b': 2} 1`"
+      - A `TypeError`
+    answer: 0
+    explain: |
+      `a` is a named parameter, so it claims `a=1`. Only the keyword arguments that match no parameter go into `kwargs`, in the order they were passed.
+
+  - q: "Given `def f(x, /, y, *, z): ...`, which call is valid?"
+    options:
+      - "`f(x=1, y=2, z=3)`"
+      - "`f(1, 2, 3)`"
+      - "`f(1, y=2, z=3)`"
+      - "`f(1, 2)`"
+    answer: 2
+    explain: |
+      `x` is positional-only (before `/`), `y` can be passed either way, and `z` is keyword-only (after `*`) and required. Only `f(1, y=2, z=3)` satisfies all three. (`f(1, 2, z=3)` would also work.)
+
+  - q: What does this print?
+    code: |
+      def append_to(item, target=[]):
+          target.append(item)
+          return target
+
+      append_to(1)
+      print(append_to(2))
+    options:
+      - "`[1, 2]`"
+      - "`[2]`"
+      - "`[1]`"
+      - "`None`"
+    answer: 0
+    explain: |
+      The default list is created **once**, when the `def` runs. Both calls append to the same list object, so the second call returns `[1, 2]`.
+
+  - q: "Why is `if items is None: items = []` preferred over `if not items: items = []` for a parameter defaulting to `None`?"
+    options:
+      - "`is None` is faster, and that's the only difference"
+      - "`not items` raises an error when `items` is `None`"
+      - "`not items` is also true for an empty list the caller passed in, so the caller's list would be replaced"
+      - There is no difference in behavior
+    answer: 2
+    explain: |
+      An empty list is falsy. With `not items`, a caller's own empty list is silently swapped for a new one, so the caller never sees the changes. `is None` only triggers when the argument was actually omitted (or `None` was passed explicitly).
+
+exercises:
+  - id: flexible-average
+    title: An average with options
+    prompt: |
+      Write a function `average` that accepts **one or more** numbers as positional arguments and returns their mean.
+
+      It should also accept a **keyword-only** option `round_to` (default `None`). When `round_to` is given, return the mean rounded to that many decimals with `round()`.
+
+      Calling `average()` with no numbers must raise a `TypeError` (let Python do that for you through the signature), and `average(1, 2, 2)` must not treat the last `2` as `round_to`.
+    starter: |
+      def average(numbers, round_to=None):
+          total = sum(numbers)
+          return total / len(numbers)
+    tests: |
+      def test_basic():
+          """average(2, 4) == 3"""
+          assert average(2, 4) == 3, f"got {average(2, 4)!r}"
+
+      def test_many():
+          """works with any number of values"""
+          assert average(1, 2, 3, 4, 5) == 3
+
+      def test_single():
+          """a single value is its own average"""
+          assert average(7) == 7
+
+      def test_round_to():
+          """round_to rounds the result"""
+          assert average(1, 2, 2, round_to=2) == 1.67, f"got {average(1, 2, 2, round_to=2)!r}"
+
+      def test_round_to_keyword_only():
+          """a third positional value is data, not round_to"""
+          assert average(1, 2, 2) == 5 / 3
+
+      def test_no_args():
+          """average() raises TypeError"""
+          try:
+              average()
+          except TypeError:
+              return
+          assert False, "average() should raise TypeError"
+    solution: |
+      def average(first, *rest, round_to=None):
+          total = first + sum(rest)
+          result = total / (1 + len(rest))
+          if round_to is not None:
+              result = round(result, round_to)
+          return result
+    hints:
+      - A required first parameter followed by `*rest` means "one or more values".
+      - Any parameter placed after `*rest` can only be passed by name, which is exactly what `round_to` needs.
+      - "Test `round_to is not None`, so that `round_to=0` still works."
+
+  - id: merge-settings
+    title: Merge settings with overrides
+    prompt: |
+      Write `merge_settings(*configs, **overrides)` that combines any number of dictionaries into a **new** dictionary.
+
+      Later dictionaries win over earlier ones, and keyword arguments win over everything. The input dictionaries must not be modified.
+
+      Example: `merge_settings({'a': 1, 'b': 2}, {'b': 3}, c=4)` returns `{'a': 1, 'b': 3, 'c': 4}`.
+    starter: |
+      def merge_settings(*configs, **overrides):
+          result = configs[0]
+          for cfg in configs[1:]:
+              result.update(cfg)
+          return result
+    tests: |
+      def test_example():
+          """later dicts and keywords win"""
+          result = merge_settings({'a': 1, 'b': 2}, {'b': 3}, c=4)
+          assert result == {'a': 1, 'b': 3, 'c': 4}, f"got {result!r}"
+
+      def test_keyword_wins():
+          """keyword arguments override every dict"""
+          assert merge_settings({'x': 1}, {'x': 2}, x=3) == {'x': 3}
+
+      def test_no_mutation():
+          """input dictionaries are not modified"""
+          first = {'a': 1}
+          merge_settings(first, {'a': 2, 'b': 3})
+          assert first == {'a': 1}, f"first dict was changed to {first}"
+
+      def test_new_object():
+          """always returns a new dict"""
+          only = {'a': 1}
+          result = merge_settings(only)
+          assert result == only and result is not only
+
+      def test_empty():
+          """no arguments gives an empty dict"""
+          assert merge_settings() == {}
+    solution: |
+      def merge_settings(*configs, **overrides):
+          result = {}
+          for cfg in configs:
+              result = {**result, **cfg}
+          return {**result, **overrides}
+    hints:
+      - "`configs` is a tuple of dictionaries and `overrides` is a dictionary."
+      - "`{**a, **b}` builds a new dict in which keys from `b` win."
+      - Start from an empty dict so that you never modify the caller's dictionaries, and so that zero arguments works.
+
+  - id: call-counter
+    title: Forward any call
+    prompt: |
+      Write `call_n(fn, *args, times=1, **kwargs)` that calls `fn` with the given positional and keyword arguments `times` times, and returns a **list** of the results.
+
+      `times` must be keyword-only, so every positional argument after `fn` belongs to `fn`.
+
+      Example: `call_n(pow, 2, 3, times=2)` returns `[8, 8]`, and `call_n(sorted, [3, 1, 2], reverse=True)` returns `[[3, 2, 1]]`.
+    starter: |
+      def call_n(fn, times=1, *args, **kwargs):
+          return [fn(args, kwargs) for _ in range(times)]
+    tests: |
+      def test_positional():
+          """positional arguments are forwarded"""
+          assert call_n(pow, 2, 3, times=2) == [8, 8], f"got {call_n(pow, 2, 3, times=2)!r}"
+
+      def test_keyword():
+          """keyword arguments are forwarded"""
+          assert call_n(sorted, [3, 1, 2], reverse=True) == [[3, 2, 1]]
+
+      def test_default_times():
+          """times defaults to 1"""
+          assert call_n(max, 4, 9, 2) == [9]
+
+      def test_times_is_keyword_only():
+          """the second positional argument goes to fn, not to times"""
+          assert call_n(abs, -5) == [5]
+
+      def test_called_n_times():
+          """fn really is called `times` times"""
+          calls = []
+          call_n(calls.append, 'x', times=3)
+          assert calls == ['x', 'x', 'x'], f"calls were {calls!r}"
+    solution: |
+      def call_n(fn, *args, times=1, **kwargs):
+          return [fn(*args, **kwargs) for _ in range(times)]
+    hints:
+      - Move `times` after `*args` to make it keyword-only.
+      - "Inside the function, `args` is a tuple and `kwargs` a dict. Unpack them again with `fn(*args, **kwargs)`."
+
+  - id: safe-default
+    title: Fix the shared default
+    prompt: |
+      `add_tag(tag, tags=[])` should add `tag` to the list `tags` and return it. When no list is passed, each call must start with a **new** empty list. But the current version shares one list between all such calls.
+
+      Fix it. When the caller *does* pass a list, even an empty one, the tag must be appended to **that** list (the caller's object).
+    starter: |
+      def add_tag(tag, tags=[]):
+          tags.append(tag)
+          return tags
+    tests: |
+      def test_fresh_list():
+          """two calls without a list don't share state"""
+          first = add_tag('a')
+          second = add_tag('b')
+          assert first == ['a'] and second == ['b'], f"got {first!r} and {second!r}"
+
+      def test_uses_callers_list():
+          """appends to a list the caller provides"""
+          mine = ['x']
+          result = add_tag('y', mine)
+          assert mine == ['x', 'y'] and result is mine
+
+      def test_empty_callers_list():
+          """an empty list passed by the caller is used, not replaced"""
+          mine = []
+          add_tag('z', mine)
+          assert mine == ['z'], f"caller's list is {mine!r}"
+
+      def test_default_is_none():
+          """the default value is None"""
+          assert add_tag.__defaults__ == (None,), f"defaults are {add_tag.__defaults__!r}"
+    solution: |
+      def add_tag(tag, tags=None):
+          if tags is None:
+              tags = []
+          tags.append(tag)
+          return tags
+    hints:
+      - The default `[]` is created once, when `def` runs. Use `None` as the default instead.
+      - "Check `tags is None` rather than `not tags`: an empty list is falsy too, and it belongs to the caller."

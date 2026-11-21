@@ -1,0 +1,74 @@
+# Roadmap
+
+Status (2026-11-22): all content is written and verified: 324 lessons, 47 sections, ~460 quiz
+questions, ~170 auto-graded exercises, ~3,100 runnable cells.
+
+## 1. Site search (Pagefind), not started
+
+Goal: a search box in the header that finds lessons by title and content, working on a static host with
+no server.
+
+Plan:
+
+1. Add the dependency: `npm i -D --save-exact pagefind@<current stable>`.
+2. Index after the build. In `package.json`, set `"build": "astro build && pagefind --site dist"`.
+   Pagefind writes `dist/pagefind/` (the index plus its UI assets).
+3. Choose what gets indexed:
+   - In `src/pages/[part]/[section]/[lecture].astro`, add `data-pagefind-body` to the `<article>` so only
+     lesson content is indexed (not the header, sidebar or footer).
+   - Add `data-pagefind-meta="section:..."` (part and section label) so results can show where a lesson
+     lives, and `data-pagefind-filter="part:Part N"` to allow filtering by part.
+   - Mark the interactive cells' source as indexable, but exclude output and UI with
+     `data-pagefind-ignore` on `.cell-bar` and `.cell-out` (in `pycell.ts`), and on the lesson-tools row.
+   - Decide whether practice pages are indexed. Probably index them with a `type:practice` filter, and
+     keep the solution `<details>` out (`data-pagefind-ignore`) so searching doesn't reveal answers.
+4. Add the UI. Create `src/components/Search.astro` with a header button that opens a dialog and loads
+   `/pagefind/pagefind-ui.js` and `pagefind-ui.css` lazily on first open. Prefix the paths with
+   `import.meta.env.BASE_URL`. Style it with the existing CSS tokens (`--bg`, `--surface`, `--accent`…) so
+   it works in light and dark mode. Add the keyboard shortcut `/` or `Ctrl+K`.
+5. Dev mode: Pagefind only exists after a build, so in `npm run dev` the dialog should show "Search is
+   available in the built site". Alternatively, run `npm run build && npx pagefind --site dist --serve`.
+6. Mobile: the header already collapses part names to P1–P4. Use an icon-only search button at 375 px with
+   no horizontal overflow.
+7. Verify:
+   - Build, then search for "closure", "descriptor", "lru_cache" and "walrus". Each should return the
+     expected lessons.
+   - Searching for text that appears only in an exercise solution must not find it.
+   - Check light/dark mode and a 375 px viewport.
+   - Extend the browser tests (below) with a search test.
+
+## 2. Deployment, not started
+
+- GitHub Pages:
+  - Create a repository.
+  - Add a workflow (`.github/workflows/deploy.yml`) that runs `npm ci`, then
+    `SITE_BASE=/<repo>/ SITE_URL=https://<user>.github.io npm run build`, then uploads `dist/`
+    (`actions/upload-pages-artifact` + `actions/deploy-pages`).
+  - Optionally run `npm run test:content` in CI. It's slow (~10 min) and needs network access to the
+    Pyodide CDN for packages, so it may be better as a manual or weekly workflow.
+- The site is fully static and any static host works (Netlify, Cloudflare Pages). For a custom domain, set
+  `SITE_URL` and leave `SITE_BASE=/`.
+
+## 3. Browser tests, to move into the repo
+
+During development an end-to-end Playwright script covered:
+- navigation, and running cells (including auto-running earlier cells)
+- tracebacks, reset, and mark-complete
+- the quiz, and grading an exercise
+- the 15 s infinite-loop timeout, and recovery from a fatal crash
+- data files and packages loading
+- dark mode and mobile overflow
+
+It lived outside the repo. To bring it in:
+
+- Add `@playwright/test` as a dev dependency and add `tests/e2e/*.spec.ts`. Use a `webServer` config that
+  runs `npm run preview`.
+- WSL/Linux note: Chromium needs `libnss3`, `libnspr4` and `libasound2t64`. Install them with
+  `sudo npx playwright install-deps`. Without sudo, `apt-get download` them, `dpkg -x` into a local
+  folder, and point `LD_LIBRARY_PATH` at it.
+
+## 4. Ideas
+
+- An optional "Start here: Python basics" track for complete beginners, before Part 1.
+- Course-wide progress export/import (a JSON download), since progress lives in localStorage.
+- Per-lecture "Open in a notebook" links to the matching source notebook on GitHub.

@@ -1,0 +1,359 @@
+quiz:
+  - q: What does this print?
+    code: |
+      def squares(n):
+          for i in range(n):
+              yield i * i
+
+      sq = squares(4)
+      print(max(sq), sum(sq))
+    options:
+      - "`9 14`"
+      - "`9 0`"
+      - "`9 9`"
+      - A `ValueError`
+    answer: 1
+    explain: |
+      `max` iterates the generator to the end to find `9`. By the time `sum` runs, `sq` is exhausted, and the sum of nothing is `0`. (`min` or `max` would have raised `ValueError` on the empty iterator; `sum` doesn't.)
+
+  - q: What does this print?
+    code: |
+      print(any([]), all([]))
+    options:
+      - "`False False`"
+      - "`True True`"
+      - "`False True`"
+      - "`True False`"
+    answer: 2
+    explain: |
+      `any` needs at least one truthy element, and there are none. `all` is `False` only if it finds a falsy element, and there are none, so it is vacuously `True`.
+
+  - q: How many times does `check` get called?
+    code: |
+      calls = 0
+      def check(x):
+          global calls
+          calls += 1
+          return x > 2
+
+      any(map(check, [1, 5, 2, 7, 3]))
+      print(calls)
+    options:
+      - "`1`"
+      - "`2`"
+      - "`3`"
+      - "`5`"
+    answer: 1
+    explain: |
+      `map` is lazy and `any` short-circuits. `check(1)` is falsy, `check(5)` is truthy, and `any` stops there, so only two calls happen.
+
+  - q: What does this print?
+    code: |
+      from itertools import islice
+      it = iter(range(10))
+      a = list(islice(it, 3))
+      b = list(islice(it, 3))
+      print(a, b)
+    options:
+      - "`[0, 1, 2] [0, 1, 2]`"
+      - "`[0, 1, 2] [3, 4, 5]`"
+      - "`[0, 1, 2] []`"
+      - "`[0, 1, 2] [2, 3, 4]`"
+    answer: 1
+    explain: |
+      `islice` pulls from the iterator you give it. The first slice consumes 0, 1 and 2, so the second slice starts at 3. This is exactly how chunking with `islice` (and `batched`) works.
+
+  - q: What does this print?
+    code: |
+      from itertools import takewhile, dropwhile
+      data = [1, 4, 6, 2, 8]
+      print(list(takewhile(lambda x: x < 5, data)),
+            list(dropwhile(lambda x: x < 5, data)))
+    options:
+      - "`[1, 4, 2] [6, 8]`"
+      - "`[1, 4] [6, 8]`"
+      - "`[1, 4] [6, 2, 8]`"
+      - "`[1, 4, 2] [6, 2, 8]`"
+    answer: 2
+    explain: |
+      `takewhile` stops for good at the first failure (`6`). `dropwhile` skips until that same failure and then yields everything after it without testing again, so `2` comes through.
+
+  - q: What does this print?
+    code: |
+      from itertools import repeat
+      rows = list(repeat([], 3))
+      rows[0].append('x')
+      print(rows)
+    options:
+      - "`[['x'], [], []]`"
+      - "`[['x'], ['x'], ['x']]`"
+      - "`[[], [], []]`"
+      - "`['x', [], []]`"
+    answer: 1
+    explain: |
+      `repeat` yields the **same** object every time. The list contains three references to one empty list, so appending through any of them shows up in all three.
+
+  - q: You have a generator `files()` that lazily yields one open-file iterator per log file. Which expression iterates all their lines **without** forcing `files()` to produce every file up front?
+    options:
+      - "`chain(*files())`"
+      - "`chain(files())`"
+      - "`chain.from_iterable(files())`"
+      - "`list(chain(files()))`"
+    answer: 2
+    explain: |
+      `chain(*files())` must unpack, and therefore exhaust, the outer generator before `chain` starts. `chain(files())` would yield the file objects themselves, not their lines. `chain.from_iterable` pulls the next file only when the previous one is finished.
+
+  - q: What does this print?
+    code: |
+      from itertools import tee
+      source = iter([1, 2, 3, 4])
+      a, b = tee(source)
+      next(a)
+      next(source)
+      print(list(a), list(b))
+    options:
+      - "`[2, 3, 4] [1, 2, 3, 4]`"
+      - "`[3, 4] [1, 3, 4]`"
+      - "`[2, 3, 4] [2, 3, 4]`"
+      - "`[3, 4] [3, 4]`"
+    answer: 1
+    explain: |
+      `next(a)` pulls `1` from the source and buffers it for `b`. Then `next(source)` takes `2` directly, bypassing the tee, so neither copy ever sees it. That's why you shouldn't use the original iterator after calling `tee`.
+
+  - q: What does this print?
+    code: |
+      from itertools import accumulate
+      import operator
+      print(list(accumulate([2, 3, 4], operator.mul, initial=1)))
+    options:
+      - "`[2, 6, 24]`"
+      - "`[1, 2, 6, 24]`"
+      - "`[24]`"
+      - "`[1, 2, 3, 4]`"
+    answer: 1
+    explain: |
+      `accumulate` yields every intermediate result. With `initial=1` (Python 3.8+) the initial value is yielded first, so the output is one item longer than the input.
+
+  - q: What does this print?
+    code: |
+      from itertools import pairwise
+      print([b - a for a, b in pairwise([3, 7, 8, 5])])
+    options:
+      - "`[4, 1, -3]`"
+      - "`[4, 1, -3, -5]`"
+      - "`[10, 15, 13]`"
+      - "`[7, 8, 5]`"
+    answer: 0
+    explain: |
+      `pairwise` (Python 3.10) yields overlapping neighbor pairs `(3, 7), (7, 8), (8, 5)`: always one fewer pair than there are items.
+
+  - q: What does this print?
+    code: |
+      from itertools import groupby
+      print([(k, len(list(g))) for k, g in groupby('aabccca')])
+    options:
+      - "`[('a', 3), ('b', 1), ('c', 3)]`"
+      - "`[('a', 2), ('b', 1), ('c', 3)]`"
+      - "`[('a', 2), ('b', 1), ('c', 3), ('a', 1)]`"
+      - "`[('a', 7)]`"
+    answer: 2
+    explain: |
+      `groupby` groups **consecutive** equal items only. The final `'a'` starts a new group. To get one group per key, sort the data first.
+
+  - q: How many tuples does `itertools.combinations('ABCD', 2)` produce, compared to `itertools.permutations('ABCD', 2)`?
+    options:
+      - "6 and 12"
+      - "12 and 6"
+      - "6 and 16"
+      - "4 and 12"
+    answer: 0
+    explain: |
+      Combinations ignore order, so `('A', 'B')` and `('B', 'A')` count once: `math.comb(4, 2) == 6`. Permutations count both orders: `math.perm(4, 2) == 12`. (16 would be `product('ABCD', repeat=2)`, which also allows `('A', 'A')`.)
+
+exercises:
+  - id: first-matches
+    title: The first n matches, lazily
+    prompt: |
+      Write `first_matches(iterable, predicate, n)` that returns a **list** of the first `n` items of `iterable` for which `predicate(item)` is truthy.
+
+      It must work on infinite iterators (so it may not consume more than it needs), and if fewer than `n` items match, return all the matches. Try to solve it with `filter` and `itertools.islice` rather than a manual loop.
+    starter: |
+      from itertools import islice
+
+      def first_matches(iterable, predicate, n):
+          # your code here
+          pass
+    tests: |
+      from itertools import count
+
+      def test_basic():
+          """first 3 even numbers from a list"""
+          assert first_matches([1, 2, 3, 4, 5, 6, 8], lambda x: x % 2 == 0, 3) == [2, 4, 6]
+
+      def test_infinite():
+          """works on an infinite iterator"""
+          result = first_matches(count(1), lambda x: x % 7 == 0, 4)
+          assert result == [7, 14, 21, 28], f"got {result}"
+
+      def test_not_enough():
+          """fewer matches than n returns all of them"""
+          assert first_matches('banana', lambda c: c == 'a', 10) == ['a', 'a', 'a']
+
+      def test_stops_early():
+          """does not consume more of the iterator than needed"""
+          it = iter(range(100))
+          first_matches(it, lambda x: x > 2, 2)
+          assert next(it) == 5, "the iterator was consumed past the second match"
+
+      def test_returns_list():
+          """returns a list"""
+          assert isinstance(first_matches(range(5), bool, 2), list)
+    solution: |
+      from itertools import islice
+
+      def first_matches(iterable, predicate, n):
+          return list(islice(filter(predicate, iterable), n))
+    hints:
+      - "`filter(predicate, iterable)` is lazy: it produces matches one at a time."
+      - "`islice(something, n)` stops after `n` items, so it never asks the filter for more."
+
+  - id: interleave
+    title: Round-robin interleaving
+    prompt: |
+      Write a generator function `interleave(*iterables)` that yields one item from each iterable in turn, skipping iterables that have run out, until all are exhausted.
+
+      For example, `list(interleave('ABC', [1, 2], 'xyzw'))` is `['A', 1, 'x', 'B', 2, 'y', 'C', 'z', 'w']`.
+
+      Values like `None` or `0` inside the data must be kept. A neat approach combines `zip_longest`, a unique sentinel `fillvalue`, and `chain.from_iterable`.
+    starter: |
+      from itertools import zip_longest, chain
+
+      def interleave(*iterables):
+          for group in zip(*iterables):
+              yield from group
+    tests: |
+      import types
+
+      def test_example():
+          """the example from the prompt"""
+          result = list(interleave('ABC', [1, 2], 'xyzw'))
+          assert result == ['A', 1, 'x', 'B', 2, 'y', 'C', 'z', 'w'], f"got {result}"
+
+      def test_keeps_none_and_zero():
+          """None and 0 in the data are kept"""
+          result = list(interleave([None, 0], [False]))
+          assert result == [None, False, 0], f"got {result}"
+
+      def test_generators():
+          """works with generators"""
+          result = list(interleave((i for i in range(3)), (c for c in 'ab')))
+          assert result == [0, 'a', 1, 'b', 2], f"got {result}"
+
+      def test_no_iterables():
+          """no arguments yields nothing"""
+          assert list(interleave()) == []
+
+      def test_is_lazy():
+          """returns an iterator, not a list"""
+          result = interleave('ab', 'cd')
+          assert iter(result) is result, "interleave should return an iterator"
+    solution: |
+      from itertools import zip_longest, chain
+
+      def interleave(*iterables):
+          missing = object()      # a sentinel no real data can be equal to
+          rounds = zip_longest(*iterables, fillvalue=missing)
+          for item in chain.from_iterable(rounds):
+              if item is not missing:
+                  yield item
+    hints:
+      - "`zip` stops at the shortest input; `zip_longest` keeps going and fills the gaps."
+      - "Use `missing = object()` as the `fillvalue` so the filler can't be confused with real data such as `None`, then skip it with `is not`."
+      - "`chain.from_iterable(rounds)` flattens the tuples into one stream."
+
+  - id: longest-streak
+    title: Longest streak
+    prompt: |
+      Write `longest_streak(iterable)` that returns a tuple `(value, length)` describing the longest run of **consecutive** equal items. If several runs are equally long, return the first one. For an empty iterable, return `None`.
+
+      For example, `longest_streak('HHTTTHTTTTH')` is `('T', 4)`.
+    starter: |
+      from itertools import groupby
+
+      def longest_streak(iterable):
+          pass
+    tests: |
+      def test_example():
+          """coin flips"""
+          assert longest_streak('HHTTTHTTTTH') == ('T', 4), f"got {longest_streak('HHTTTHTTTTH')}"
+
+      def test_tie_first_wins():
+          """ties go to the first run"""
+          assert longest_streak([1, 1, 2, 2, 3]) == (1, 2), f"got {longest_streak([1, 1, 2, 2, 3])}"
+
+      def test_not_global_count():
+          """counts runs, not total occurrences"""
+          assert longest_streak('abababbb') == ('b', 3)
+          assert longest_streak('aabaab') == ('a', 2)
+
+      def test_generator_input():
+          """works on a one-shot generator"""
+          assert longest_streak(x % 3 == 0 for x in [3, 6, 9, 1, 2]) == (True, 3)
+
+      def test_empty():
+          """empty input returns None"""
+          assert longest_streak([]) is None
+    solution: |
+      from itertools import groupby
+
+      def longest_streak(iterable):
+          runs = ((key, sum(1 for _ in group)) for key, group in groupby(iterable))
+          return max(runs, key=lambda run: run[1], default=None)
+    hints:
+      - "`groupby` without a key yields one `(value, group)` pair per run of equal neighbors."
+      - "A group has no `len`, but `sum(1 for _ in group)` counts it."
+      - "`max(..., key=..., default=None)` handles the empty case, and returns the first of several equal maxima."
+
+  - id: sliding-window
+    title: Sliding windows
+    prompt: |
+      Write `windows(iterable, n)` that lazily yields every run of `n` consecutive items as a tuple, like a generalized `pairwise`. For example, `list(windows([1, 2, 3, 4, 5], 3))` is `[(1, 2, 3), (2, 3, 4), (3, 4, 5)]`.
+
+      It must accept any iterable (including infinite iterators), and yield nothing if there are fewer than `n` items. One approach: `tee` the input `n` times, advance the k-th copy by k items with `islice`, then `zip` the copies.
+    starter: |
+      from itertools import tee, islice
+
+      def windows(iterable, n):
+          # your code here
+          pass
+    tests: |
+      from itertools import count, islice
+
+      def test_example():
+          """windows of size 3"""
+          assert list(windows([1, 2, 3, 4, 5], 3)) == [(1, 2, 3), (2, 3, 4), (3, 4, 5)]
+
+      def test_pairwise():
+          """n=2 matches itertools.pairwise"""
+          from itertools import pairwise
+          assert list(windows('ABCD', 2)) == list(pairwise('ABCD'))
+
+      def test_too_short():
+          """fewer than n items yields nothing"""
+          assert list(windows([1, 2], 3)) == []
+
+      def test_infinite():
+          """works lazily on an infinite iterator"""
+          result = list(islice(windows(count(), 4), 2))
+          assert result == [(0, 1, 2, 3), (1, 2, 3, 4)], f"got {result}"
+    solution: |
+      from itertools import tee, islice
+
+      def windows(iterable, n):
+          copies = tee(iterable, n)
+          shifted = (islice(copy, k, None) for k, copy in enumerate(copies))
+          return zip(*shifted)
+    hints:
+      - "`tee(iterable, n)` gives `n` independent iterators over the same data."
+      - "`islice(copy, k, None)` skips the first `k` items of a copy, lazily."
+      - "`zip` of the shifted copies stops when the most-advanced copy runs out, which is exactly when the last full window has been produced."

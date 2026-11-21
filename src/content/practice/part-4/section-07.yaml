@@ -1,0 +1,1058 @@
+quiz:
+  - q: What does this print?
+    code: |
+      class Resource:
+          @property
+          def category(self):
+              return type(self).__name__.lower()
+
+      class Storage(Resource): pass
+      class HDD(Storage): pass
+
+      print(Resource().category, HDD().category)
+    options:
+      - "`resource resource`"
+      - "`resource storage`"
+      - "`resource hdd`"
+      - "`Resource HDD`"
+    answer: 2
+    explain: |
+      The property is defined once in `Resource`, but `type(self)` is the class of the actual instance, so an `HDD` reports `'hdd'`. No subclass needs to override `category`.
+
+  - q: What does this print?
+    code: |
+      class Storage:
+          def __repr__(self):
+              return f'{type(self).__name__.lower()}: 512 GB'
+
+      class SSD(Storage):
+          def __repr__(self):
+              return f'{super().__repr__()} (SATA III)'
+
+      print(repr(SSD()))
+    options:
+      - "`ssd: 512 GB (SATA III)`"
+      - "`storage: 512 GB (SATA III)`"
+      - "`(SATA III)`"
+      - "`ssd: 512 GB`"
+    answer: 0
+    explain: |
+      `SSD.__repr__` **extends** the parent's result. `super().__repr__()` runs `Storage.__repr__`, but bound to the `SSD` instance, so `type(self).__name__` is `'SSD'`.
+
+  - q: The project stores counts in `self._total` and exposes them with a getter-only `@property def total(self)`. What happens on `cpu.total = 100`?
+    options:
+      - The value is changed, because `_total` is only private by convention
+      - "`AttributeError`, because the property has no setter"
+      - A new instance attribute `total` shadows the property
+      - "`TypeError`, because properties can't be assigned"
+    answer: 1
+    explain: |
+      A property without a setter is read-only: assigning to it raises `AttributeError` (in 3.11+: "property 'total' of 'CPU' object has no setter"). Properties are data descriptors, so they take priority over the instance dictionary and can't be shadowed this way.
+
+  - q: What does this print?
+    code: |
+      def validate_integer(name, value, min_value=None):
+          if not isinstance(value, int):
+              raise TypeError(f'{name} must be an integer.')
+          if min_value is not None and value < min_value:
+              raise ValueError(f'{name} too small')
+
+      try:
+          validate_integer('num', True, 1)
+          print('accepted')
+      except (TypeError, ValueError) as ex:
+          print(type(ex).__name__)
+    options:
+      - "`TypeError`"
+      - "`ValueError`"
+      - "`accepted`"
+      - Nothing, the call never returns
+    answer: 2
+    explain: |
+      `bool` is a **subclass** of `int`, so `isinstance(True, int)` is `True`, and `True == 1` satisfies the minimum of `1`. To reject booleans, check `isinstance(value, bool)` explicitly.
+
+  - q: What does this print?
+    code: |
+      class Resource:
+          def __init__(self, total):
+              self._total = total
+          @property
+          def total(self):
+              return self._total
+
+      class CPU(Resource):
+          def __init__(self, total, cores):
+              self._cores = cores
+
+      try:
+          print(CPU(10, 8).total)
+      except AttributeError:
+          print('AttributeError')
+    options:
+      - "`10`"
+      - "`None`"
+      - "`TypeError`"
+      - "`AttributeError`"
+    answer: 3
+    explain: |
+      `CPU.__init__` never calls `super().__init__(total)`, so `_total` is never set. The inherited `total` property then fails with `AttributeError: 'CPU' object has no attribute '_total'`.
+
+  - q: Why does the design put `capacity_gb` in an intermediate `Storage` class instead of in `HDD` and `SSD` separately?
+    options:
+      - Python requires at least three levels of inheritance for `super()` to work
+      - It's shared by every storage device, so it's defined, validated and represented once, and both subclasses inherit it
+      - "`HDD` and `SSD` can't both inherit directly from `Resource`"
+      - So that `Storage` objects can't be created directly
+    answer: 1
+    explain: |
+      Whatever several subclasses have in common belongs one level up. `HDD` and `SSD` pass `capacity_gb` to `Storage.__init__` and only add their own attributes. Nothing stops you from instantiating `Storage` itself.
+
+  - q: What is the MRO of `SSD` in the project's hierarchy?
+    code: |
+      class Resource: pass
+      class Storage(Resource): pass
+      class SSD(Storage): pass
+
+      print([c.__name__ for c in SSD.__mro__])
+    options:
+      - "`['SSD', 'Storage', 'Resource']`"
+      - "`['SSD', 'Resource', 'Storage', 'object']`"
+      - "`['object', 'Resource', 'Storage', 'SSD']`"
+      - "`['SSD', 'Storage', 'Resource', 'object']`"
+    answer: 3
+    explain: |
+      With single inheritance the MRO is the class followed by its ancestors, nearest first, ending in `object`. This is the order in which `ssd.claim` or `super().__repr__()` searches for a name.
+
+  - q: Suppose `Resource` declared `__slots__ = ('_name', '_manufacturer', '_total', '_allocated')` but `CPU` declared no `__slots__`. Which is true of a `CPU` instance?
+    options:
+      - It has no `__dict__`, like a `Resource`
+      - It has a `__dict__`, and `_total` is stored in it rather than in the slot
+      - It has a `__dict__` holding `_cores`, `_socket` and `_power_watts`, while the `Resource` attributes stay in their slots
+      - Creating it raises `TypeError`
+    answer: 2
+    explain: |
+      A subclass without `__slots__` gets an instance dictionary back. Inherited slot names are still found via the descriptors on `Resource`, so only the attributes `CPU` adds end up in `__dict__`. To keep `CPU` dictionary-free, give it `__slots__ = ('_cores', '_socket', '_power_watts')`.
+
+exercises:
+  - id: validate-integer
+    title: "Goal 1: validate_integer"
+    prompt: |
+      Write `validate_integer(arg_name, arg_value, min_value=None, max_value=None, custom_min_message=None, custom_max_message=None)`:
+
+      - if `arg_value` isn't an `int`, raise `TypeError` with a message containing `arg_name`,
+      - if `min_value` is given and `arg_value < min_value`, raise `ValueError`; its message is `custom_min_message` if one was given, otherwise a default message that contains `arg_name` and `min_value`,
+      - likewise for `max_value` with `arg_value > max_value` and `custom_max_message`,
+      - otherwise return `None`. Both bounds are inclusive and optional.
+    starter: |
+      def validate_integer(
+              arg_name, arg_value, min_value=None, max_value=None,
+              custom_min_message=None, custom_max_message=None
+      ):
+          pass
+    tests: |
+      def raises(exc_type, *args, **kwargs):
+          try:
+              validate_integer(*args, **kwargs)
+          except exc_type as ex:
+              return str(ex)
+          except Exception as ex:
+              assert False, f"expected {exc_type.__name__}, got {type(ex).__name__}: {ex}"
+          assert False, f"expected {exc_type.__name__} for {args} {kwargs}"
+
+      def test_valid():
+          """valid values return None (bounds are inclusive)"""
+          assert validate_integer('arg', 10, 0, 20, 'min msg', 'max msg') is None
+          assert validate_integer('arg', 0, 0, 0) is None
+          assert validate_integer('arg', -5) is None
+
+      def test_type_error():
+          """non-integers raise TypeError mentioning the argument"""
+          for value in (1.5, '10', None):
+              msg = raises(TypeError, 'qty', value)
+              assert 'qty' in msg, f"message {msg!r} should mention 'qty'"
+
+      def test_type_checked_first():
+          """the type is checked even when bounds are given"""
+          raises(TypeError, 'arg', 2.5, 0, 10)
+
+      def test_min_default_message():
+          """below min: default message mentions name and bound"""
+          msg = raises(ValueError, 'arg', 10, 100)
+          assert 'arg' in msg and '100' in msg, f"got {msg!r}"
+
+      def test_min_custom_message():
+          """below min: the custom message replaces the default"""
+          assert raises(ValueError, 'arg', 10, 100, custom_min_message='custom') == 'custom'
+
+      def test_max_default_message():
+          """above max: default message mentions name and bound"""
+          msg = raises(ValueError, 'arg', 10, 1, 5)
+          assert 'arg' in msg and '5' in msg, f"got {msg!r}"
+
+      def test_max_custom_message():
+          """above max: the custom message replaces the default"""
+          assert raises(ValueError, 'arg', 10, 1, 5, custom_max_message='custom') == 'custom'
+
+      def test_only_max():
+          """max_value works without min_value"""
+          assert validate_integer('arg', -100, max_value=5) is None
+          raises(ValueError, 'arg', 6, max_value=5)
+
+      def test_custom_messages_dont_leak():
+          """a custom min message isn't used for a max violation"""
+          msg = raises(ValueError, 'arg', 10, 1, 5, custom_min_message='too small')
+          assert msg != 'too small', "used the min message for a max violation"
+    solution: |
+      def validate_integer(
+              arg_name, arg_value, min_value=None, max_value=None,
+              custom_min_message=None, custom_max_message=None
+      ):
+          if not isinstance(arg_value, int):
+              raise TypeError(f'{arg_name} must be an integer.')
+          if min_value is not None and arg_value < min_value:
+              if custom_min_message is not None:
+                  raise ValueError(custom_min_message)
+              raise ValueError(f'{arg_name} cannot be less than {min_value}')
+          if max_value is not None and arg_value > max_value:
+              if custom_max_message is not None:
+                  raise ValueError(custom_max_message)
+              raise ValueError(f'{arg_name} cannot be greater than {max_value}')
+    hints:
+      - "`isinstance(arg_value, int)` handles the type check."
+      - "Compare with `is not None`, not truthiness: `min_value=0` is a real bound."
+      - "Check the custom message first inside each bound check, and fall back to an f-string default."
+
+  - id: resource-class
+    title: "Goal 2: the Resource base class"
+    prompt: |
+      Using the given `validate_integer`, write `Resource(name, manufacturer, total, allocated)`:
+
+      - **read-only** properties `name`, `manufacturer`, `total` and `allocated`, stored in private attributes (`_name`, `_total`, …),
+      - `total` must be an integer `>= 0`, `allocated` an integer between `0` and `total` (`TypeError` / `ValueError` otherwise),
+      - computed properties `available` (`total - allocated`) and `category` (the instance's class name in lower case),
+      - `str()` returns the name; `repr()` returns e.g. `'Parrot (resource - Pirates A-Hoy) : total=100, allocated=50'`,
+      - `claim(n)` allocates `n` items (`1 <= n <= available`), `freeup(n)` returns `n` items to the pool (`1 <= n <= allocated`), `died(n)` removes `n` allocated items from both `allocated` and `total` (`1 <= n <= allocated`), and `purchased(n)` adds `n >= 1` items to the total. Invalid `n` raises `ValueError` (or `TypeError` for non-integers).
+    starter: |
+      # --- given: the validator (do not change) ---
+      def validate_integer(
+              arg_name, arg_value, min_value=None, max_value=None,
+              custom_min_message=None, custom_max_message=None
+      ):
+          if not isinstance(arg_value, int):
+              raise TypeError(f'{arg_name} must be an integer.')
+          if min_value is not None and arg_value < min_value:
+              if custom_min_message is not None:
+                  raise ValueError(custom_min_message)
+              raise ValueError(f'{arg_name} cannot be less than {min_value}')
+          if max_value is not None and arg_value > max_value:
+              if custom_max_message is not None:
+                  raise ValueError(custom_max_message)
+              raise ValueError(f'{arg_name} cannot be greater than {max_value}')
+
+
+      class Resource:
+          def __init__(self, name, manufacturer, total, allocated):
+              pass
+
+          # properties: name, manufacturer, total, allocated, category, available
+
+          def __str__(self):
+              pass
+
+          def __repr__(self):
+              pass
+
+          def claim(self, num):
+              pass
+
+          def freeup(self, num):
+              pass
+
+          def died(self, num):
+              pass
+
+          def purchased(self, num):
+              pass
+    tests: |
+      VALUES = {'name': 'Parrot', 'manufacturer': 'Pirates A-Hoy', 'total': 100, 'allocated': 50}
+
+      def make():
+          return Resource(**VALUES)
+
+      def expect(exc_type, fn):
+          try:
+              fn()
+          except exc_type:
+              return
+          except Exception as ex:
+              assert False, f"expected {exc_type.__name__}, got {type(ex).__name__}: {ex}"
+          assert False, f"expected {exc_type.__name__}"
+
+      def test_create():
+          """the constructor stores all four values"""
+          r = make()
+          for attr, value in VALUES.items():
+              assert getattr(r, attr) == value, f"{attr}: got {getattr(r, attr)!r}"
+
+      def test_private_storage():
+          """counts are stored in _total and _allocated"""
+          r = make()
+          assert r._total == 100 and r._allocated == 50
+
+      def test_read_only():
+          """name, manufacturer, total and allocated are read-only properties"""
+          r = make()
+          for attr in VALUES:
+              assert isinstance(getattr(Resource, attr, None), property), f"{attr} should be a property"
+              expect(AttributeError, lambda: setattr(r, attr, 1))
+
+      def test_invalid_creation():
+          """invalid total/allocated are rejected"""
+          expect(TypeError, lambda: Resource('n', 'm', 10.5, 5))
+          expect(TypeError, lambda: Resource('n', 'm', 10, 2.5))
+          expect(ValueError, lambda: Resource('n', 'm', -10, 0))
+          expect(ValueError, lambda: Resource('n', 'm', 10, -5))
+          expect(ValueError, lambda: Resource('n', 'm', 10, 20))
+          Resource('n', 'm', 0, 0)
+          Resource('n', 'm', 10, 10)
+
+      def test_available_and_category():
+          """available and category are computed"""
+          r = make()
+          assert r.available == 50, f"got {r.available!r}"
+          assert r.category == 'resource', f"got {r.category!r}"
+          class Gpu(Resource):
+              pass
+          assert Gpu('g', 'm', 1, 0).category == 'gpu', "category must use the instance's class"
+
+      def test_str_repr():
+          """str is the name, repr is detailed"""
+          r = make()
+          assert str(r) == 'Parrot'
+          assert repr(r) == 'Parrot (resource - Pirates A-Hoy) : total=100, allocated=50', repr(r)
+
+      def test_claim_and_freeup():
+          """claim and freeup move items between available and allocated"""
+          r = make()
+          r.claim(2)
+          assert (r.total, r.allocated, r.available) == (100, 52, 48)
+          r.freeup(10)
+          assert (r.total, r.allocated, r.available) == (100, 42, 58)
+          r.claim(58)
+          assert r.available == 0
+
+      def test_died_and_purchased():
+          """died removes allocated items, purchased adds new ones"""
+          r = make()
+          r.died(2)
+          assert (r.total, r.allocated) == (98, 48), (r.total, r.allocated)
+          r.purchased(12)
+          assert (r.total, r.allocated) == (110, 48), (r.total, r.allocated)
+
+      def test_invalid_amounts():
+          """out-of-range amounts raise ValueError, non-integers TypeError"""
+          r = make()
+          for method, value in [('claim', -1), ('claim', 0), ('claim', 51),
+                                ('freeup', -1), ('freeup', 0), ('freeup', 51),
+                                ('died', -1), ('died', 0), ('died', 51),
+                                ('purchased', -1), ('purchased', 0)]:
+              expect(ValueError, lambda: getattr(r, method)(value))
+          for method in ('claim', 'freeup', 'died', 'purchased'):
+              expect(TypeError, lambda: getattr(r, method)(1.5))
+          assert (r.total, r.allocated) == (100, 50), "failed calls must not change the counts"
+    solution: |
+      def validate_integer(
+              arg_name, arg_value, min_value=None, max_value=None,
+              custom_min_message=None, custom_max_message=None
+      ):
+          if not isinstance(arg_value, int):
+              raise TypeError(f'{arg_name} must be an integer.')
+          if min_value is not None and arg_value < min_value:
+              if custom_min_message is not None:
+                  raise ValueError(custom_min_message)
+              raise ValueError(f'{arg_name} cannot be less than {min_value}')
+          if max_value is not None and arg_value > max_value:
+              if custom_max_message is not None:
+                  raise ValueError(custom_max_message)
+              raise ValueError(f'{arg_name} cannot be greater than {max_value}')
+
+
+      class Resource:
+          def __init__(self, name, manufacturer, total, allocated):
+              self._name = name
+              self._manufacturer = manufacturer
+              validate_integer('total', total, min_value=0)
+              self._total = total
+              validate_integer(
+                  'allocated', allocated, 0, total,
+                  custom_max_message='Allocated inventory cannot exceed total inventory'
+              )
+              self._allocated = allocated
+
+          @property
+          def name(self):
+              return self._name
+
+          @property
+          def manufacturer(self):
+              return self._manufacturer
+
+          @property
+          def total(self):
+              return self._total
+
+          @property
+          def allocated(self):
+              return self._allocated
+
+          @property
+          def category(self):
+              return type(self).__name__.lower()
+
+          @property
+          def available(self):
+              return self.total - self.allocated
+
+          def __str__(self):
+              return self.name
+
+          def __repr__(self):
+              return (f'{self.name} ({self.category} - {self.manufacturer}) : '
+                      f'total={self.total}, allocated={self.allocated}')
+
+          def claim(self, num):
+              validate_integer('num', num, 1, self.available,
+                               custom_max_message='Cannot claim more than available')
+              self._allocated += num
+
+          def freeup(self, num):
+              validate_integer('num', num, 1, self.allocated,
+                               custom_max_message='Cannot return more than allocated')
+              self._allocated -= num
+
+          def died(self, num):
+              validate_integer('num', num, 1, self.allocated,
+                               custom_max_message='Cannot retire more than allocated')
+              self._total -= num
+              self._allocated -= num
+
+          def purchased(self, num):
+              validate_integer('num', num, 1)
+              self._total += num
+    hints:
+      - "Each property is a getter only, e.g. `@property def total(self): return self._total`."
+      - "`type(self).__name__.lower()` gives the category for any subclass."
+      - "The bounds for `claim` depend on the current state: `validate_integer('num', num, 1, self.available)`."
+
+  - id: cpu-class
+    title: "Goal 3: the CPU class"
+    prompt: |
+      `validate_integer` and `Resource` are given. Write `CPU(Resource)`, created with `CPU(name, manufacturer, total, allocated, cores, socket, power_watts)`:
+
+      - delegate the first four arguments to `Resource.__init__` with `super()` (don't repeat its assignments or validation),
+      - `cores` and `power_watts` must be integers `>= 1`; store all three new values privately and expose them as **read-only** properties `cores`, `socket` and `power_watts`,
+      - override `__repr__` so it contains the category, name, socket and number of cores, e.g. `'cpu: Ryzen 7 2700 (AM4 - x8)'`,
+      - everything else (`claim`, `available`, `category`, `str()` …) is inherited, so don't redefine it.
+    starter: |
+      # --- given: the validator (do not change) ---
+      def validate_integer(
+              arg_name, arg_value, min_value=None, max_value=None,
+              custom_min_message=None, custom_max_message=None
+      ):
+          if not isinstance(arg_value, int):
+              raise TypeError(f'{arg_name} must be an integer.')
+          if min_value is not None and arg_value < min_value:
+              if custom_min_message is not None:
+                  raise ValueError(custom_min_message)
+              raise ValueError(f'{arg_name} cannot be less than {min_value}')
+          if max_value is not None and arg_value > max_value:
+              if custom_max_message is not None:
+                  raise ValueError(custom_max_message)
+              raise ValueError(f'{arg_name} cannot be greater than {max_value}')
+
+
+      # --- given: Resource from the previous exercise (do not change) ---
+      class Resource:
+          def __init__(self, name, manufacturer, total, allocated):
+              self._name = name
+              self._manufacturer = manufacturer
+              validate_integer('total', total, min_value=0)
+              self._total = total
+              validate_integer(
+                  'allocated', allocated, 0, total,
+                  custom_max_message='Allocated inventory cannot exceed total inventory'
+              )
+              self._allocated = allocated
+
+          @property
+          def name(self):
+              return self._name
+
+          @property
+          def manufacturer(self):
+              return self._manufacturer
+
+          @property
+          def total(self):
+              return self._total
+
+          @property
+          def allocated(self):
+              return self._allocated
+
+          @property
+          def category(self):
+              return type(self).__name__.lower()
+
+          @property
+          def available(self):
+              return self.total - self.allocated
+
+          def __str__(self):
+              return self.name
+
+          def __repr__(self):
+              return (f'{self.name} ({self.category} - {self.manufacturer}) : '
+                      f'total={self.total}, allocated={self.allocated}')
+
+          def claim(self, num):
+              validate_integer('num', num, 1, self.available,
+                               custom_max_message='Cannot claim more than available')
+              self._allocated += num
+
+          def freeup(self, num):
+              validate_integer('num', num, 1, self.allocated,
+                               custom_max_message='Cannot return more than allocated')
+              self._allocated -= num
+
+          def died(self, num):
+              validate_integer('num', num, 1, self.allocated,
+                               custom_max_message='Cannot retire more than allocated')
+              self._total -= num
+              self._allocated -= num
+
+          def purchased(self, num):
+              validate_integer('num', num, 1)
+              self._total += num
+
+
+      # --- your code ---
+      class CPU(Resource):
+          def __init__(self, name, manufacturer, total, allocated,
+                       cores, socket, power_watts):
+              pass
+    tests: |
+      VALUES = {'name': 'RYZEN Threadripper 2990WX', 'manufacturer': 'AMD', 'total': 10,
+                'allocated': 3, 'cores': 32, 'socket': 'sTR4', 'power_watts': 250}
+
+      def make(**changes):
+          return CPU(**dict(VALUES, **changes))
+
+      def expect(exc_type, fn):
+          try:
+              fn()
+          except exc_type:
+              return
+          except Exception as ex:
+              assert False, f"expected {exc_type.__name__}, got {type(ex).__name__}: {ex}"
+          assert False, f"expected {exc_type.__name__}"
+
+      def test_create():
+          """all seven values are available as attributes"""
+          cpu = make()
+          for attr, value in VALUES.items():
+              assert getattr(cpu, attr) == value, f"{attr}: got {getattr(cpu, attr)!r}"
+
+      def test_is_resource():
+          """CPU inherits from Resource and reuses its behavior"""
+          assert issubclass(CPU, Resource)
+          for name in ('claim', 'available', 'category', '__str__', 'total'):
+              assert name not in CPU.__dict__, f"CPU should inherit {name}, not redefine it"
+          cpu = make()
+          assert cpu.category == 'cpu' and str(cpu) == VALUES['name'] and cpu.available == 7
+          cpu.claim(7)
+          assert cpu.available == 0
+
+      def test_delegates_init():
+          """CPU.__init__ delegates to Resource.__init__"""
+          calls = []
+          original = Resource.__init__
+          def spy(self, *args, **kwargs):
+              calls.append((args, kwargs))
+              original(self, *args, **kwargs)
+          Resource.__init__ = spy
+          try:
+              make()
+          finally:
+              Resource.__init__ = original
+          assert len(calls) == 1, "Resource.__init__ was not called (use super().__init__)"
+
+      def test_resource_validation_applies():
+          """the parent's validation still runs"""
+          expect(ValueError, lambda: make(allocated=11))
+          expect(TypeError, lambda: make(total=10.5))
+
+      def test_invalid_cores_and_power():
+          """cores and power_watts must be integers >= 1"""
+          for field in ('cores', 'power_watts'):
+              expect(TypeError, lambda: make(**{field: 10.5}))
+              expect(ValueError, lambda: make(**{field: -1}))
+              expect(ValueError, lambda: make(**{field: 0}))
+          make(cores=1, power_watts=1)
+
+      def test_read_only():
+          """cores, socket and power_watts are read-only"""
+          cpu = make()
+          for attr in ('cores', 'socket', 'power_watts'):
+              assert isinstance(getattr(CPU, attr, None), property), f"{attr} should be a property"
+              expect(AttributeError, lambda: setattr(cpu, attr, 1))
+
+      def test_repr():
+          """repr shows category, name, socket and cores"""
+          cpu = make()
+          text = repr(cpu)
+          for part in ('cpu', VALUES['name'], 'sTR4', '32'):
+              assert part in text, f"{part!r} missing from {text!r}"
+          assert '__repr__' in CPU.__dict__, "override __repr__ in CPU"
+    solution: |
+      def validate_integer(
+              arg_name, arg_value, min_value=None, max_value=None,
+              custom_min_message=None, custom_max_message=None
+      ):
+          if not isinstance(arg_value, int):
+              raise TypeError(f'{arg_name} must be an integer.')
+          if min_value is not None and arg_value < min_value:
+              if custom_min_message is not None:
+                  raise ValueError(custom_min_message)
+              raise ValueError(f'{arg_name} cannot be less than {min_value}')
+          if max_value is not None and arg_value > max_value:
+              if custom_max_message is not None:
+                  raise ValueError(custom_max_message)
+              raise ValueError(f'{arg_name} cannot be greater than {max_value}')
+
+
+      class Resource:
+          def __init__(self, name, manufacturer, total, allocated):
+              self._name = name
+              self._manufacturer = manufacturer
+              validate_integer('total', total, min_value=0)
+              self._total = total
+              validate_integer(
+                  'allocated', allocated, 0, total,
+                  custom_max_message='Allocated inventory cannot exceed total inventory'
+              )
+              self._allocated = allocated
+
+          @property
+          def name(self):
+              return self._name
+
+          @property
+          def manufacturer(self):
+              return self._manufacturer
+
+          @property
+          def total(self):
+              return self._total
+
+          @property
+          def allocated(self):
+              return self._allocated
+
+          @property
+          def category(self):
+              return type(self).__name__.lower()
+
+          @property
+          def available(self):
+              return self.total - self.allocated
+
+          def __str__(self):
+              return self.name
+
+          def __repr__(self):
+              return (f'{self.name} ({self.category} - {self.manufacturer}) : '
+                      f'total={self.total}, allocated={self.allocated}')
+
+          def claim(self, num):
+              validate_integer('num', num, 1, self.available,
+                               custom_max_message='Cannot claim more than available')
+              self._allocated += num
+
+          def freeup(self, num):
+              validate_integer('num', num, 1, self.allocated,
+                               custom_max_message='Cannot return more than allocated')
+              self._allocated -= num
+
+          def died(self, num):
+              validate_integer('num', num, 1, self.allocated,
+                               custom_max_message='Cannot retire more than allocated')
+              self._total -= num
+              self._allocated -= num
+
+          def purchased(self, num):
+              validate_integer('num', num, 1)
+              self._total += num
+
+
+      class CPU(Resource):
+          def __init__(self, name, manufacturer, total, allocated,
+                       cores, socket, power_watts):
+              super().__init__(name, manufacturer, total, allocated)
+              validate_integer('cores', cores, 1)
+              validate_integer('power_watts', power_watts, 1)
+              self._cores = cores
+              self._socket = socket
+              self._power_watts = power_watts
+
+          @property
+          def cores(self):
+              return self._cores
+
+          @property
+          def socket(self):
+              return self._socket
+
+          @property
+          def power_watts(self):
+              return self._power_watts
+
+          def __repr__(self):
+              return f'{self.category}: {self.name} ({self.socket} - x{self.cores})'
+    hints:
+      - "Start `__init__` with `super().__init__(name, manufacturer, total, allocated)`."
+      - "Validate with `validate_integer('cores', cores, 1)` before storing."
+      - "Inside `__repr__`, `self.category` already returns `'cpu'`."
+
+  - id: storage-classes
+    title: "Goal 4: Storage, HDD and SSD"
+    prompt: |
+      `validate_integer` and `Resource` are given. Write three classes, each delegating to its parent's `__init__` with `super()`:
+
+      - `Storage(Resource)`: adds `capacity_gb`, an integer `>= 1`, as a read-only property. Its `repr` is `'<category>: <capacity_gb> GB'`, e.g. `'storage: 512 GB'`.
+      - `HDD(Storage)`: adds `size`, which must be `'2.5"'` or `'3.5"'` (otherwise `ValueError`), and `rpm`, an integer between `1_000` and `50_000` inclusive. Its `repr` **extends** the parent's using `super().__repr__()`: `'hdd: 1000 GB (3.5", 10000 rpm)'`.
+      - `SSD(Storage)`: adds `interface` (any string). Its `repr` extends the parent's too: `'ssd: 1000 GB (SATA III)'`.
+
+      All new attributes are read-only properties.
+    starter: |
+      # --- given: the validator (do not change) ---
+      def validate_integer(
+              arg_name, arg_value, min_value=None, max_value=None,
+              custom_min_message=None, custom_max_message=None
+      ):
+          if not isinstance(arg_value, int):
+              raise TypeError(f'{arg_name} must be an integer.')
+          if min_value is not None and arg_value < min_value:
+              if custom_min_message is not None:
+                  raise ValueError(custom_min_message)
+              raise ValueError(f'{arg_name} cannot be less than {min_value}')
+          if max_value is not None and arg_value > max_value:
+              if custom_max_message is not None:
+                  raise ValueError(custom_max_message)
+              raise ValueError(f'{arg_name} cannot be greater than {max_value}')
+
+
+      # --- given: Resource from the previous exercise (do not change) ---
+      class Resource:
+          def __init__(self, name, manufacturer, total, allocated):
+              self._name = name
+              self._manufacturer = manufacturer
+              validate_integer('total', total, min_value=0)
+              self._total = total
+              validate_integer(
+                  'allocated', allocated, 0, total,
+                  custom_max_message='Allocated inventory cannot exceed total inventory'
+              )
+              self._allocated = allocated
+
+          @property
+          def name(self):
+              return self._name
+
+          @property
+          def manufacturer(self):
+              return self._manufacturer
+
+          @property
+          def total(self):
+              return self._total
+
+          @property
+          def allocated(self):
+              return self._allocated
+
+          @property
+          def category(self):
+              return type(self).__name__.lower()
+
+          @property
+          def available(self):
+              return self.total - self.allocated
+
+          def __str__(self):
+              return self.name
+
+          def __repr__(self):
+              return (f'{self.name} ({self.category} - {self.manufacturer}) : '
+                      f'total={self.total}, allocated={self.allocated}')
+
+          def claim(self, num):
+              validate_integer('num', num, 1, self.available,
+                               custom_max_message='Cannot claim more than available')
+              self._allocated += num
+
+          def freeup(self, num):
+              validate_integer('num', num, 1, self.allocated,
+                               custom_max_message='Cannot return more than allocated')
+              self._allocated -= num
+
+          def died(self, num):
+              validate_integer('num', num, 1, self.allocated,
+                               custom_max_message='Cannot retire more than allocated')
+              self._total -= num
+              self._allocated -= num
+
+          def purchased(self, num):
+              validate_integer('num', num, 1)
+              self._total += num
+
+
+      # --- your code ---
+      class Storage(Resource):
+          def __init__(self, name, manufacturer, total, allocated, capacity_gb):
+              pass
+
+
+      class HDD(Storage):
+          def __init__(self, name, manufacturer, total, allocated, capacity_gb,
+                       size, rpm):
+              pass
+
+
+      class SSD(Storage):
+          def __init__(self, name, manufacturer, total, allocated, capacity_gb,
+                       interface):
+              pass
+    tests: |
+      STORAGE = {'name': 'Thumbdrive', 'manufacturer': 'Sandisk', 'total': 10,
+                 'allocated': 3, 'capacity_gb': 512}
+      HDD_VALUES = {'name': '1TB SATA HDD', 'manufacturer': 'Seagate', 'total': 10,
+                    'allocated': 3, 'capacity_gb': 1_000, 'size': '3.5"', 'rpm': 10_000}
+      SSD_VALUES = {'name': 'Samsung 860 EVO', 'manufacturer': 'Samsung', 'total': 10,
+                    'allocated': 3, 'capacity_gb': 1_000, 'interface': 'SATA III'}
+
+      def expect(exc_type, fn):
+          try:
+              fn()
+          except exc_type:
+              return
+          except Exception as ex:
+              assert False, f"expected {exc_type.__name__}, got {type(ex).__name__}: {ex}"
+          assert False, f"expected {exc_type.__name__}"
+
+      def test_hierarchy():
+          """HDD and SSD are Storage, which is a Resource"""
+          assert [c.__name__ for c in HDD.__mro__] == ['HDD', 'Storage', 'Resource', 'object']
+          assert [c.__name__ for c in SSD.__mro__] == ['SSD', 'Storage', 'Resource', 'object']
+
+      def test_create_all():
+          """every value is stored for all three classes"""
+          for cls, values in ((Storage, STORAGE), (HDD, HDD_VALUES), (SSD, SSD_VALUES)):
+              obj = cls(**values)
+              for attr, value in values.items():
+                  assert getattr(obj, attr) == value, f"{cls.__name__}.{attr}: got {getattr(obj, attr)!r}"
+
+      def test_inherited_behavior():
+          """categories and inventory methods come from Resource"""
+          hdd, ssd = HDD(**HDD_VALUES), SSD(**SSD_VALUES)
+          assert (Storage(**STORAGE).category, hdd.category, ssd.category) == ('storage', 'hdd', 'ssd')
+          hdd.claim(7)
+          assert hdd.available == 0
+          for cls in (Storage, HDD, SSD):
+              assert 'claim' not in cls.__dict__ and 'category' not in cls.__dict__
+
+      def test_capacity_validation():
+          """capacity_gb must be an integer >= 1, for every storage class"""
+          for cls, values in ((Storage, STORAGE), (HDD, HDD_VALUES), (SSD, SSD_VALUES)):
+              expect(TypeError, lambda: cls(**dict(values, capacity_gb=10.5)))
+              expect(ValueError, lambda: cls(**dict(values, capacity_gb=0)))
+              expect(ValueError, lambda: cls(**dict(values, capacity_gb=-1)))
+
+      def test_resource_validation_applies():
+          """the Resource validation still runs"""
+          expect(ValueError, lambda: SSD(**dict(SSD_VALUES, allocated=20)))
+          expect(ValueError, lambda: HDD(**dict(HDD_VALUES, total=-1)))
+
+      def test_hdd_size():
+          """HDD size must be one of the two allowed sizes"""
+          expect(ValueError, lambda: HDD(**dict(HDD_VALUES, size='2.5')))
+          expect(ValueError, lambda: HDD(**dict(HDD_VALUES, size='5.25"')))
+          assert HDD(**dict(HDD_VALUES, size='2.5"')).size == '2.5"'
+
+      def test_hdd_rpm():
+          """HDD rpm must be an integer between 1,000 and 50,000"""
+          expect(TypeError, lambda: HDD(**dict(HDD_VALUES, rpm='100')))
+          expect(ValueError, lambda: HDD(**dict(HDD_VALUES, rpm=100)))
+          expect(ValueError, lambda: HDD(**dict(HDD_VALUES, rpm=100_000)))
+          HDD(**dict(HDD_VALUES, rpm=1_000))
+          HDD(**dict(HDD_VALUES, rpm=50_000))
+
+      def test_read_only():
+          """new attributes are read-only properties"""
+          for cls, values, attrs in ((Storage, STORAGE, ['capacity_gb']),
+                                     (HDD, HDD_VALUES, ['size', 'rpm']),
+                                     (SSD, SSD_VALUES, ['interface'])):
+              obj = cls(**values)
+              for attr in attrs:
+                  expect(AttributeError, lambda: setattr(obj, attr, 1))
+
+      def test_reprs():
+          """reprs show the category and specific attributes"""
+          assert repr(Storage(**STORAGE)) == 'storage: 512 GB', repr(Storage(**STORAGE))
+          assert repr(HDD(**HDD_VALUES)) == 'hdd: 1000 GB (3.5", 10000 rpm)', repr(HDD(**HDD_VALUES))
+          assert repr(SSD(**SSD_VALUES)) == 'ssd: 1000 GB (SATA III)', repr(SSD(**SSD_VALUES))
+
+      def test_repr_extends_parent():
+          """HDD and SSD build on Storage.__repr__ via super()"""
+          original = Storage.__repr__
+          Storage.__repr__ = lambda self: 'STORAGE-REPR'
+          try:
+              hdd_text, ssd_text = repr(HDD(**HDD_VALUES)), repr(SSD(**SSD_VALUES))
+          finally:
+              Storage.__repr__ = original
+          assert hdd_text.startswith('STORAGE-REPR'), f"HDD repr doesn't use super().__repr__(): {hdd_text!r}"
+          assert ssd_text.startswith('STORAGE-REPR'), f"SSD repr doesn't use super().__repr__(): {ssd_text!r}"
+    solution: |
+      def validate_integer(
+              arg_name, arg_value, min_value=None, max_value=None,
+              custom_min_message=None, custom_max_message=None
+      ):
+          if not isinstance(arg_value, int):
+              raise TypeError(f'{arg_name} must be an integer.')
+          if min_value is not None and arg_value < min_value:
+              if custom_min_message is not None:
+                  raise ValueError(custom_min_message)
+              raise ValueError(f'{arg_name} cannot be less than {min_value}')
+          if max_value is not None and arg_value > max_value:
+              if custom_max_message is not None:
+                  raise ValueError(custom_max_message)
+              raise ValueError(f'{arg_name} cannot be greater than {max_value}')
+
+
+      class Resource:
+          def __init__(self, name, manufacturer, total, allocated):
+              self._name = name
+              self._manufacturer = manufacturer
+              validate_integer('total', total, min_value=0)
+              self._total = total
+              validate_integer(
+                  'allocated', allocated, 0, total,
+                  custom_max_message='Allocated inventory cannot exceed total inventory'
+              )
+              self._allocated = allocated
+
+          @property
+          def name(self):
+              return self._name
+
+          @property
+          def manufacturer(self):
+              return self._manufacturer
+
+          @property
+          def total(self):
+              return self._total
+
+          @property
+          def allocated(self):
+              return self._allocated
+
+          @property
+          def category(self):
+              return type(self).__name__.lower()
+
+          @property
+          def available(self):
+              return self.total - self.allocated
+
+          def __str__(self):
+              return self.name
+
+          def __repr__(self):
+              return (f'{self.name} ({self.category} - {self.manufacturer}) : '
+                      f'total={self.total}, allocated={self.allocated}')
+
+          def claim(self, num):
+              validate_integer('num', num, 1, self.available,
+                               custom_max_message='Cannot claim more than available')
+              self._allocated += num
+
+          def freeup(self, num):
+              validate_integer('num', num, 1, self.allocated,
+                               custom_max_message='Cannot return more than allocated')
+              self._allocated -= num
+
+          def died(self, num):
+              validate_integer('num', num, 1, self.allocated,
+                               custom_max_message='Cannot retire more than allocated')
+              self._total -= num
+              self._allocated -= num
+
+          def purchased(self, num):
+              validate_integer('num', num, 1)
+              self._total += num
+
+
+      class Storage(Resource):
+          def __init__(self, name, manufacturer, total, allocated, capacity_gb):
+              super().__init__(name, manufacturer, total, allocated)
+              validate_integer('capacity_gb', capacity_gb, 1)
+              self._capacity_gb = capacity_gb
+
+          @property
+          def capacity_gb(self):
+              return self._capacity_gb
+
+          def __repr__(self):
+              return f'{self.category}: {self.capacity_gb} GB'
+
+
+      class HDD(Storage):
+          def __init__(self, name, manufacturer, total, allocated, capacity_gb,
+                       size, rpm):
+              super().__init__(name, manufacturer, total, allocated, capacity_gb)
+              allowed_sizes = ['2.5"', '3.5"']
+              if size not in allowed_sizes:
+                  raise ValueError(f'Invalid HDD size. Must be one of {", ".join(allowed_sizes)}')
+              validate_integer('rpm', rpm, min_value=1_000, max_value=50_000)
+              self._size = size
+              self._rpm = rpm
+
+          @property
+          def size(self):
+              return self._size
+
+          @property
+          def rpm(self):
+              return self._rpm
+
+          def __repr__(self):
+              return f'{super().__repr__()} ({self.size}, {self.rpm} rpm)'
+
+
+      class SSD(Storage):
+          def __init__(self, name, manufacturer, total, allocated, capacity_gb,
+                       interface):
+              super().__init__(name, manufacturer, total, allocated, capacity_gb)
+              self._interface = interface
+
+          @property
+          def interface(self):
+              return self._interface
+
+          def __repr__(self):
+              return f'{super().__repr__()} ({self.interface})'
+    hints:
+      - "Each `__init__` starts with `super().__init__(...)`, passing everything the parent needs; `HDD` and `SSD` pass `capacity_gb` on to `Storage`."
+      - "Check the size with `if size not in ['2.5\"', '3.5\"']: raise ValueError(...)`."
+      - "In `HDD.__repr__`, return `f'{super().__repr__()} ({self.size}, {self.rpm} rpm)'`."

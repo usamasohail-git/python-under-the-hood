@@ -1,0 +1,482 @@
+packages: ['pyyaml', 'jsonschema']
+
+quiz:
+  - q: Why should you never call `pickle.loads` on data received from an untrusted source?
+    options:
+      - Pickle data is compressed and may be corrupted in transit
+      - Loading a pickle can call arbitrary functions, so a crafted payload can run any code
+      - Pickles from other machines always raise `UnpicklingError`
+      - Pickle silently converts all numbers to floats
+    answer: 1
+    explain: |
+      A pickle is a little program. Through `__reduce__`, an object can tell pickle to call any importable callable (for example `os.system`) with chosen arguments **while it is being loaded**.
+
+  - q: What does this print?
+    code: |
+      import pickle
+
+      inner = {'a': 1}
+      outer = {'x': inner, 'y': inner}
+      copy = pickle.loads(pickle.dumps(outer))
+      print(copy['x'] is copy['y'], copy['x'] is inner)
+    options:
+      - "`True True`"
+      - "`False False`"
+      - "`True False`"
+      - "`False True`"
+    answer: 2
+    explain: |
+      Within one pickle, shared references are preserved, so `'x'` and `'y'` still refer to one dictionary. But that dictionary is a new object, not the original `inner`.
+
+  - q: What does this print?
+    code: |
+      import json
+
+      d = {1: (10, 20)}
+      print(json.loads(json.dumps(d)))
+    options:
+      - "`{1: (10, 20)}`"
+      - "`{'1': [10, 20]}`"
+      - "`{1: [10, 20]}`"
+      - A `TypeError`, because tuples can't be serialized
+    answer: 1
+    explain: |
+      JSON object keys must be strings, so the int key becomes `"1"`, and JSON has only one sequence type, so the tuple becomes an array, which loads as a list.
+
+  - q: What does this print?
+    code: |
+      import json
+
+      def fmt(obj):
+          if isinstance(obj, set):
+              return sorted(obj)
+
+      print(json.dumps({'s': {3, 1}, 'c': 1j}, default=fmt))
+    options:
+      - "`{\"s\": [1, 3], \"c\": null}`"
+      - "A `TypeError` for the complex number"
+      - "`{\"s\": [1, 3], \"c\": \"1j\"}`"
+      - "`{\"s\": [1, 3]}`"
+    answer: 0
+    explain: |
+      `fmt` returns `None` for anything that isn't a set, and `None` serializes as `null`. A `default` function should **raise `TypeError`** for types it doesn't handle, otherwise data is silently lost.
+
+  - q: What does this print?
+    code: |
+      import json
+
+      calls = []
+      def default(obj):
+          calls.append(obj)
+          return str(obj)
+
+      json.dumps({'name': 'Python', 'n': (1, 2)}, default=default)
+      print(len(calls))
+    options:
+      - "`0`"
+      - "`1`"
+      - "`2`"
+      - "`3`"
+    answer: 0
+    explain: |
+      `default` is only called for objects the encoder can't handle by itself. Strings, ints and tuples are all natively supported, so it is never called.
+
+  - q: In a `JSONEncoder` subclass, which method do you override to support new types, and what should it do with types it doesn't support?
+    options:
+      - "`encode`; return the object unchanged"
+      - "`default`; return `super().default(obj)`, which raises `TypeError`"
+      - "`default`; return `None`"
+      - "`iterencode`; skip the object"
+    answer: 1
+    explain: |
+      `default(self, obj)` is called for unsupported objects. Delegating to the base implementation raises the standard `TypeError` for anything you don't handle.
+
+  - q: 'In which order does `object_hook` receive the objects of `{"a": {"b": {"c": 1}}}`?'
+    options:
+      - 'Outermost first: `{"a": ...}`, then `{"b": ...}`, then `{"c": 1}`'
+      - Only the root object is passed to the hook
+      - 'Innermost first: `{"c": 1}`, then `{"b": ...}`, then the root'
+      - In alphabetical order of their keys
+    answer: 2
+    explain: |
+      The parser finishes an object before the object that contains it, so the hook sees the innermost object first. When it sees an outer object, the inner ones have already been replaced by whatever the hook returned.
+
+  - q: What does this print?
+    code: |
+      import json
+      from decimal import Decimal
+
+      d = json.loads('{"a": 0.1, "b": 0.2, "n": 3}', parse_float=Decimal)
+      print(d['a'] + d['b'], type(d['n']).__name__)
+    options:
+      - "`0.30000000000000004 int`"
+      - "`0.3 Decimal`"
+      - "`0.3 int`"
+      - "`Decimal('0.3') int`"
+    answer: 2
+    explain: |
+      `parse_float` receives the original text of each float, so `Decimal('0.1') + Decimal('0.2')` is exactly `0.3` (and `print` shows the `str`). `3` is an integer, which goes through `parse_int` (still `int`).
+
+  - q: What does `loads` return when you override `decode` in a `JSONDecoder` subclass and pass it as `cls`?
+    options:
+      - Whatever your `decode` method returns; it receives the whole document as a string
+      - A dict, after `decode` has been called once for every JSON object
+      - The original string, unchanged
+      - The result of the parent's `decode`, regardless of what yours returns
+    answer: 0
+    explain: |
+      `decode(self, s)` is called once with the entire JSON text, and its return value is the result of `loads`. It's all-or-nothing; call `super().decode(s)` to parse normally.
+
+  - q: This document is checked with `jsonschema.validate`. What happens?
+    code: |
+      schema = {
+          "type": "object",
+          "properties": {"age": {"type": "integer", "minimum": 0}},
+      }
+      instance = {"name": "John"}
+    options:
+      - "`ValidationError`: `'age' is a required property`"
+      - "`ValidationError`: `'name'` is not allowed"
+      - It passes validation
+      - "`SchemaError`, because `name` isn't described"
+    answer: 2
+    explain: |
+      Properties are optional unless listed in `"required"`, and extra properties are allowed unless `"additionalProperties": false` is set. So this instance is valid.
+
+  - q: What does this print?
+    code: |
+      import yaml
+
+      print(yaml.safe_load('country: NO\nversion: 3.10\nzip: "02134"'))
+    options:
+      - "`{'country': 'NO', 'version': '3.10', 'zip': '02134'}`"
+      - "`{'country': False, 'version': 3.1, 'zip': '02134'}`"
+      - "`{'country': False, 'version': 3.1, 'zip': 2134}`"
+      - "`{'country': 'NO', 'version': 3.1, 'zip': '02134'}`"
+    answer: 1
+    explain: |
+      PyYAML follows YAML 1.1: `NO` is a boolean and `3.10` is a float. The quoted zip code stays a string. Quote values that must be strings.
+
+  - q: Which statement about marshmallow and serpy is correct?
+    options:
+      - serpy validates input and raises `ValidationError`, marshmallow doesn't
+      - Both libraries can load JSON back into objects
+      - marshmallow serializes, deserializes and validates; serpy only serializes, which is what makes it fast
+      - serpy requires a JSON Schema document to work
+    answer: 2
+    explain: |
+      marshmallow schemas `dump`, `load` and validate (raising `ValidationError` on `load` in current versions). serpy serializers only turn objects into native dicts, without validation or loading.
+
+exercises:
+  - id: json-default-function
+    title: A strict default function
+    prompt: |
+      Write a function `to_json(arg)` to use as the `default=` argument of `json.dumps`. It must convert:
+
+      - `datetime` and `date` objects to their ISO format string (`isoformat()`),
+      - `Decimal` objects to strings, e.g. `Decimal('9.99')` → `'9.99'`,
+      - `set` and `frozenset` objects to a **sorted** list,
+
+      and raise a `TypeError` for anything else, so unsupported values are never silently written as `null`.
+    starter: |
+      import json
+      from datetime import date, datetime
+      from decimal import Decimal
+
+      def to_json(arg):
+          # your code here
+          pass
+    tests: |
+      def test_datetime():
+          """datetime becomes an ISO string"""
+          s = json.dumps({'t': datetime(2024, 3, 15, 9, 30)}, default=to_json)
+          assert s == '{"t": "2024-03-15T09:30:00"}', s
+
+      def test_date():
+          """date becomes an ISO string"""
+          s = json.dumps([date(1939, 10, 27)], default=to_json)
+          assert s == '["1939-10-27"]', s
+
+      def test_decimal():
+          """Decimal becomes a string, keeping trailing zeros"""
+          s = json.dumps({'p': Decimal('337.60')}, default=to_json)
+          assert s == '{"p": "337.60"}', s
+
+      def test_sets():
+          """sets and frozensets become sorted lists"""
+          s = json.dumps({'a': {3, 1, 2}, 'b': frozenset('cab')}, default=to_json)
+          assert s == '{"a": [1, 2, 3], "b": ["a", "b", "c"]}', s
+
+      def test_nested():
+          """works anywhere in a nested structure"""
+          s = json.dumps({'x': [{'d': date(2020, 1, 1)}]}, default=to_json)
+          assert s == '{"x": [{"d": "2020-01-01"}]}', s
+
+      def test_unknown_raises():
+          """unsupported types raise TypeError"""
+          try:
+              json.dumps({'c': 1 + 2j}, default=to_json)
+          except TypeError:
+              pass
+          else:
+              raise AssertionError('complex numbers should raise TypeError')
+    solution: |
+      import json
+      from datetime import date, datetime
+      from decimal import Decimal
+
+      def to_json(arg):
+          if isinstance(arg, (date, datetime)):
+              return arg.isoformat()
+          if isinstance(arg, Decimal):
+              return str(arg)
+          if isinstance(arg, (set, frozenset)):
+              return sorted(arg)
+          raise TypeError(f'Object of type {type(arg).__name__} is not JSON serializable')
+    hints:
+      - "`datetime` is a subclass of `date`, and both have `isoformat()`, so one check can cover both."
+      - "If none of your checks match, `raise TypeError(...)` instead of falling off the end of the function (which returns `None`)."
+
+  - id: tagged-object-hook
+    title: Decoding tagged values
+    prompt: |
+      A service encodes special values as JSON objects with a `"__type__"` key:
+
+      - `{"__type__": "fraction", "numerator": 1, "denominator": 3}` means `Fraction(1, 3)`
+      - `{"__type__": "complex", "real": 1.0, "imag": -2.0}` means `complex(1.0, -2.0)`
+      - `{"__type__": "date", "value": "2024-03-15"}` means `date(2024, 3, 15)`
+
+      Write `decode_hook(obj)` for use as `object_hook`, and `load(text)` that calls `json.loads` with it. Any other object (including ones with an unknown `__type__`) must be returned unchanged.
+    starter: |
+      import json
+      from datetime import date
+      from fractions import Fraction
+
+      def decode_hook(obj):
+          # your code here
+          return obj
+
+      def load(text):
+          return json.loads(text)
+    tests: |
+      def test_fraction():
+          """fractions are decoded"""
+          r = load('{"x": {"__type__": "fraction", "numerator": 1, "denominator": 3}}')
+          assert r == {'x': Fraction(1, 3)}, r
+
+      def test_complex():
+          """complex numbers are decoded"""
+          r = load('[{"__type__": "complex", "real": 1.0, "imag": -2.0}]')
+          assert r == [1 - 2j], r
+
+      def test_date():
+          """dates are decoded"""
+          r = load('{"d": {"__type__": "date", "value": "2024-03-15"}}')
+          assert r['d'] == date(2024, 3, 15) and type(r['d']) is date, r
+
+      def test_nested():
+          """tagged values are found at any depth"""
+          r = load('{"a": {"b": [{"c": {"__type__": "fraction", "numerator": 2, "denominator": 4}}]}}')
+          assert r == {'a': {'b': [{'c': Fraction(1, 2)}]}}, r
+
+      def test_plain_unchanged():
+          """ordinary objects and unknown tags are left alone"""
+          r = load('{"p": {"x": 1}, "q": {"__type__": "mystery", "v": 1}}')
+          assert r == {'p': {'x': 1}, 'q': {'__type__': 'mystery', 'v': 1}}, r
+    solution: |
+      import json
+      from datetime import date
+      from fractions import Fraction
+
+      def decode_hook(obj):
+          match obj.get('__type__'):
+              case 'fraction':
+                  return Fraction(obj['numerator'], obj['denominator'])
+              case 'complex':
+                  return complex(obj['real'], obj['imag'])
+              case 'date':
+                  return date.fromisoformat(obj['value'])
+              case _:
+                  return obj
+
+      def load(text):
+          return json.loads(text, object_hook=decode_hook)
+    hints:
+      - "`object_hook` is called for every JSON object, innermost first, so nesting takes care of itself."
+      - Use `obj.get('__type__')` so dictionaries without the key don't raise `KeyError`.
+      - Don't forget to pass `object_hook=decode_hook` to `json.loads`.
+
+  - id: restricted-unpickler
+    title: An allow-list for unpickling
+    prompt: |
+      Write `safe_loads(data)` that unpickles `data` (bytes) like `pickle.loads`, but only allows these globals:
+
+      - `datetime.date`, `datetime.datetime`
+      - `decimal.Decimal`
+      - `collections.OrderedDict`
+
+      Any other global must raise `pickle.UnpicklingError`. Built-in containers and scalars (lists, dicts, sets, strings, numbers) must still load normally.
+
+      Subclass `pickle.Unpickler` and override `find_class(self, module, name)`.
+    starter: |
+      import io
+      import pickle
+
+      def safe_loads(data):
+          return pickle.loads(data)
+    tests: |
+      import os
+      from collections import OrderedDict, Counter
+      from datetime import date, datetime
+      from decimal import Decimal
+
+      class Evil:
+          def __reduce__(self):
+              return (os.getcwd, ())
+
+      def test_plain_data():
+          """plain built-in data loads"""
+          obj = [1, 'two', {3: (4.0, None)}, {5, 6}]
+          assert safe_loads(pickle.dumps(obj)) == obj
+
+      def test_allowed_classes():
+          """allow-listed classes load"""
+          obj = {'d': date(2024, 1, 2), 't': datetime(2024, 1, 2, 3, 4), 'p': Decimal('9.99'),
+                 'o': OrderedDict(a=1)}
+          assert safe_loads(pickle.dumps(obj)) == obj
+
+      def test_blocks_function_call():
+          """a payload that calls os.getcwd is refused"""
+          try:
+              safe_loads(pickle.dumps(Evil()))
+          except pickle.UnpicklingError:
+              pass
+          else:
+              raise AssertionError('os.getcwd was allowed')
+
+      def test_blocks_other_classes():
+          """classes not on the list are refused"""
+          try:
+              safe_loads(pickle.dumps(Counter('abc')))
+          except pickle.UnpicklingError:
+              pass
+          else:
+              raise AssertionError('collections.Counter was allowed')
+    solution: |
+      import importlib
+      import io
+      import pickle
+
+      ALLOWED = {
+          ('datetime', 'date'),
+          ('datetime', 'datetime'),
+          ('decimal', 'Decimal'),
+          ('collections', 'OrderedDict'),
+      }
+
+      class SafeUnpickler(pickle.Unpickler):
+          def find_class(self, module, name):
+              if (module, name) in ALLOWED:
+                  return getattr(importlib.import_module(module), name)
+              raise pickle.UnpicklingError(f'global {module}.{name} is forbidden')
+
+      def safe_loads(data):
+          return SafeUnpickler(io.BytesIO(data)).load()
+    hints:
+      - "`pickle.Unpickler` reads from a binary file object; wrap the bytes in `io.BytesIO(data)` and call `.load()`."
+      - "`find_class` must return the actual object: `getattr(importlib.import_module(module), name)`."
+      - Built-in data types have their own opcodes and never reach `find_class`, so you don't need to allow them.
+
+  - id: yaml-config-loader
+    title: Load and validate a YAML config
+    prompt: |
+      Write `load_config(text)` that:
+
+      1. parses the YAML `text` **safely** (no Python object tags allowed),
+      2. validates the result against `CONFIG_SCHEMA` (given) with `jsonschema`,
+      3. returns the config dict with defaults filled in: `debug` defaults to `False` and `workers` to `1`.
+
+      If the YAML can't be parsed, or the data doesn't match the schema, raise `ValueError` (with any message).
+    starter: |
+      import yaml
+      import jsonschema
+
+      CONFIG_SCHEMA = {
+          "type": "object",
+          "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "debug": {"type": "boolean"},
+              "workers": {"type": "integer", "minimum": 1},
+              "hosts": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+          },
+          "required": ["name", "hosts"],
+          "additionalProperties": False,
+      }
+
+      def load_config(text):
+          return yaml.load(text, Loader=yaml.UnsafeLoader)
+    tests: |
+      def raises_value_error(text):
+          try:
+              load_config(text)
+          except ValueError:
+              return True
+          return False
+
+      def test_valid_with_defaults():
+          """a minimal config gets its defaults"""
+          cfg = load_config('name: api\nhosts:\n  - a.example\n  - b.example\n')
+          assert cfg == {'name': 'api', 'hosts': ['a.example', 'b.example'],
+                         'debug': False, 'workers': 1}, cfg
+
+      def test_explicit_values_kept():
+          """given values override the defaults"""
+          cfg = load_config('name: api\nhosts: [x]\ndebug: true\nworkers: 4\n')
+          assert cfg['debug'] is True and cfg['workers'] == 4, cfg
+
+      def test_schema_violation():
+          """invalid data raises ValueError"""
+          assert raises_value_error('name: api\nhosts: [x]\nworkers: 0\n'), 'workers: 0 accepted'
+          assert raises_value_error('name: api\n'), 'missing hosts accepted'
+          assert raises_value_error('name: api\nhosts: [x]\nport: 80\n'), 'unknown key accepted'
+
+      def test_bad_yaml():
+          """unparseable YAML raises ValueError"""
+          assert raises_value_error('name: [unclosed\n'), 'broken YAML accepted'
+
+      def test_no_python_tags():
+          """Python object tags are refused"""
+          assert raises_value_error('name: !!python/object/apply:os.getcwd []\nhosts: [x]\n'), \
+              'python/object/apply tag was executed'
+    solution: |
+      import yaml
+      import jsonschema
+
+      CONFIG_SCHEMA = {
+          "type": "object",
+          "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "debug": {"type": "boolean"},
+              "workers": {"type": "integer", "minimum": 1},
+              "hosts": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+          },
+          "required": ["name", "hosts"],
+          "additionalProperties": False,
+      }
+
+      DEFAULTS = {'debug': False, 'workers': 1}
+
+      def load_config(text):
+          try:
+              data = yaml.safe_load(text)
+          except yaml.YAMLError as ex:
+              raise ValueError(f'invalid YAML: {ex}') from ex
+          try:
+              jsonschema.validate(data, CONFIG_SCHEMA)
+          except jsonschema.ValidationError as ex:
+              raise ValueError(f'invalid config: {ex.message}') from ex
+          return {**DEFAULTS, **data}
+    hints:
+      - "`yaml.safe_load` refuses Python tags by raising a `yaml.YAMLError` subclass, just like it does for malformed YAML."
+      - "`jsonschema.validate(data, schema)` raises `jsonschema.ValidationError`; catch it and raise `ValueError` instead."
+      - "`{**DEFAULTS, **data}` merges the two dicts, with values from `data` winning."

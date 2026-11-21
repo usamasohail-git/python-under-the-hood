@@ -1,0 +1,615 @@
+quiz:
+  - q: What does this print?
+    code: |
+      class AppError(Exception):
+          def __init__(self, *args):
+              super().__init__(args)
+
+      e = AppError('message', 10)
+      print(e.args)
+    options:
+      - "`('message', 10)`"
+      - "`(('message', 10),)`"
+      - "`('message',)`"
+      - "`message`"
+    answer: 1
+    explain: |
+      `super().__init__(args)` passes the whole tuple as a **single** argument, so `args` becomes a one-element tuple containing a tuple. Unpack it with `super().__init__(*args)`.
+
+  - q: What does this print?
+    code: |
+      class WidgetError(Exception):
+          message = 'generic'
+          def __init__(self, *args):
+              if args:
+                  self.message = args[0]
+              super().__init__(*args)
+
+      class StockError(WidgetError):
+          message = 'out of stock'
+
+      a = StockError()
+      b = StockError('only 2 left')
+      print(a.message, '|', b.message, '|', StockError.message)
+    options:
+      - "`generic | only 2 left | generic`"
+      - "`out of stock | only 2 left | only 2 left`"
+      - "`out of stock | only 2 left | out of stock`"
+      - "`generic | generic | out of stock`"
+    answer: 2
+    explain: |
+      `a` has no instance attribute, so lookup finds the class attribute of `StockError`. For `b`, `self.message = ...` creates an **instance** attribute that shadows the class one for that object only; the class attribute is unchanged.
+
+  - q: What does this print?
+    code: |
+      from http import HTTPStatus
+      s = HTTPStatus.BAD_REQUEST
+      print(s.value, s.phrase)
+    options:
+      - "`400 Bad Request`"
+      - "`BAD_REQUEST 400`"
+      - "`400 BAD_REQUEST`"
+      - "`HTTPStatus.BAD_REQUEST Bad Request`"
+    answer: 0
+    explain: |
+      Each `HTTPStatus` member has a numeric `value`, a short `phrase` and a longer `description`. The member's *name* is `BAD_REQUEST`.
+
+  - q: What does this print?
+    code: |
+      import json
+      from http import HTTPStatus
+      print(json.dumps({'code': HTTPStatus.NOT_FOUND}))
+    options:
+      - "A `TypeError`: enums are not JSON serializable"
+      - "`{\"code\": \"NOT_FOUND\"}`"
+      - "`{\"code\": \"HTTPStatus.NOT_FOUND\"}`"
+      - "`{\"code\": 404}`"
+    answer: 3
+    explain: |
+      `HTTPStatus` is an `IntEnum`, so its members **are** integers, and `json` writes them as plain numbers. A regular `Enum` member would raise a `TypeError`.
+
+  - q: Which handler runs?
+    code: |
+      class WidgetException(Exception): pass
+      class CheckoutException(WidgetException): pass
+      class PricingException(CheckoutException): pass
+      class InvalidCouponCodeException(PricingException): pass
+
+      try:
+          raise InvalidCouponCodeException('expired')
+      except CheckoutException:
+          print('checkout handler')
+      except PricingException:
+          print('pricing handler')
+      except WidgetException:
+          print('widget handler')
+    options:
+      - "`pricing handler`"
+      - "`checkout handler`"
+      - "`widget handler`"
+      - All three, from the most specific to the least
+    answer: 1
+    explain: |
+      The exception is an instance of all three classes, and the **first** matching clause wins. Since `CheckoutException` is listed first, its handler runs; the more specific `PricingException` handler is unreachable here.
+
+  - q: What does this print?
+    code: |
+      class WidgetException(Exception):
+          message = 'Generic.'
+          def __init__(self, *args, customer_message=None):
+              if args:
+                  self.message = args[0]
+              super().__init__(*args)
+              self.customer_message = customer_message or self.message
+
+      e = WidgetException('internal detail', 'for the customer')
+      print(e.customer_message)
+    options:
+      - "`for the customer`"
+      - "`internal detail`"
+      - "`Generic.`"
+      - "A `TypeError`"
+    answer: 1
+    explain: |
+      `customer_message` is **keyword-only** (it comes after `*args`), so `'for the customer'` is just a second positional argument stored in `args`. The customer message falls back to the internal one. You'd have to write `customer_message='for the customer'`.
+
+  - q: What does this print?
+    code: |
+      import traceback
+      e = ValueError('never raised')
+      print(traceback.format_exception(e))
+    options:
+      - "`['Traceback (most recent call last):\\n', 'ValueError: never raised\\n']`"
+      - "`[]`"
+      - "`['ValueError: never raised\\n']`"
+      - "A `TypeError`: format_exception needs three arguments"
+    answer: 2
+    explain: |
+      An exception gets its traceback frames only while it propagates, so one that was never raised formats as just its `Type: message` line. (Passing only the exception, without type and traceback, is allowed since Python 3.10.)
+
+exercises:
+  - id: widget-hierarchy
+    title: The exception hierarchy
+    prompt: |
+      Write the exception classes for the widget shop. Every class must derive from the class shown above it in this tree (a class's **only** base is its parent):
+
+      ```text
+      WidgetException                 (derives from Exception)
+      ├── SupplierException
+      │   ├── NotManufacturedException
+      │   ├── ProductionDelayedException
+      │   └── ShippingDelayedException
+      └── CheckoutException
+          ├── InventoryException
+          │   └── OutOfStockException
+          └── PricingException
+              ├── InvalidCouponCodeException
+              └── CannotStackCouponException
+      ```
+
+      Every class must define its own class attribute `message`: a non-empty string describing that exception, different for every class (e.g. `'Inventory out of stock.'`).
+    starter: |
+      class WidgetException(Exception):
+          """Base exception for the Widget application."""
+          message = 'Generic Widget exception.'
+
+      class SupplierException(WidgetException):
+          message = 'Supplier exception.'
+
+      # add the remaining classes
+    tests: |
+      TREE = {
+          'WidgetException': 'Exception',
+          'SupplierException': 'WidgetException',
+          'NotManufacturedException': 'SupplierException',
+          'ProductionDelayedException': 'SupplierException',
+          'ShippingDelayedException': 'SupplierException',
+          'CheckoutException': 'WidgetException',
+          'InventoryException': 'CheckoutException',
+          'OutOfStockException': 'InventoryException',
+          'PricingException': 'CheckoutException',
+          'InvalidCouponCodeException': 'PricingException',
+          'CannotStackCouponException': 'PricingException',
+      }
+
+      import builtins
+
+      def _cls(name):
+          obj = globals().get(name, getattr(builtins, name, None))
+          assert obj is not None, f"class {name} is not defined"
+          return obj
+
+      def test_all_defined():
+          """all eleven classes exist"""
+          missing = [name for name in TREE if name not in globals()]
+          assert not missing, f"missing classes: {missing}"
+
+      def test_parents():
+          """each class derives directly from its parent"""
+          for name, parent in TREE.items():
+              cls = _cls(name)
+              assert cls.__bases__ == (_cls(parent),), f"{name} should derive only from {parent}, bases are {cls.__bases__}"
+
+      def test_all_widget_exceptions():
+          """everything is a WidgetException"""
+          for name in TREE:
+              assert issubclass(_cls(name), _cls('WidgetException')), f"{name} is not a WidgetException"
+
+      def test_own_messages():
+          """each class defines its own, distinct message"""
+          messages = []
+          for name in TREE:
+              cls = _cls(name)
+              assert 'message' in vars(cls), f"{name} does not define its own message"
+              msg = vars(cls)['message']
+              assert isinstance(msg, str) and msg, f"{name}.message should be a non-empty string"
+              messages.append(msg)
+          assert len(set(messages)) == len(messages), "every class needs a different message"
+    solution: |
+      class WidgetException(Exception):
+          """Base exception for the Widget application."""
+          message = 'Generic Widget exception.'
+
+      class SupplierException(WidgetException):
+          message = 'Supplier exception.'
+
+      class NotManufacturedException(SupplierException):
+          message = 'Widget is no longer manufactured by supplier.'
+
+      class ProductionDelayedException(SupplierException):
+          message = 'Widget production has been delayed by supplier.'
+
+      class ShippingDelayedException(SupplierException):
+          message = 'Widget shipping has been delayed by supplier.'
+
+      class CheckoutException(WidgetException):
+          message = 'Checkout exception.'
+
+      class InventoryException(CheckoutException):
+          message = 'Checkout inventory exception.'
+
+      class OutOfStockException(InventoryException):
+          message = 'Inventory out of stock.'
+
+      class PricingException(CheckoutException):
+          message = 'Checkout pricing exception.'
+
+      class InvalidCouponCodeException(PricingException):
+          message = 'Invalid checkout coupon code.'
+
+      class CannotStackCouponException(PricingException):
+          message = 'Cannot stack checkout coupon codes.'
+    hints:
+      - Each category (`SupplierException`, `CheckoutException`, `InventoryException`, `PricingException`) is a class too, with the leaves deriving from it.
+      - A class body consisting of just `message = '...'` is enough.
+
+  - id: widget-messages
+    title: Internal and customer messages
+    prompt: |
+      Give `WidgetException` an `__init__(self, *args, customer_message=None)` so that:
+
+      - with positional arguments, the first one becomes the instance's `message`, and **all** of them are kept in `args`;
+      - with no arguments, `message` stays the class default, and `args` is `(message,)` so `str(ex)` is the default message;
+      - `customer_message` (keyword-only) is stored on the instance, and defaults to `message` when not given.
+
+      This must also work for subclasses that only override the class attribute `message`.
+    starter: |
+      class WidgetException(Exception):
+          """Base exception for the Widget application."""
+          message = 'Generic Widget exception.'
+
+      class OutOfStockException(WidgetException):
+          message = 'Inventory out of stock.'
+    tests: |
+      def test_defaults():
+          """no arguments: class default for everything"""
+          ex = WidgetException()
+          assert ex.message == 'Generic Widget exception.'
+          assert str(ex) == 'Generic Widget exception.', f"str(ex) was {str(ex)!r}"
+          assert ex.args == ('Generic Widget exception.',), f"args were {ex.args}"
+          assert ex.customer_message == 'Generic Widget exception.'
+
+      def test_custom_message_and_args():
+          """first positional argument is the message, all are kept"""
+          ex = WidgetException('custom message', 10, 100)
+          assert ex.message == 'custom message'
+          assert ex.args == ('custom message', 10, 100), f"args were {ex.args}"
+          assert ex.args[1:] == (10, 100)
+          assert ex.customer_message == 'custom message'
+
+      def test_customer_message():
+          """customer_message is separate and keyword-only"""
+          ex = WidgetException('internal', customer_message='Sorry!')
+          assert ex.message == 'internal' and ex.customer_message == 'Sorry!'
+          ex = WidgetException(customer_message='Sorry!')
+          assert ex.message == 'Generic Widget exception.' and ex.customer_message == 'Sorry!'
+          ex = WidgetException('internal', 'extra')
+          assert ex.customer_message == 'internal', "a second positional argument is not the customer message"
+
+      def test_subclass_default():
+          """subclasses use their own default message"""
+          ex = OutOfStockException()
+          assert ex.message == 'Inventory out of stock.'
+          assert str(ex) == 'Inventory out of stock.'
+          assert ex.customer_message == 'Inventory out of stock.'
+
+      def test_class_attribute_untouched():
+          """a custom message doesn't change the class default"""
+          OutOfStockException('only 2 left')
+          assert OutOfStockException.message == 'Inventory out of stock.'
+          assert OutOfStockException().message == 'Inventory out of stock.'
+    solution: |
+      class WidgetException(Exception):
+          """Base exception for the Widget application."""
+          message = 'Generic Widget exception.'
+
+          def __init__(self, *args, customer_message=None):
+              if args:
+                  self.message = args[0]
+              else:
+                  args = (self.message,)
+              super().__init__(*args)
+              self.customer_message = (customer_message if customer_message is not None
+                                       else self.message)
+
+      class OutOfStockException(WidgetException):
+          message = 'Inventory out of stock.'
+    hints:
+      - "`self.message = args[0]` creates an instance attribute; reading `self.message` without assigning it finds the class attribute."
+      - "Unpack when calling the parent: `super().__init__(*args)`. If `args` is empty, use `(self.message,)` instead."
+
+  - id: widget-json
+    title: HTTP status and JSON response
+    prompt: |
+      The hierarchy and `__init__` are given. Add:
+
+      - an `http_status` class attribute: `HTTPStatus.INTERNAL_SERVER_ERROR` on `WidgetException` (inherited by everything), overridden with `HTTPStatus.BAD_REQUEST` on `InvalidCouponCodeException` and `CannotStackCouponException`;
+      - a method `to_json()` on `WidgetException` that returns a JSON **string** of an object with the keys:
+        - `code`: the status number, e.g. `400`;
+        - `message`: the status phrase, a colon and the customer message, e.g. `"Bad Request: Sorry, this coupon has expired."`;
+        - `category`: the exception's class name;
+        - `time_utc`: the current time as an ISO 8601 string with the UTC offset (use `datetime.now(timezone.utc).isoformat()`).
+    starter: |
+      import json
+      from datetime import datetime, timezone
+      from http import HTTPStatus
+
+      class WidgetException(Exception):
+          """Base exception for the Widget application."""
+          message = 'Generic Widget exception.'
+
+          def __init__(self, *args, customer_message=None):
+              if args:
+                  self.message = args[0]
+              else:
+                  args = (self.message,)
+              super().__init__(*args)
+              self.customer_message = (customer_message if customer_message is not None
+                                       else self.message)
+
+          def to_json(self):
+              pass
+
+      class SupplierException(WidgetException):
+          message = 'Supplier exception.'
+
+      class NotManufacturedException(SupplierException):
+          message = 'Widget is no longer manufactured by supplier.'
+
+      class ProductionDelayedException(SupplierException):
+          message = 'Widget production has been delayed by supplier.'
+
+      class ShippingDelayedException(SupplierException):
+          message = 'Widget shipping has been delayed by supplier.'
+
+      class CheckoutException(WidgetException):
+          message = 'Checkout exception.'
+
+      class InventoryException(CheckoutException):
+          message = 'Checkout inventory exception.'
+
+      class OutOfStockException(InventoryException):
+          message = 'Inventory out of stock.'
+
+      class PricingException(CheckoutException):
+          message = 'Checkout pricing exception.'
+
+      class InvalidCouponCodeException(PricingException):
+          message = 'Invalid checkout coupon code.'
+
+      class CannotStackCouponException(PricingException):
+          message = 'Cannot stack checkout coupon codes.'
+    tests: |
+      from datetime import datetime, timedelta
+
+      def test_statuses():
+          """500 everywhere except the two coupon exceptions"""
+          bad_request = {InvalidCouponCodeException, CannotStackCouponException}
+          for cls in (WidgetException, SupplierException, NotManufacturedException,
+                      ProductionDelayedException, ShippingDelayedException, CheckoutException,
+                      InventoryException, OutOfStockException, PricingException,
+                      InvalidCouponCodeException, CannotStackCouponException):
+              expected = 400 if cls in bad_request else 500
+              status = getattr(cls, 'http_status', None)
+              assert isinstance(status, HTTPStatus), f"{cls.__name__}.http_status should be an HTTPStatus member"
+              assert status == expected, f"{cls.__name__} should be {expected}, got {status}"
+
+      def test_json_is_string():
+          """to_json returns a JSON string"""
+          out = WidgetException().to_json()
+          assert isinstance(out, str), f"to_json returned {type(out).__name__}"
+          json.loads(out)
+
+      def test_json_content():
+          """code, message and category"""
+          ex = InvalidCouponCodeException('coupon OLD5 expired', customer_message='Sorry, this coupon has expired.')
+          data = json.loads(ex.to_json())
+          assert data['code'] == 400, f"code was {data['code']!r}"
+          assert data['message'] == 'Bad Request: Sorry, this coupon has expired.', f"message was {data['message']!r}"
+          assert data['category'] == 'InvalidCouponCodeException'
+
+      def test_json_default_customer_message():
+          """without a customer message, the default message is shown"""
+          data = json.loads(OutOfStockException().to_json())
+          assert data['code'] == 500
+          assert data['message'] == 'Internal Server Error: Inventory out of stock.', f"message was {data['message']!r}"
+          assert data['category'] == 'OutOfStockException'
+
+      def test_json_time():
+          """time_utc is a current, timezone-aware ISO timestamp"""
+          data = json.loads(WidgetException().to_json())
+          t = datetime.fromisoformat(data['time_utc'])
+          assert t.tzinfo is not None, "use a timezone-aware datetime: datetime.now(timezone.utc)"
+          assert t.utcoffset() == timedelta(0), "the time should be in UTC"
+          assert abs(datetime.now(timezone.utc) - t) < timedelta(minutes=1), "time_utc should be the current time"
+    solution: |
+      import json
+      from datetime import datetime, timezone
+      from http import HTTPStatus
+
+      class WidgetException(Exception):
+          """Base exception for the Widget application."""
+          message = 'Generic Widget exception.'
+          http_status = HTTPStatus.INTERNAL_SERVER_ERROR
+
+          def __init__(self, *args, customer_message=None):
+              if args:
+                  self.message = args[0]
+              else:
+                  args = (self.message,)
+              super().__init__(*args)
+              self.customer_message = (customer_message if customer_message is not None
+                                       else self.message)
+
+          def to_json(self):
+              response = {
+                  'code': self.http_status.value,
+                  'message': f'{self.http_status.phrase}: {self.customer_message}',
+                  'category': type(self).__name__,
+                  'time_utc': datetime.now(timezone.utc).isoformat(),
+              }
+              return json.dumps(response)
+
+      class SupplierException(WidgetException):
+          message = 'Supplier exception.'
+
+      class NotManufacturedException(SupplierException):
+          message = 'Widget is no longer manufactured by supplier.'
+
+      class ProductionDelayedException(SupplierException):
+          message = 'Widget production has been delayed by supplier.'
+
+      class ShippingDelayedException(SupplierException):
+          message = 'Widget shipping has been delayed by supplier.'
+
+      class CheckoutException(WidgetException):
+          message = 'Checkout exception.'
+
+      class InventoryException(CheckoutException):
+          message = 'Checkout inventory exception.'
+
+      class OutOfStockException(InventoryException):
+          message = 'Inventory out of stock.'
+
+      class PricingException(CheckoutException):
+          message = 'Checkout pricing exception.'
+
+      class InvalidCouponCodeException(PricingException):
+          message = 'Invalid checkout coupon code.'
+          http_status = HTTPStatus.BAD_REQUEST
+
+      class CannotStackCouponException(PricingException):
+          message = 'Cannot stack checkout coupon codes.'
+          http_status = HTTPStatus.BAD_REQUEST
+    hints:
+      - Only three classes need an `http_status` line; the rest inherit the base class's value.
+      - "`HTTPStatus` members have `.value` (e.g. `400`) and `.phrase` (e.g. `'Bad Request'`)."
+      - Build a dict and return `json.dumps(the_dict)`.
+
+  - id: widget-logging
+    title: Logging with the traceback
+    prompt: |
+      Add two members to `WidgetException`:
+
+      - a **property** `traceback_lines` returning the formatted traceback of the exception as a list of strings (exactly what `traceback.format_exception(self)` gives);
+      - a method `log_exception()` that builds a dict with the keys `type` (class name), `http_status` (the number, e.g. `500`), `message`, `args` (the positional arguments **after** the message), `time_utc` (a UTC ISO timestamp string) and `traceback` (the `traceback_lines` list), prints one line starting with `EXCEPTION` that contains the type and message, and **returns** the dict.
+    starter: |
+      import json
+      import traceback
+      from datetime import datetime, timezone
+      from http import HTTPStatus
+
+      class WidgetException(Exception):
+          """Base exception for the Widget application."""
+          message = 'Generic Widget exception.'
+          http_status = HTTPStatus.INTERNAL_SERVER_ERROR
+
+          def __init__(self, *args, customer_message=None):
+              if args:
+                  self.message = args[0]
+              else:
+                  args = (self.message,)
+              super().__init__(*args)
+              self.customer_message = (customer_message if customer_message is not None
+                                       else self.message)
+
+          def log_exception(self):
+              print(f'EXCEPTION: {self.message}')
+
+      class InvalidCouponCodeException(WidgetException):
+          message = 'Invalid checkout coupon code.'
+          http_status = HTTPStatus.BAD_REQUEST
+    tests: |
+      import io
+      from contextlib import redirect_stdout
+
+      def _log(ex):
+          buf = io.StringIO()
+          with redirect_stdout(buf):
+              record = ex.log_exception()
+          return record, buf.getvalue()
+
+      def test_record_fields():
+          """log_exception returns the record"""
+          ex = InvalidCouponCodeException('coupon OLD5 expired', 'order=17', 'user=42')
+          record, _ = _log(ex)
+          assert isinstance(record, dict), "log_exception should return a dict"
+          assert record['type'] == 'InvalidCouponCodeException'
+          assert record['http_status'] == 400, f"http_status was {record['http_status']!r}"
+          assert record['message'] == 'coupon OLD5 expired'
+          assert tuple(record['args']) == ('order=17', 'user=42'), f"args were {record['args']!r}"
+          t = datetime.fromisoformat(record['time_utc'])
+          assert t.tzinfo is not None, "time_utc should be timezone-aware"
+
+      def test_printed_line():
+          """a log line is printed"""
+          _, out = _log(WidgetException('db down'))
+          assert out.startswith('EXCEPTION'), f"printed {out!r}"
+          assert 'WidgetException' in out and 'db down' in out, f"printed {out!r}"
+
+      def test_traceback_property():
+          """traceback_lines is a property returning a list of strings"""
+          assert isinstance(vars(WidgetException).get('traceback_lines'), property), "make traceback_lines a property"
+          lines = WidgetException('never raised').traceback_lines
+          assert lines == ['WidgetException: never raised\n'], f"got {lines!r}"
+
+      def test_traceback_raised_and_chained():
+          """a raised, chained exception logs its full traceback"""
+          try:
+              try:
+                  1 / 0
+              except ZeroDivisionError:
+                  raise WidgetException('raised while handling')
+          except WidgetException as ex:
+              ex.add_note('order=99')
+              caught = ex
+          record, _ = _log(caught)
+          text = ''.join(record['traceback'])
+          assert text.startswith('Traceback (most recent call last):'), text
+          assert 'ZeroDivisionError' in text, "the chained exception should be in the traceback"
+          assert 'WidgetException: raised while handling' in text
+          assert 'order=99' in text, "notes should appear in the formatted traceback"
+          assert record['traceback'] == caught.traceback_lines
+    solution: |
+      import json
+      import traceback
+      from datetime import datetime, timezone
+      from http import HTTPStatus
+
+      class WidgetException(Exception):
+          """Base exception for the Widget application."""
+          message = 'Generic Widget exception.'
+          http_status = HTTPStatus.INTERNAL_SERVER_ERROR
+
+          def __init__(self, *args, customer_message=None):
+              if args:
+                  self.message = args[0]
+              else:
+                  args = (self.message,)
+              super().__init__(*args)
+              self.customer_message = (customer_message if customer_message is not None
+                                       else self.message)
+
+          @property
+          def traceback_lines(self):
+              return traceback.format_exception(self)
+
+          def log_exception(self):
+              record = {
+                  'type': type(self).__name__,
+                  'http_status': self.http_status.value,
+                  'message': self.message,
+                  'args': self.args[1:],
+                  'time_utc': datetime.now(timezone.utc).isoformat(),
+                  'traceback': self.traceback_lines,
+              }
+              print(f"EXCEPTION {record['time_utc']}: {record['type']}: {record['message']}")
+              return record
+
+      class InvalidCouponCodeException(WidgetException):
+          message = 'Invalid checkout coupon code.'
+          http_status = HTTPStatus.BAD_REQUEST
+    hints:
+      - Inside a method, the exception is `self`, so `traceback.format_exception(self)` formats it (Python 3.10+).
+      - "`self.args[1:]` gives the positional arguments after the message."
+      - "Decorate `traceback_lines` with `@property`, and remember to `return` the record from `log_exception`."

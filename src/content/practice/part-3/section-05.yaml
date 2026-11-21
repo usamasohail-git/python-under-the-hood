@@ -1,0 +1,416 @@
+quiz:
+  - q: What is the type of `x` after `x = {}`?
+    options:
+      - "`set`"
+      - "`dict`"
+      - "`frozenset`"
+      - "`NoneType`"
+    answer: 1
+    explain: |
+      Empty braces create an empty **dictionary**. The only way to write an empty set is `set()`, which is also how Python displays one.
+
+  - q: What does this print?
+    code: |
+      s = set('mississippi')
+      print(len(s), sorted(s))
+    options:
+      - "`11 ['i', 'm', 'p', 's']`"
+      - "`4 ['m', 'i', 's', 'p']`"
+      - "`4 ['i', 'm', 'p', 's']`"
+      - "`3 ['i', 'p', 's']`"
+    answer: 2
+    explain: |
+      `set()` iterates the string and keeps one copy of each character: `m`, `i`, `s`, `p`. `sorted` returns them alphabetically as a list.
+
+  - q: What does this print?
+    code: |
+      s1 = {1, 2, 3}
+      s2 = {3, 4}
+      print(len([*s1, *s2]), len({*s1, *s2}))
+    options:
+      - "`5 4`"
+      - "`4 4`"
+      - "`5 5`"
+      - "`4 5`"
+    answer: 0
+    explain: |
+      Unpacking into a list keeps every element, including both copies of `3`. Unpacking into a set literal discards the duplicate.
+
+  - q: Which of these raises a `TypeError`?
+    options:
+      - "`{(1, 2), (3, 4)}`"
+      - "`set({'a': 1, 'b': 2})`"
+      - "`{frozenset({1}), frozenset({2})}`"
+      - "`{[1, 2], [3, 4]}`"
+    answer: 3
+    explain: |
+      Set elements must be hashable. Tuples of ints and frozensets are; lists are not. `set(d)` is fine: it collects the dictionary's keys.
+
+  - q: What does this print?
+    code: |
+      s = {1, 2, 3}
+      s.discard(10)
+      try:
+          s.remove(10)
+      except KeyError:
+          print('KeyError', len(s))
+    options:
+      - Nothing
+      - "`KeyError 3`"
+      - "`KeyError 2`"
+      - A `KeyError` from the `discard` line
+    answer: 1
+    explain: |
+      `discard` silently ignores a missing element; `remove` raises `KeyError`. Neither call removed anything, so the set still has 3 elements.
+
+  - q: What does this print?
+    code: |
+      a = {1, 2, 3, 4}
+      b = {3, 4, 5}
+      print(sorted(a - b), sorted(b - a), sorted(a ^ b))
+    options:
+      - "`[1, 2] [5] [1, 2, 5]`"
+      - "`[1, 2] [1, 2] [3, 4]`"
+      - "`[5] [1, 2] [1, 2, 5]`"
+      - "`[1, 2] [5] [3, 4]`"
+    answer: 0
+    explain: |
+      `a - b` keeps what's only in `a`, `b - a` what's only in `b`. The symmetric difference is the union of those two: the elements in exactly one set.
+
+  - q: What does this print?
+    code: |
+      a = {1, 2}
+      b = {3, 4}
+      print(a < b, a > b, a == b, a.isdisjoint(b))
+    options:
+      - "`True False False True`"
+      - "`False True False True`"
+      - "`False False False True`"
+      - "`False False False False`"
+    answer: 2
+    explain: |
+      Comparison operators on sets test subset/superset relationships. Neither set contains the other, so `<`, `>` and `==` are all `False`: sets are only partially ordered. They share no elements, so they are disjoint.
+
+  - q: What does this print?
+    code: |
+      s1 = {1, 2, 3, 4}
+      s2 = {2, 3}
+      s3 = {3, 4}
+      a = set(s1)
+      a -= s2 - s3
+      b = set(s1)
+      b.difference_update(s2, s3)
+      print(sorted(a), sorted(b))
+    options:
+      - "`[1] [1]`"
+      - "`[1, 3, 4] [1, 3, 4]`"
+      - "`[1, 4] [1]`"
+      - "`[1, 3, 4] [1]`"
+    answer: 3
+    explain: |
+      In `a -= s2 - s3` the right-hand side is computed first: `{2, 3} - {3, 4}` is `{2}`, so only `2` is removed. `difference_update(s2, s3)` removes the elements of both sets, like `a -= s2 | s3`.
+
+  - q: What does this print?
+    code: |
+      a = {1, 2}
+      alias = a
+      a = a | {3}
+      b = {1, 2}
+      b_alias = b
+      b |= {3}
+      print(len(alias), len(b_alias))
+    options:
+      - "`3 3`"
+      - "`2 3`"
+      - "`2 2`"
+      - "`3 2`"
+    answer: 1
+    explain: |
+      `a | {3}` builds a new set and re-binds `a`, so `alias` still refers to the original two-element set. `|=` mutates the set in place, so `b_alias` sees the change.
+
+  - q: What does this print?
+    code: |
+      fs = frozenset({'a', 'b'})
+      s = {'b', 'c'}
+      print(type(fs | s).__name__, type(s | fs).__name__, s & fs == fs & s)
+    options:
+      - "`frozenset set True`"
+      - "`frozenset frozenset True`"
+      - "`set set True`"
+      - "`frozenset set False`"
+    answer: 0
+    explain: |
+      Mixed operations return the type of the **left** operand. Equality between a set and a frozenset compares elements only, so `{'b'} == frozenset({'b'})` is `True`.
+
+  - q: What does this print?
+    code: |
+      d = {'a': 1, 'b': 2, 'c': 3}
+      e = {'b': 20, 'c': 3, 'd': 4}
+      print(sorted(d.keys() & e.keys()), sorted(d.items() & e.items()))
+    options:
+      - "`['b', 'c'] [('b', 2), ('c', 3)]`"
+      - "`['b', 'c'] [('c', 3)]`"
+      - "`['a', 'd'] [('c', 3)]`"
+      - A `TypeError`, since views don't support `&`
+    answer: 1
+    explain: |
+      Keys and items views are set-like. Both dictionaries have keys `b` and `c`, but only the pair `('c', 3)` appears in both, since `b` maps to different values.
+
+  - q: What happens here?
+    code: |
+      d = {'a': 1, 'b': 2, 'c': 3}
+      for k in d:
+          d[k] = d[k] * 10
+      for k in d:
+          if d[k] > 10:
+              del d[k]
+    options:
+      - The first loop raises `RuntimeError`
+      - "Both loops run fine and `d` ends up as `{'a': 10}`"
+      - The second loop raises `RuntimeError` once it has deleted a key and moves on
+      - The second loop deletes nothing
+    answer: 2
+    explain: |
+      Changing values while iterating is fine, so the first loop works. Deleting a key changes the dictionary's size, and the loop raises `RuntimeError: dictionary changed size during iteration` when it asks for the next key. Iterate over `list(d)` instead.
+
+exercises:
+  - id: common-to-all
+    title: Common to all
+    prompt: |
+      Write `common(*iterables)` that returns a **set** of the elements that appear in **every** iterable passed to it.
+
+      - The arguments can be any iterables (lists, tuples, strings, sets, generators…), and elements may repeat inside an iterable.
+      - With no arguments, return an empty set.
+      - Don't modify the arguments.
+    starter: |
+      def common(*iterables):
+          result = set()
+          for it in iterables:
+              result = result & set(it)
+          return result
+    tests: |
+      def test_two_lists():
+          """two lists with repeats"""
+          assert common([1, 2, 2, 3], [2, 3, 3, 4]) == {2, 3}, common([1, 2, 2, 3], [2, 3, 3, 4])
+
+      def test_many_kinds():
+          """mixed iterable types"""
+          assert common('python', 'typhoon', ('t', 'h', 'x', 'o')) == {'t', 'h', 'o'}
+
+      def test_generator():
+          """works with a generator argument"""
+          assert common(range(10), (n * 2 for n in range(10))) == {0, 2, 4, 6, 8}
+
+      def test_single():
+          """a single iterable gives its distinct elements"""
+          assert common([3, 1, 3]) == {1, 3}
+
+      def test_none():
+          """no arguments gives an empty set"""
+          assert common() == set()
+
+      def test_disjoint():
+          """disjoint inputs give an empty set"""
+          assert common([1, 2], [3, 4], [1, 3]) == set()
+
+      def test_no_mutation():
+          """arguments are not modified"""
+          a, b = {1, 2, 3}, {2, 3, 4}
+          common(a, b)
+          assert a == {1, 2, 3} and b == {2, 3, 4}
+
+      def test_returns_set():
+          """returns a set"""
+          assert type(common([1], [1])) is set
+    solution: |
+      def common(*iterables):
+          if not iterables:
+              return set()
+          first, *rest = iterables
+          return set(first).intersection(*rest)
+    hints:
+      - Starting from an empty set and intersecting can only ever give an empty set. Start from the first iterable instead.
+      - "`set.intersection` accepts any number of iterables: `set(first).intersection(*rest)`."
+
+  - id: dict-diff
+    title: What changed between two dicts?
+    prompt: |
+      Write `dict_diff(old, new)` that compares two dictionaries and returns a dictionary with three **sets** of keys:
+
+      - `'added'`: keys in `new` but not in `old`;
+      - `'removed'`: keys in `old` but not in `new`;
+      - `'changed'`: keys in both whose values differ.
+
+      Values may be unhashable (lists, dicts), so compare them with `==` rather than putting `items()` into set operations.
+    starter: |
+      def dict_diff(old, new):
+          return {
+              'added': set(),
+              'removed': set(),
+              'changed': set(),
+          }
+    tests: |
+      def test_example():
+          """added, removed and changed keys"""
+          old = {'host': 'localhost', 'port': 8080, 'debug': True}
+          new = {'host': 'localhost', 'port': 9090, 'user': 'admin'}
+          r = dict_diff(old, new)
+          assert r == {'added': {'user'}, 'removed': {'debug'}, 'changed': {'port'}}, r
+
+      def test_identical():
+          """identical dicts give three empty sets"""
+          d = {'a': 1, 'b': 2}
+          assert dict_diff(d, dict(d)) == {'added': set(), 'removed': set(), 'changed': set()}
+
+      def test_unhashable_values():
+          """works with unhashable values"""
+          old = {'tags': ['a', 'b'], 'meta': {'x': 1}}
+          new = {'tags': ['a', 'b', 'c'], 'meta': {'x': 1}}
+          r = dict_diff(old, new)
+          assert r['changed'] == {'tags'}, r
+          assert r['added'] == set() and r['removed'] == set(), r
+
+      def test_empty_old():
+          """everything is added when old is empty"""
+          assert dict_diff({}, {'a': 1, 'b': 2})['added'] == {'a', 'b'}
+
+      def test_types():
+          """each entry is a set"""
+          r = dict_diff({'a': 1}, {'b': 2})
+          assert all(type(r[k]) is set for k in ('added', 'removed', 'changed')), r
+          assert r['removed'] == {'a'} and r['added'] == {'b'}
+    solution: |
+      def dict_diff(old, new):
+          shared = old.keys() & new.keys()
+          return {
+              'added': set(new.keys() - old.keys()),
+              'removed': set(old.keys() - new.keys()),
+              'changed': {k for k in shared if old[k] != new[k]},
+          }
+    hints:
+      - Keys views support set operations directly, for example `new.keys() - old.keys()`.
+      - For `'changed'`, intersect the keys views and keep the keys whose values compare unequal.
+
+  - id: filter-pages
+    title: Collect, then filter, in place
+    prompt: |
+      Write `collect(pages, ignore, target)` that adds every item of every page in `pages` (an iterable of lists) to the existing set `target`, and then removes every item in `ignore` (any iterable).
+
+      It must **mutate** `target` (the caller's set) and return `None`. Items in `ignore` that never appeared must not cause an error.
+    starter: |
+      def collect(pages, ignore, target):
+          for page in pages:
+              target = target | set(page)
+          target = target - set(ignore)
+    tests: |
+      def pages():
+          yield ['Paris', 'Beijing', 'New York', 'London']
+          yield ['Cairo', 'New York', 'Milan']
+          yield ['Paris', 'Berlin']
+
+      def test_mutates():
+          """the caller's set is updated"""
+          result = set()
+          collect(pages(), ['Paris', 'London'], result)
+          assert result == {'Beijing', 'New York', 'Cairo', 'Milan', 'Berlin'}, result
+
+      def test_keeps_existing():
+          """existing elements of target are kept"""
+          result = {'Tokyo'}
+          collect(pages(), [], result)
+          assert 'Tokyo' in result and len(result) == 8, result
+
+      def test_ignore_missing():
+          """ignoring items that never appeared is fine"""
+          result = set()
+          collect([['a', 'b']], ('z', 'a'), result)
+          assert result == {'b'}, result
+
+      def test_returns_none():
+          """returns None"""
+          assert collect([[1]], [], set()) is None
+
+      def test_same_object():
+          """target remains the same object"""
+          result = set()
+          before = id(result)
+          collect([[1, 2]], [2], result)
+          assert id(result) == before and result == {1}
+    solution: |
+      def collect(pages, ignore, target):
+          for page in pages:
+              target.update(page)
+          target.difference_update(ignore)
+    hints:
+      - "`target = target | ...` re-binds the local name and leaves the caller's set untouched. You need the in-place methods."
+      - "`update` and `difference_update` accept any iterable, so no conversion is needed."
+
+  - id: kwargs-memo
+    title: A cache that ignores keyword order
+    prompt: |
+      Write a decorator `memoize` that caches a function's results so that the **order of keyword arguments doesn't matter**: `f(a=1, b=2)` and `f(b=2, a=1)` must share one cache entry. Positional arguments keep their order (`f(1, 2)` and `f(2, 1)` are different calls).
+
+      The decorated function should also expose the number of *actual* calls to the original function as an attribute `calls` (an `int`, starting at `0`).
+    starter: |
+      def memoize(fn):
+          cache = {}
+          def inner(*args, **kwargs):
+              key = (args, tuple(kwargs.items()))
+              if key not in cache:
+                  inner.calls += 1
+                  cache[key] = fn(*args, **kwargs)
+              return cache[key]
+          inner.calls = 0
+          return inner
+    tests: |
+      def make():
+          @memoize
+          def f(*args, **kwargs):
+              return sum(args) + sum(v * len(k) for k, v in kwargs.items())
+          return f
+
+      def test_basic_cache():
+          """repeat calls hit the cache"""
+          f = make()
+          assert f(1, 2) == 3 and f(1, 2) == 3
+          assert f.calls == 1, f.calls
+
+      def test_kwarg_order():
+          """keyword order does not matter"""
+          f = make()
+          r1 = f(a=1, bb=2)
+          r2 = f(bb=2, a=1)
+          assert r1 == r2 == 5
+          assert f.calls == 1, f"expected 1 real call, got {f.calls}"
+
+      def test_positional_order():
+          """positional order still matters"""
+          f = make()
+          f(1, 2); f(2, 1)
+          assert f.calls == 2, f.calls
+
+      def test_mixed():
+          """positional and keyword arguments together"""
+          f = make()
+          f(1, x=1, yy=2); f(1, yy=2, x=1); f(2, x=1, yy=2)
+          assert f.calls == 2, f.calls
+
+      def test_different_values():
+          """different keyword values are different calls"""
+          f = make()
+          f(a=1); f(a=2)
+          assert f.calls == 2, f.calls
+    solution: |
+      def memoize(fn):
+          cache = {}
+          def inner(*args, **kwargs):
+              key = (args, frozenset(kwargs.items()))
+              if key not in cache:
+                  inner.calls += 1
+                  cache[key] = fn(*args, **kwargs)
+              return cache[key]
+          inner.calls = 0
+          return inner
+    hints:
+      - "`tuple(kwargs.items())` remembers the order the keywords were passed in. What hashable collection forgets order?"
+      - "Each keyword argument's name is unique, so `frozenset(kwargs.items())` loses nothing but the order."

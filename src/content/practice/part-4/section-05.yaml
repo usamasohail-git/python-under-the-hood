@@ -1,0 +1,763 @@
+quiz:
+  - q: Why does `Mod.__init__` store `value % modulus` instead of the value it was given?
+    options:
+      - To save memory, since residues are smaller
+      - So that every instance is normalized and `==`, `<`, `hash` and arithmetic can work directly with `value`
+      - Because `%` validates that the value is an integer
+      - Because properties can only return residues
+    answer: 1
+    explain: |
+      Normalizing in the constructor means `Mod(8, 3)` and `Mod(2, 3)` have identical state. Every other method can then compare or combine `value` directly, without reducing again.
+
+  - q: What does this print?
+    code: |
+      print(2 ** 5 % 5, pow(2, 5, 5), 2 ** (5 % 5) % 5)
+    options:
+      - "`2 2 2`"
+      - "`2 2 1`"
+      - "`1 1 1`"
+      - "`2 1 1`"
+    answer: 1
+    explain: |
+      `2**5` is 32, which is 2 mod 5, and three-argument `pow` computes the same thing efficiently. Reducing the **exponent** mod 5 turns it into `2**0`, which is 1: congruent exponents don't give congruent powers.
+
+  - q: What does this print?
+    code: |
+      print(pow(3, -1, 7), 3 * pow(3, -1, 7) % 7)
+    options:
+      - "`0.3333333333333333 1.0`"
+      - "A `ValueError`"
+      - "`5 1`"
+      - "`-3 5`"
+    answer: 2
+    explain: |
+      Since Python 3.8, `pow(base, -1, mod)` returns the **modular inverse**: the number `x` with `base * x ≡ 1 (mod mod)`. Here `3 * 5 = 15 ≡ 1 (mod 7)`. If no inverse exists, it raises `ValueError`.
+
+  - q: What does this print?
+    code: |
+      class M:
+          def __init__(self, v):
+              self.v = v
+          def __sub__(self, other):
+              return self.v - other
+          def __rsub__(self, other):
+              return self.v - other
+
+      print(10 - M(3))
+    options:
+      - "`7`"
+      - "`-7`"
+      - "`13`"
+      - "A `TypeError`"
+    answer: 1
+    explain: |
+      `10 - M(3)` calls `M(3).__rsub__(10)`: `self` is the **right** operand. This `__rsub__` computes `3 - 10`, which is `-7`. A correct reflected subtraction must swap the operands and return `other - self.v`.
+
+  - q: What does this print?
+    code: |
+      class Key:
+          def __init__(self, n):
+              self.n = n
+          def __eq__(self, other):
+              return isinstance(other, Key) and self.n == other.n
+          def __hash__(self):
+              return hash(self.n)
+          def __iadd__(self, k):
+              self.n += k
+              return self
+
+      k = Key(1)
+      s = {k}
+      k += 1
+      print(k in s, Key(1) in s)
+    options:
+      - "`True False`"
+      - "`False True`"
+      - "`True True`"
+      - "`False False`"
+    answer: 3
+    explain: |
+      The set stored `k` under the hash of 1. After the in-place change, `k` hashes like 2, so the lookup goes to the wrong slot. `Key(1)` goes to the right slot, but the object there is no longer equal to it. Mutating hashed state breaks sets and dicts.
+
+  - q: Why is it better for `Mod.__eq__` to **return `NotImplemented`** for an incompatible operand rather than raise `TypeError`?
+    options:
+      - It's faster
+      - So that `Mod(2, 3) == 'two'` is simply `False`, and code like `x in [Mod(2, 3), 'two']` doesn't crash; it also lets the other operand's `__eq__` have a say
+      - Because `__eq__` is not allowed to raise exceptions
+      - So that `Mod(2, 3) == Mod(2, 7)` returns `True`
+    answer: 1
+    explain: |
+      When both sides return `NotImplemented`, `==` falls back to an identity comparison, giving `False`. Containers, `in` checks and dictionary lookups compare objects of mixed types all the time and rely on `==` not raising.
+
+  - q: What does this print?
+    code: |
+      import operator
+
+      def apply(op, a, b, mod):
+          return op(a, b) % mod
+
+      print(apply(operator.sub, 2, 4, 5), apply(operator.mul, 3, 4, 5))
+    options:
+      - "`3 2`"
+      - "`-2 12`"
+      - "`2 2`"
+      - "`3 12`"
+    answer: 0
+    explain: |
+      `operator.sub(2, 4)` is `-2`, and `-2 % 5` is `3` (Python's `%` follows the sign of the divisor). `operator.mul(3, 4)` is `12`, and `12 % 5` is `2`. Passing operators as functions is what lets one `_op` helper serve `+`, `-` and `*`.
+
+exercises:
+  - id: mod-basics
+    title: "Goal 1: construction and representation"
+    prompt: |
+      Write the class `Mod(value, modulus)`:
+
+      - Both arguments must be integers, otherwise raise `TypeError`. The modulus must be positive, otherwise raise `ValueError`.
+      - Store the **residue** `value % modulus`, so `Mod(8, 3).value` is `2` and `Mod(-1, 5).value` is `4`.
+      - `value` and `modulus` are **read-only** properties.
+      - `repr(Mod(8, 3))` is `'Mod(2, 3)'` and `int(Mod(8, 3))` is `2`.
+    starter: |
+      class Mod:
+          def __init__(self, value, modulus):
+              # validate, then store the residue
+              self.value = value
+              self.modulus = modulus
+    tests: |
+      def test_residue():
+          """stores the residue as value"""
+          assert Mod(8, 3).value == 2, f"Mod(8, 3).value is {Mod(8, 3).value!r}"
+          assert Mod(-1, 5).value == 4, "negative values should wrap around: Mod(-1, 5).value == 4"
+          assert Mod(3, 3).value == 0
+          assert Mod(8, 3).modulus == 3
+
+      def test_validation_types():
+          """non-int value or modulus raises TypeError"""
+          for args in [(1.5, 3), ('1', 3), (1, 3.0), (1, None)]:
+              try:
+                  Mod(*args)
+              except TypeError:
+                  pass
+              else:
+                  raise AssertionError(f"Mod{args} should raise TypeError")
+
+      def test_validation_modulus():
+          """a modulus <= 0 raises ValueError"""
+          for m in (0, -3):
+              try:
+                  Mod(1, m)
+              except ValueError:
+                  pass
+              else:
+                  raise AssertionError(f"Mod(1, {m}) should raise ValueError")
+
+      def test_read_only():
+          """value and modulus are read-only properties"""
+          m = Mod(1, 3)
+          for name in ('value', 'modulus'):
+              try:
+                  setattr(m, name, 2)
+              except AttributeError:
+                  pass
+              else:
+                  raise AssertionError(f"assigning to .{name} should raise AttributeError")
+
+      def test_repr_int():
+          """repr and int()"""
+          assert repr(Mod(8, 3)) == 'Mod(2, 3)', f"repr is {repr(Mod(8, 3))!r}"
+          assert int(Mod(14, 12)) == 2
+    solution: |
+      class Mod:
+          def __init__(self, value, modulus):
+              if not isinstance(modulus, int):
+                  raise TypeError('Unsupported type for modulus')
+              if not isinstance(value, int):
+                  raise TypeError('Unsupported type for value')
+              if modulus <= 0:
+                  raise ValueError('Modulus must be positive')
+              self._modulus = modulus
+              self._value = value % modulus
+
+          @property
+          def modulus(self):
+              return self._modulus
+
+          @property
+          def value(self):
+              return self._value
+
+          def __repr__(self):
+              return f'Mod({self.value}, {self.modulus})'
+
+          def __int__(self):
+              return self.value
+    hints:
+      - "Validate first, then store `value % modulus`. Python's `%` already returns a non-negative result for a positive modulus, even for negative values."
+      - "Store the data in `_value` and `_modulus` and expose them with `@property` methods that have no setter: assigning to a property without a setter raises `AttributeError`."
+      - "`int(m)` calls `m.__int__()`, which must return an `int`."
+
+  - id: mod-equality-ordering
+    title: "Goal 2: equality, hashing and ordering"
+    prompt: |
+      The class from goal 1 is given. Add:
+
+      - **Equality** by congruence: a `Mod` equals a `Mod` with the same modulus when the residues match, and equals an `int` congruent to it (`Mod(8, 3) == 5`, and also `5 == Mod(8, 3)`). For a different modulus or any other type, `__eq__` must return `NotImplemented`, so `==` gives `False`.
+      - **Hashing**: congruent `Mod` objects with the same modulus have the same hash.
+      - **Ordering** `<`, `<=`, `>`, `>=` by residue, against a `Mod` with the same modulus or an `int` (use its residue). Use `functools.total_ordering`; incompatible operands must lead to a `TypeError`.
+    starter: |
+      from functools import total_ordering
+
+
+      @total_ordering
+      class Mod:
+          def __init__(self, value, modulus):
+              if not isinstance(modulus, int):
+                  raise TypeError('Unsupported type for modulus')
+              if not isinstance(value, int):
+                  raise TypeError('Unsupported type for value')
+              if modulus <= 0:
+                  raise ValueError('Modulus must be positive')
+              self._modulus = modulus
+              self._value = value % modulus
+
+          @property
+          def modulus(self):
+              return self._modulus
+
+          @property
+          def value(self):
+              return self._value
+
+          def __repr__(self):
+              return f'Mod({self.value}, {self.modulus})'
+
+          def __int__(self):
+              return self.value
+
+          # your code here: equality, hashing and __lt__
+    tests: |
+      def test_congruence():
+          """Mods with the same modulus are equal when congruent"""
+          assert Mod(8, 3) == Mod(2, 3)
+          assert Mod(8, 3) != Mod(1, 3)
+
+      def test_equal_to_int():
+          """a Mod equals a congruent int, on either side"""
+          assert Mod(8, 3) == 5, "Mod(8, 3) == 5 should be True"
+          assert 5 == Mod(8, 3), "5 == Mod(8, 3) should be True"
+          assert Mod(8, 3) != 4
+
+      def test_incompatible_eq():
+          """different modulus or other types: NotImplemented, so == is False"""
+          assert Mod(2, 3).__eq__(Mod(2, 7)) is NotImplemented, "__eq__ should return NotImplemented for a different modulus"
+          assert Mod(2, 3).__eq__('2') is NotImplemented, "__eq__ should return NotImplemented for a str"
+          assert (Mod(2, 3) == Mod(2, 7)) is False
+          assert (Mod(2, 3) == 'two') is False
+
+      def test_hash():
+          """hashable, and congruent Mods have equal hashes"""
+          assert hash(Mod(2, 3)) == hash(Mod(5, 3))
+          assert len({Mod(2, 3), Mod(5, 3), Mod(2, 7)}) == 2
+
+      def test_ordering():
+          """<, <=, >, >= compare residues"""
+          assert Mod(1, 5) < Mod(3, 5)
+          assert Mod(4, 5) >= 9, "9 has residue 4, so Mod(4, 5) >= 9"
+          assert Mod(4, 5) > 3 and Mod(3, 5) <= 3 and not (Mod(4, 5) < 4)
+          assert 3 > Mod(1, 5)
+          assert sorted([Mod(4, 5), Mod(0, 5), Mod(7, 5)]) == [Mod(0, 5), Mod(2, 5), Mod(4, 5)]
+
+      def test_ordering_incompatible():
+          """ordering with a different modulus raises TypeError"""
+          try:
+              Mod(1, 5) < Mod(1, 7)
+          except TypeError:
+              pass
+          else:
+              raise AssertionError("Mod(1, 5) < Mod(1, 7) should raise TypeError")
+    solution: |
+      from functools import total_ordering
+
+
+      @total_ordering
+      class Mod:
+          def __init__(self, value, modulus):
+              if not isinstance(modulus, int):
+                  raise TypeError('Unsupported type for modulus')
+              if not isinstance(value, int):
+                  raise TypeError('Unsupported type for value')
+              if modulus <= 0:
+                  raise ValueError('Modulus must be positive')
+              self._modulus = modulus
+              self._value = value % modulus
+
+          @property
+          def modulus(self):
+              return self._modulus
+
+          @property
+          def value(self):
+              return self._value
+
+          def __repr__(self):
+              return f'Mod({self.value}, {self.modulus})'
+
+          def __int__(self):
+              return self.value
+
+          def _residue(self, other):
+              if isinstance(other, Mod):
+                  return other.value if other.modulus == self.modulus else None
+              if isinstance(other, int):
+                  return other % self.modulus
+              return None
+
+          def __eq__(self, other):
+              r = self._residue(other)
+              return NotImplemented if r is None else self.value == r
+
+          def __hash__(self):
+              return hash((self.value, self.modulus))
+
+          def __lt__(self, other):
+              r = self._residue(other)
+              return NotImplemented if r is None else self.value < r
+    hints:
+      - "Write a helper `_residue(other)` that returns the residue of an `int`, the `value` of a `Mod` with the same modulus, or `None` when `other` is incompatible. Every comparison method then starts the same way."
+      - "Return `NotImplemented` (don't raise) for incompatible operands: then `5 == Mod(8, 3)` is reflected to your `__eq__`, and `Mod(2, 3) == 'two'` quietly gives `False`."
+      - "Defining `__eq__` removes the inherited hash. Hash the same data that `__eq__` uses: `hash((self.value, self.modulus))`. Then decorate the class with `@total_ordering` and write only `__lt__`."
+
+  - id: mod-arithmetic
+    title: "Goal 3: arithmetic and reflected operators"
+    prompt: |
+      Goals 1 and 2 are given. Add arithmetic that returns **new** `Mod` objects:
+
+      - `+`, `-` and `*` with a `Mod` of the same modulus or with an `int`, with the `int` on **either side**: `Mod(2, 5) + 4`, `3 + Mod(2, 5)` and `3 - Mod(1, 5)` (which is `Mod(2, 5)`) all work.
+      - `**` with an `int` exponent, including negative ones: `Mod(3, 7) ** -1` is `Mod(5, 7)` (the modular inverse). A non-`int` exponent is unsupported.
+      - unary `-`: `-Mod(2, 5)` is `Mod(3, 5)`.
+      - A different modulus or an unsupported type must raise `TypeError`, so return `NotImplemented` from your methods in those cases.
+    starter: |
+      import operator
+      from functools import total_ordering
+
+
+      @total_ordering
+      class Mod:
+          def __init__(self, value, modulus):
+              if not isinstance(modulus, int):
+                  raise TypeError('Unsupported type for modulus')
+              if not isinstance(value, int):
+                  raise TypeError('Unsupported type for value')
+              if modulus <= 0:
+                  raise ValueError('Modulus must be positive')
+              self._modulus = modulus
+              self._value = value % modulus
+
+          @property
+          def modulus(self):
+              return self._modulus
+
+          @property
+          def value(self):
+              return self._value
+
+          def __repr__(self):
+              return f'Mod({self.value}, {self.modulus})'
+
+          def __int__(self):
+              return self.value
+
+          def _residue(self, other):
+              if isinstance(other, Mod):
+                  return other.value if other.modulus == self.modulus else None
+              if isinstance(other, int):
+                  return other % self.modulus
+              return None
+
+          def __eq__(self, other):
+              r = self._residue(other)
+              return NotImplemented if r is None else self.value == r
+
+          def __hash__(self):
+              return hash((self.value, self.modulus))
+
+          def __lt__(self, other):
+              r = self._residue(other)
+              return NotImplemented if r is None else self.value < r
+
+          # your code here: +, -, *, ** (and the reflected versions), unary -
+    tests: |
+      def expect_type_error(fn, label):
+          try:
+              fn()
+          except TypeError:
+              return
+          raise AssertionError(f"{label} should raise TypeError")
+
+      def test_with_mods():
+          """+, -, * with a Mod of the same modulus"""
+          a, b = Mod(2, 5), Mod(4, 5)
+          assert a + b == Mod(1, 5), f"got {a + b!r}"
+          assert a - b == Mod(3, 5), f"got {a - b!r}"
+          assert a * b == Mod(3, 5), f"got {a * b!r}"
+          assert isinstance(a + b, Mod) and (a + b).modulus == 5
+
+      def test_with_ints_on_the_right():
+          """+, -, * with an int on the right"""
+          assert Mod(2, 5) + 4 == Mod(1, 5)
+          assert Mod(2, 5) - 3 == Mod(4, 5)
+          assert Mod(3, 5) * 4 == Mod(2, 5)
+
+      def test_reflected():
+          """ints on the left work too, and 3 - Mod(1, 5) is 3 - 1"""
+          assert 3 + Mod(2, 5) == Mod(0, 5), "3 + Mod(2, 5) failed: implement __radd__"
+          assert 2 * Mod(3, 5) == Mod(1, 5), "2 * Mod(3, 5) failed: implement __rmul__"
+          r = 3 - Mod(1, 5)
+          assert isinstance(r, Mod) and r == Mod(2, 5), f"3 - Mod(1, 5) gave {r!r}, expected Mod(2, 5)"
+
+      def test_power():
+          """** with an int exponent, including negative (modular inverse)"""
+          assert Mod(2, 5) ** 5 == Mod(2, 5), "2**5 = 32, which is 2 mod 5 (don't reduce the exponent!)"
+          assert Mod(3, 7) ** 0 == Mod(1, 7)
+          assert Mod(3, 7) ** -1 == Mod(5, 7), "use pow(base, exp, mod): pow(3, -1, 7) is 5"
+
+      def test_negation():
+          """unary minus"""
+          assert -Mod(2, 5) == Mod(3, 5)
+
+      def test_incompatible():
+          """different modulus or unsupported types raise TypeError"""
+          expect_type_error(lambda: Mod(1, 5) + Mod(1, 7), "Mod(1, 5) + Mod(1, 7)")
+          expect_type_error(lambda: Mod(1, 5) * 1.5, "Mod(1, 5) * 1.5")
+          expect_type_error(lambda: 'a' - Mod(1, 5), "'a' - Mod(1, 5)")
+          expect_type_error(lambda: Mod(2, 5) ** Mod(1, 5), "Mod(2, 5) ** Mod(1, 5)")
+          assert Mod(1, 5).__add__(1.5) is NotImplemented, "__add__ should return NotImplemented for a float"
+
+      def test_new_objects():
+          """operators return new objects and leave the operands unchanged"""
+          a = Mod(2, 5)
+          b = a + 1
+          assert b is not a and a == Mod(2, 5)
+    solution: |
+      import operator
+      from functools import total_ordering
+
+
+      @total_ordering
+      class Mod:
+          def __init__(self, value, modulus):
+              if not isinstance(modulus, int):
+                  raise TypeError('Unsupported type for modulus')
+              if not isinstance(value, int):
+                  raise TypeError('Unsupported type for value')
+              if modulus <= 0:
+                  raise ValueError('Modulus must be positive')
+              self._modulus = modulus
+              self._value = value % modulus
+
+          @property
+          def modulus(self):
+              return self._modulus
+
+          @property
+          def value(self):
+              return self._value
+
+          def __repr__(self):
+              return f'Mod({self.value}, {self.modulus})'
+
+          def __int__(self):
+              return self.value
+
+          def _residue(self, other):
+              if isinstance(other, Mod):
+                  return other.value if other.modulus == self.modulus else None
+              if isinstance(other, int):
+                  return other % self.modulus
+              return None
+
+          def __eq__(self, other):
+              r = self._residue(other)
+              return NotImplemented if r is None else self.value == r
+
+          def __hash__(self):
+              return hash((self.value, self.modulus))
+
+          def __lt__(self, other):
+              r = self._residue(other)
+              return NotImplemented if r is None else self.value < r
+
+          def _op(self, other, op, *, reflected=False):
+              r = self._residue(other)
+              if r is None:
+                  return NotImplemented
+              a, b = (r, self.value) if reflected else (self.value, r)
+              return Mod(op(a, b), self.modulus)
+
+          def __add__(self, other):
+              return self._op(other, operator.add)
+
+          def __radd__(self, other):
+              return self._op(other, operator.add, reflected=True)
+
+          def __sub__(self, other):
+              return self._op(other, operator.sub)
+
+          def __rsub__(self, other):
+              return self._op(other, operator.sub, reflected=True)
+
+          def __mul__(self, other):
+              return self._op(other, operator.mul)
+
+          def __rmul__(self, other):
+              return self._op(other, operator.mul, reflected=True)
+
+          def __pow__(self, exp):
+              if not isinstance(exp, int):
+                  return NotImplemented
+              return Mod(pow(self.value, exp, self.modulus), self.modulus)
+
+          def __neg__(self):
+              return Mod(-self.value, self.modulus)
+    hints:
+      - "A generic `_op(self, other, op, *, reflected=False)` using `operator.add`, `operator.sub` and `operator.mul` avoids writing the same checks six times. Return `Mod(op(a, b), self.modulus)` and let the constructor reduce the result."
+      - "For the reflected methods the `int` is the **left** operand: `3 - Mod(1, 5)` calls `Mod(1, 5).__rsub__(3)` and must compute `3 - 1`, not `1 - 3`."
+      - "For powers use the built-in `pow(self.value, exp, self.modulus)`: it's fast, and since Python 3.8 a negative exponent gives the modular inverse. Never reduce the exponent modulo the modulus."
+
+  - id: mod-inplace
+    title: "Goal 4: in-place operators"
+    prompt: |
+      Goals 1–3 are given. Add `+=`, `-=`, `*=` and `**=` so that they **modify the object in place** (its identity stays the same, and other names referring to it see the change). The operands allowed are the same as for the regular operators, the stored value must remain the residue, and incompatible operands must raise `TypeError` without changing the object.
+    starter: |
+      import operator
+      from functools import total_ordering
+
+
+      @total_ordering
+      class Mod:
+          def __init__(self, value, modulus):
+              if not isinstance(modulus, int):
+                  raise TypeError('Unsupported type for modulus')
+              if not isinstance(value, int):
+                  raise TypeError('Unsupported type for value')
+              if modulus <= 0:
+                  raise ValueError('Modulus must be positive')
+              self._modulus = modulus
+              self._value = value % modulus
+
+          @property
+          def modulus(self):
+              return self._modulus
+
+          @property
+          def value(self):
+              return self._value
+
+          def __repr__(self):
+              return f'Mod({self.value}, {self.modulus})'
+
+          def __int__(self):
+              return self.value
+
+          def _residue(self, other):
+              if isinstance(other, Mod):
+                  return other.value if other.modulus == self.modulus else None
+              if isinstance(other, int):
+                  return other % self.modulus
+              return None
+
+          def __eq__(self, other):
+              r = self._residue(other)
+              return NotImplemented if r is None else self.value == r
+
+          def __hash__(self):
+              return hash((self.value, self.modulus))
+
+          def __lt__(self, other):
+              r = self._residue(other)
+              return NotImplemented if r is None else self.value < r
+
+          def _op(self, other, op, *, reflected=False):
+              r = self._residue(other)
+              if r is None:
+                  return NotImplemented
+              a, b = (r, self.value) if reflected else (self.value, r)
+              return Mod(op(a, b), self.modulus)
+
+          def __add__(self, other):
+              return self._op(other, operator.add)
+
+          def __radd__(self, other):
+              return self._op(other, operator.add, reflected=True)
+
+          def __sub__(self, other):
+              return self._op(other, operator.sub)
+
+          def __rsub__(self, other):
+              return self._op(other, operator.sub, reflected=True)
+
+          def __mul__(self, other):
+              return self._op(other, operator.mul)
+
+          def __rmul__(self, other):
+              return self._op(other, operator.mul, reflected=True)
+
+          def __pow__(self, exp):
+              if not isinstance(exp, int):
+                  return NotImplemented
+              return Mod(pow(self.value, exp, self.modulus), self.modulus)
+
+          def __neg__(self):
+              return Mod(-self.value, self.modulus)
+
+          # your code here: +=, -=, *=, **=
+    tests: |
+      def test_iadd_mutates():
+          """+= changes the object itself"""
+          m = Mod(1, 5)
+          alias = m
+          m += 7
+          assert m is alias, "+= should modify the object in place, not create a new one"
+          assert m == Mod(3, 5), f"got {m!r}"
+
+      def test_all_inplace_ops():
+          """-=, *=, **= work in place with Mods and ints"""
+          m = Mod(4, 7)
+          before = id(m)
+          m -= Mod(1, 7)
+          assert m == 3
+          m *= 3
+          assert m == 2
+          m **= 3
+          assert m == 1
+          m += Mod(2, 7)
+          assert m == 3
+          assert id(m) == before, "one of the in-place operators created a new object"
+
+      def test_value_stays_residue():
+          """the stored value stays in range(modulus)"""
+          m = Mod(4, 5)
+          m += 100
+          assert m.value == 4, f"value is {m.value}"
+          m -= 10
+          assert m.value == 4, f"value is {m.value}"
+
+      def test_inplace_incompatible():
+          """incompatible operands raise TypeError and leave the object unchanged"""
+          m = Mod(2, 5)
+          for op in ('m += 1.5', 'm *= Mod(1, 7)', 'm **= Mod(1, 5)'):
+              try:
+                  exec(op, {'m': m, 'Mod': Mod})
+              except TypeError:
+                  pass
+              else:
+                  raise AssertionError(f"{op} should raise TypeError")
+          assert m == Mod(2, 5), f"m changed to {m!r}"
+
+      def test_inplace_returns_self():
+          """the in-place methods return the object itself"""
+          m = Mod(1, 3)
+          assert m.__iadd__(1) is m
+          assert m.__iadd__('x') is NotImplemented, "__iadd__ should return NotImplemented for a str"
+    solution: |
+      import operator
+      from functools import total_ordering
+
+
+      @total_ordering
+      class Mod:
+          def __init__(self, value, modulus):
+              if not isinstance(modulus, int):
+                  raise TypeError('Unsupported type for modulus')
+              if not isinstance(value, int):
+                  raise TypeError('Unsupported type for value')
+              if modulus <= 0:
+                  raise ValueError('Modulus must be positive')
+              self._modulus = modulus
+              self._value = value % modulus
+
+          @property
+          def modulus(self):
+              return self._modulus
+
+          @property
+          def value(self):
+              return self._value
+
+          def __repr__(self):
+              return f'Mod({self.value}, {self.modulus})'
+
+          def __int__(self):
+              return self.value
+
+          def _residue(self, other):
+              if isinstance(other, Mod):
+                  return other.value if other.modulus == self.modulus else None
+              if isinstance(other, int):
+                  return other % self.modulus
+              return None
+
+          def __eq__(self, other):
+              r = self._residue(other)
+              return NotImplemented if r is None else self.value == r
+
+          def __hash__(self):
+              return hash((self.value, self.modulus))
+
+          def __lt__(self, other):
+              r = self._residue(other)
+              return NotImplemented if r is None else self.value < r
+
+          def _op(self, other, op, *, reflected=False):
+              r = self._residue(other)
+              if r is None:
+                  return NotImplemented
+              a, b = (r, self.value) if reflected else (self.value, r)
+              return Mod(op(a, b), self.modulus)
+
+          def __add__(self, other):
+              return self._op(other, operator.add)
+
+          def __radd__(self, other):
+              return self._op(other, operator.add, reflected=True)
+
+          def __sub__(self, other):
+              return self._op(other, operator.sub)
+
+          def __rsub__(self, other):
+              return self._op(other, operator.sub, reflected=True)
+
+          def __mul__(self, other):
+              return self._op(other, operator.mul)
+
+          def __rmul__(self, other):
+              return self._op(other, operator.mul, reflected=True)
+
+          def __pow__(self, exp):
+              if not isinstance(exp, int):
+                  return NotImplemented
+              return Mod(pow(self.value, exp, self.modulus), self.modulus)
+
+          def __neg__(self):
+              return Mod(-self.value, self.modulus)
+
+          def _iop(self, result):
+              if result is NotImplemented:
+                  return NotImplemented
+              self._value = result.value
+              return self
+
+          def __iadd__(self, other):
+              return self._iop(self.__add__(other))
+
+          def __isub__(self, other):
+              return self._iop(self.__sub__(other))
+
+          def __imul__(self, other):
+              return self._iop(self.__mul__(other))
+
+          def __ipow__(self, exp):
+              return self._iop(self.__pow__(exp))
+    hints:
+      - "`__iadd__` must change `self` and then `return self`: Python rebinds the name on the left of `+=` to whatever the method returns."
+      - "Reuse your regular operators: `result = self.__add__(other)` is either a new `Mod` (copy its `value` into `self._value`) or `NotImplemented` (return it unchanged, and Python raises the `TypeError` for you)."
+      - "Call the method (`self.__add__(other)`) rather than writing `self + other`: the expression would raise inside `__iadd__` instead of returning `NotImplemented`."

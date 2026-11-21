@@ -1,0 +1,693 @@
+quiz:
+  - q: What does this print?
+    code: |
+      class Shape: pass
+      class Polygon(Shape): pass
+      class Rectangle(Polygon): pass
+      class Square(Rectangle): pass
+
+      sq = Square()
+      print(isinstance(sq, Polygon), type(sq) is Rectangle)
+    options:
+      - "`True True`"
+      - "`True False`"
+      - "`False False`"
+      - "`False True`"
+    answer: 1
+    explain: |
+      `isinstance` accepts the class **or any subclass**, and `Square` inherits from `Polygon` indirectly. `type(sq)` is exactly `Square`, so comparing it with `Rectangle` using `is` gives `False`.
+
+  - q: What happens when you call `issubclass(obj, Shape)` where `obj = Shape()`?
+    options:
+      - It returns `True`
+      - It returns `False`
+      - It raises `TypeError`, because the first argument must be a class
+      - It checks `type(obj)` instead, so it returns `True`
+    answer: 2
+    explain: |
+      `issubclass` describes a relationship between **classes**. Passing an instance raises `TypeError: issubclass() arg 1 must be a class`. For instances, use `isinstance`.
+
+  - q: Which statement about the built-in `object` is **false**?
+    options:
+      - It is a class, and `type(object)` is `type`
+      - Every class, including `int` and your own classes, is a subclass of it
+      - Its default `__eq__` compares objects by identity
+      - Instances of `object()` have a `__dict__`, so you can set attributes on them
+    answer: 3
+    explain: |
+      A bare `object()` has no instance dictionary, so `object().x = 1` raises `AttributeError`. Instances of classes you define with `class` get a `__dict__` by default (unless they use `__slots__`).
+
+  - q: What does this print?
+    code: |
+      class Person:
+          def __repr__(self):
+              return 'Person()'
+
+      print(str(Person()))
+    options:
+      - "`Person()`"
+      - "`<__main__.Person object at 0x...>`"
+      - An empty string
+      - "`AttributeError`"
+    answer: 0
+    explain: |
+      `Person` has no `__str__`, so `object.__str__` runs. It calls `repr()` on the same object, which finds `Person.__repr__`.
+
+  - q: What does this print?
+    code: |
+      class Shape:
+          def info(self):
+              return 'shape'
+          def describe(self):
+              return f'I am a {self.info()}'
+
+      class Circle(Shape):
+          def info(self):
+              return 'circle'
+
+      print(Circle().describe())
+    options:
+      - "`I am a shape`"
+      - "`I am a circle`"
+      - "`AttributeError`"
+      - "`I am a shape circle`"
+    answer: 1
+    explain: |
+      `describe` is defined in `Shape`, but `self` is a `Circle`. The lookup of `self.info` starts at `type(self)`, so it finds the override `Circle.info`.
+
+  - q: What does this print?
+    code: |
+      class Account:
+          apr = 3.0
+          def rate(self):
+              return Account.apr
+
+      class Savings(Account):
+          apr = 5.0
+
+      s = Savings()
+      s.apr = 10.0
+      print(s.rate(), s.apr, type(s).apr)
+    options:
+      - "`10.0 10.0 5.0`"
+      - "`5.0 10.0 5.0`"
+      - "`3.0 10.0 5.0`"
+      - "`3.0 10.0 3.0`"
+    answer: 2
+    explain: |
+      `rate` hard-codes `Account.apr`, so it always returns `3.0`, ignoring the subclass. `s.apr` finds the **instance** attribute first, and `type(s).apr` reads the class attribute of `Savings`. Use `self.apr` or `type(self).apr` in methods, never the class name.
+
+  - q: What does this print?
+    code: |
+      class Person:
+          def __init__(self, name):
+              self.name = name
+
+      class Student(Person):
+          def __init__(self, name, number):
+              self.number = number
+
+      s = Student('Alex', 42)
+      print(hasattr(s, 'name'), hasattr(s, 'number'))
+    options:
+      - "`True True`"
+      - "`False True`"
+      - "`True False`"
+      - A `TypeError` is raised
+    answer: 1
+    explain: |
+      Once a subclass defines its own `__init__`, Python no longer calls the parent's automatically. Without `super().__init__(name)`, the `name` attribute is never set.
+
+  - q: What does this print?
+    code: |
+      class A:
+          def go(self):
+              return 'A'
+
+      class B(A):
+          pass
+
+      class C(B):
+          def go(self):
+              return 'C' + super().go()
+
+      print(C().go())
+    options:
+      - "`C`"
+      - "`CB`"
+      - "`CA`"
+      - "`AttributeError`, because `B` has no `go`"
+    answer: 2
+    explain: |
+      `super()` in `C` searches the MRO after `C`: `B`, then `A`, then `object`. `B` doesn't define `go`, so the search continues to `A`.
+
+  - q: What does this print?
+    code: |
+      class Person:
+          def greet(self):
+              return 'Hi from ' + self.name()
+          def name(self):
+              return 'Person'
+
+      class Student(Person):
+          def greet(self):
+              return super().greet() + '!'
+          def name(self):
+              return 'Student'
+
+      print(Student().greet())
+    options:
+      - "`Hi from Person!`"
+      - "`Hi from Student!`"
+      - "`Hi from Person`"
+      - "`Hi from Student`"
+    answer: 1
+    explain: |
+      `super().greet()` runs `Person.greet`, but bound to the same `Student` instance. Inside it, `self.name()` is looked up from `Student` again, so it returns `'Student'`. Then `Student.greet` adds the `!`.
+
+  - q: What does this print?
+    code: |
+      class Person:
+          __slots__ = ('name',)
+          def __init__(self, name):
+              self.name = name
+
+      class Student(Person):
+          pass
+
+      s = Student('Alex')
+      s.age = 20
+      print(s.__dict__)
+    options:
+      - "`{'age': 20}`"
+      - "`{'name': 'Alex', 'age': 20}`"
+      - "`AttributeError`: Student has no `__dict__`"
+      - "`{}`"
+    answer: 0
+    explain: |
+      `Student` doesn't declare `__slots__`, so its instances get a `__dict__`. `name` is still stored in the slot inherited from `Person`, so only `age` ends up in the dictionary.
+
+  - q: Which of these is **not** a consequence of declaring `__slots__ = ('x', 'y')` in a class (with no slot-less parents)?
+    options:
+      - Instances can't be given an attribute `z`
+      - Instances can't be targets of `weakref.ref()`
+      - The class can't also define a class attribute named `x`
+      - New class attributes can no longer be added to the class itself
+    answer: 3
+    explain: |
+      Slots only affect **instances**. The class keeps its normal namespace, so `Cls.something = 1` still works. The other three are real trade-offs; weak references come back if you add `'__weakref__'` to the slots.
+
+  - q: What does this print?
+    code: |
+      class Point:
+          def __init__(self, x):
+              self.x = x
+          def __eq__(self, other):
+              return self.x == other.x
+
+      try:
+          print(len({Point(1), Point(1)}))
+      except TypeError as ex:
+          print('TypeError')
+    options:
+      - "`1`"
+      - "`2`"
+      - "`TypeError`"
+      - "`0`"
+    answer: 2
+    explain: |
+      Overriding `__eq__` without `__hash__` sets `Point.__hash__ = None`, so instances are unhashable and can't go in a set. Define `__hash__` too (e.g. `hash(self.x)`) if equal points should be usable as keys.
+
+exercises:
+  - id: shape-hierarchy
+    title: A small shape hierarchy
+    prompt: |
+      Build three classes:
+
+      - `Shape`, the base class:
+        - a read-only property `name` that returns the **lower-case name of the instance's class** (so it's `'square'` for a `Square`, without any subclass having to set it),
+        - a method `area()` that raises `NotImplementedError`,
+        - a method `describe()` that returns `f'{name} with area {area}'`, using the object's `name` and `area()`.
+      - `Rectangle(Shape)`, created with `Rectangle(width, height)`, storing `width` and `height` and implementing `area()`.
+      - `Square(Rectangle)`, created with `Square(side)`. It must **delegate** to `Rectangle.__init__` with `super()`, and it must **not** define its own `area` or `describe`: those are inherited. Add a read-only property `side`.
+
+      For example, `Square(3).describe()` returns `'square with area 9'`.
+    starter: |
+      class Shape:
+          @property
+          def name(self):
+              pass
+
+          def area(self):
+              pass
+
+          def describe(self):
+              pass
+
+
+      class Rectangle(Shape):
+          def __init__(self, width, height):
+              pass
+
+
+      class Square(Rectangle):
+          def __init__(self, side):
+              pass
+    tests: |
+      def test_rectangle():
+          """Rectangle stores its sides and computes its area"""
+          r = Rectangle(2, 5)
+          assert (r.width, r.height) == (2, 5)
+          assert r.area() == 10, f"got {r.area()!r}"
+
+      def test_names():
+          """name is the lower-case class name"""
+          assert Rectangle(1, 2).name == 'rectangle'
+          assert Square(1).name == 'square', f"got {Square(1).name!r}"
+
+      def test_describe():
+          """describe() combines name and area"""
+          assert Rectangle(2, 5).describe() == 'rectangle with area 10', Rectangle(2, 5).describe()
+          assert Square(3).describe() == 'square with area 9', Square(3).describe()
+
+      def test_square_is_rectangle():
+          """a Square is a Rectangle and a Shape, with equal sides"""
+          sq = Square(4)
+          assert isinstance(sq, Rectangle) and isinstance(sq, Shape)
+          assert sq.width == sq.height == sq.side == 4
+
+      def test_square_inherits():
+          """Square inherits area() and describe() rather than redefining them"""
+          assert 'area' not in Square.__dict__, "Square should not define area()"
+          assert 'describe' not in Square.__dict__, "Square should not define describe()"
+          assert 'name' not in Square.__dict__ and 'name' not in Rectangle.__dict__, "name belongs in Shape only"
+
+      def test_base_area():
+          """Shape().area() raises NotImplementedError"""
+          try:
+              Shape().area()
+          except NotImplementedError:
+              return
+          assert False, "expected NotImplementedError"
+
+      def test_side_read_only():
+          """side is read-only"""
+          sq = Square(2)
+          try:
+              sq.side = 5
+          except AttributeError:
+              return
+          assert False, "setting side should raise AttributeError"
+
+      def test_new_subclass():
+          """a new subclass gets the right name automatically"""
+          class Tile(Square):
+              pass
+          assert Tile(2).describe() == 'tile with area 4', Tile(2).describe()
+    solution: |
+      class Shape:
+          @property
+          def name(self):
+              return type(self).__name__.lower()
+
+          def area(self):
+              raise NotImplementedError(f'{type(self).__name__} must implement area()')
+
+          def describe(self):
+              return f'{self.name} with area {self.area()}'
+
+
+      class Rectangle(Shape):
+          def __init__(self, width, height):
+              self.width = width
+              self.height = height
+
+          def area(self):
+              return self.width * self.height
+
+
+      class Square(Rectangle):
+          def __init__(self, side):
+              super().__init__(side, side)
+
+          @property
+          def side(self):
+              return self.width
+    hints:
+      - "`type(self).__name__` is the name of the instance's actual class, even when the code runs in `Shape`."
+      - "`describe` can call `self.area()`: the lookup starts at the instance's class, so it finds `Rectangle.area` for squares too."
+      - In `Square.__init__`, call `super().__init__(side, side)`.
+
+  - id: fix-accounts
+    title: Accounts that respect subclasses
+    prompt: |
+      The `Account` class below works on its own but breaks as soon as it's subclassed. Fix it, then write `Savings`.
+
+      `Account`:
+
+      - has a class attribute `apr` (percent per year) of `3.0`,
+      - `interest()` must return `balance * apr / 100` using the `apr` of the **instance's class**, so subclasses that override `apr` are respected, but an instance attribute called `apr` is **ignored**,
+      - `describe()` must start with the name of the instance's actual class, e.g. `'Savings #7: balance=100'`.
+
+      `Savings(Account)`:
+
+      - overrides `apr` with `5.0`,
+      - is created with `Savings(number, balance, owner)` and must delegate the first two arguments to `Account.__init__` with `super()`, then store `owner`,
+      - overrides `describe()` by **extending** the parent's result with `', owner=<owner>'`, using `super()`.
+    starter: |
+      class Account:
+          apr = 3.0
+
+          def __init__(self, number, balance):
+              self.number = number
+              self.balance = balance
+
+          def interest(self):
+              return self.balance * Account.apr / 100
+
+          def describe(self):
+              return f'Account #{self.number}: balance={self.balance}'
+
+
+      class Savings(Account):
+          pass
+    tests: |
+      def test_account():
+          """a plain Account still works"""
+          a = Account(1, 200)
+          assert a.interest() == 6.0, f"got {a.interest()!r}"
+          assert a.describe() == 'Account #1: balance=200', a.describe()
+
+      def test_savings_interest():
+          """Savings uses its own apr"""
+          s = Savings(7, 100, 'Alex')
+          assert Savings.apr == 5.0
+          assert s.interest() == 5.0, f"got {s.interest()!r}"
+
+      def test_savings_init():
+          """Savings stores number, balance and owner"""
+          s = Savings(7, 100, 'Alex')
+          assert (s.number, s.balance, s.owner) == (7, 100, 'Alex')
+
+      def test_savings_delegates_init():
+          """Savings.__init__ delegates to Account.__init__"""
+          calls = []
+          original = Account.__init__
+          def spy(self, *args, **kwargs):
+              calls.append(args)
+              original(self, *args, **kwargs)
+          Account.__init__ = spy
+          try:
+              Savings(1, 2, 'x')
+          finally:
+              Account.__init__ = original
+          assert calls == [(1, 2)], f"Account.__init__ calls: {calls}"
+
+      def test_instance_apr_ignored():
+          """an instance attribute named apr doesn't change interest()"""
+          s = Savings(7, 100, 'Alex')
+          s.apr = 50
+          assert s.interest() == 5.0, f"got {s.interest()!r}"
+
+      def test_describe():
+          """Savings.describe extends the parent's description"""
+          s = Savings(7, 100, 'Alex')
+          assert s.describe() == 'Savings #7: balance=100, owner=Alex', s.describe()
+
+      def test_further_subclass():
+          """a subclass of Savings that only overrides apr works too"""
+          class Premium(Savings):
+              apr = 7.0
+          p = Premium(9, 1000, 'Eve')
+          assert p.interest() == 70.0, f"got {p.interest()!r}"
+          assert p.describe() == 'Premium #9: balance=1000, owner=Eve', p.describe()
+    solution: |
+      class Account:
+          apr = 3.0
+
+          def __init__(self, number, balance):
+              self.number = number
+              self.balance = balance
+
+          def interest(self):
+              return self.balance * type(self).apr / 100
+
+          def describe(self):
+              return f'{type(self).__name__} #{self.number}: balance={self.balance}'
+
+
+      class Savings(Account):
+          apr = 5.0
+
+          def __init__(self, number, balance, owner):
+              super().__init__(number, balance)
+              self.owner = owner
+
+          def describe(self):
+              return f'{super().describe()}, owner={self.owner}'
+    hints:
+      - "`Account.apr` always means the attribute on `Account`. Which expression gives you the instance's class?"
+      - "`self.apr` would find an instance attribute first; `type(self).apr` skips the instance dictionary."
+      - "In `Savings.describe`, call `super().describe()` and append to its result."
+
+  - id: discounted-product
+    title: A read-only, delegating property
+    prompt: |
+      `Product` (given) has a validated, writable `price` property. Write a subclass `Discounted(Product)`:
+
+      - created with `Discounted(name, price, discount)`; delegate `name` and `price` to `Product.__init__` with `super()` (so the price is still validated),
+      - `discount` must be a number with `0 <= discount < 1`, otherwise raise `ValueError`; store it as `self.discount`,
+      - override `price` with a **read-only** property that returns the parent's price reduced by the discount, rounded to 2 decimals (for example `100` with a discount of `0.25` gives `75.0`),
+      - add a read-only property `full_price` that returns the parent's (undiscounted) price.
+
+      Don't access `_price` directly in `Discounted`: get the parent's value through `super()`.
+    starter: |
+      class Product:
+          def __init__(self, name, price):
+              self.name = name
+              self._price = self._validated(price)
+
+          @staticmethod
+          def _validated(price):
+              if isinstance(price, bool) or not isinstance(price, (int, float)) or price <= 0:
+                  raise ValueError('price must be a positive number')
+              return price
+
+          @property
+          def price(self):
+              return self._price
+
+          @price.setter
+          def price(self, value):
+              self._price = self._validated(value)
+
+
+      class Discounted(Product):
+          pass
+    tests: |
+      def test_product_unchanged():
+          """Product still works on its own"""
+          p = Product('pen', 2)
+          p.price = 3
+          assert p.price == 3
+
+      def test_discounted_price():
+          """price applies the discount"""
+          d = Discounted('book', 100, 0.25)
+          assert d.price == 75.0, f"got {d.price!r}"
+          assert Discounted('pen', 3, 0.1).price == 2.7, f"got {Discounted('pen', 3, 0.1).price!r}"
+
+      def test_full_price():
+          """full_price returns the undiscounted price"""
+          d = Discounted('book', 100, 0.25)
+          assert d.full_price == 100, f"got {d.full_price!r}"
+          assert d.name == 'book' and d.discount == 0.25
+
+      def test_read_only():
+          """price can't be set on a Discounted"""
+          d = Discounted('book', 100, 0.25)
+          try:
+              d.price = 10
+          except AttributeError:
+              return
+          assert False, "setting price should raise AttributeError"
+
+      def test_price_validated():
+          """an invalid price is still rejected (via Product)"""
+          for bad in (0, -5, 'ten'):
+              try:
+                  Discounted('book', bad, 0.1)
+              except ValueError:
+                  continue
+              assert False, f"price {bad!r} should raise ValueError"
+
+      def test_discount_validated():
+          """discount must satisfy 0 <= discount < 1"""
+          Discounted('book', 10, 0)
+          for bad in (1, 1.5, -0.1):
+              try:
+                  Discounted('book', 10, bad)
+              except ValueError:
+                  continue
+              assert False, f"discount {bad!r} should raise ValueError"
+
+      def test_follows_parent_price():
+          """both prices are computed from the parent's current price"""
+          d = Discounted('book', 100, 0.5)
+          d._price = 40          # change the parent's stored price
+          assert d.full_price == 40 and d.price == 20.0, "prices should follow the parent's price"
+    solution: |
+      class Product:
+          def __init__(self, name, price):
+              self.name = name
+              self._price = self._validated(price)
+
+          @staticmethod
+          def _validated(price):
+              if isinstance(price, bool) or not isinstance(price, (int, float)) or price <= 0:
+                  raise ValueError('price must be a positive number')
+              return price
+
+          @property
+          def price(self):
+              return self._price
+
+          @price.setter
+          def price(self, value):
+              self._price = self._validated(value)
+
+
+      class Discounted(Product):
+          def __init__(self, name, price, discount):
+              super().__init__(name, price)
+              if not isinstance(discount, (int, float)) or not 0 <= discount < 1:
+                  raise ValueError('discount must be in [0, 1)')
+              self.discount = discount
+
+          @property
+          def price(self):
+              return round(super().price * (1 - self.discount), 2)
+
+          @property
+          def full_price(self):
+              return super().price
+    hints:
+      - Defining a property with only a getter makes it read-only; setting it raises `AttributeError`.
+      - Inside the new `price` getter, `self.price` would call itself forever. `super().price` runs `Product`'s getter instead.
+      - Validate the discount after `super().__init__(...)`, so an invalid price is reported first.
+
+  - id: slotted-points
+    title: Slotted points
+    prompt: |
+      Write three memory-efficient point classes:
+
+      - `Point2D(x, y)`: stores `x` and `y` in **slots**, has no instance `__dict__`, and **supports weak references** (`weakref.ref(p)` must work). Its `__repr__` returns e.g. `'Point2D(1, 2)'`, using the instance's class name.
+      - `Point3D(Point2D)`, created with `Point3D(x, y, z)`: delegates `x` and `y` to the parent with `super()`, stores `z` in a slot, and still has no `__dict__`. Its `__slots__` must list **only the new name**. `repr` gives `'Point3D(1, 2, 3)'`.
+      - `TaggedPoint(Point2D)`, created like `Point2D`: keeps `x` and `y` in the inherited slots, but allows arbitrary extra attributes (such as `t.label = 'home'`) by adding an instance dictionary **through its slots**.
+    starter: |
+      class Point2D:
+          def __init__(self, x, y):
+              self.x = x
+              self.y = y
+
+          def __repr__(self):
+              return f'Point2D({self.x}, {self.y})'
+
+
+      class Point3D(Point2D):
+          def __init__(self, x, y, z):
+              self.x = x
+              self.y = y
+              self.z = z
+
+
+      class TaggedPoint(Point2D):
+          pass
+    tests: |
+      import weakref
+
+      def no_dict(obj):
+          return not hasattr(obj, '__dict__')
+
+      def test_point2d_slots():
+          """Point2D uses slots and has no __dict__"""
+          p = Point2D(1, 2)
+          assert (p.x, p.y) == (1, 2)
+          assert hasattr(Point2D, '__slots__'), "Point2D needs __slots__"
+          assert no_dict(p), "Point2D instances should not have a __dict__"
+
+      def test_point2d_rejects_new_attributes():
+          """Point2D instances can't get new attributes"""
+          p = Point2D(1, 2)
+          try:
+              p.z = 3
+          except AttributeError:
+              return
+          assert False, "setting p.z should raise AttributeError"
+
+      def test_weakref():
+          """Point2D and Point3D support weak references"""
+          p, q = Point2D(1, 2), Point3D(1, 2, 3)
+          assert weakref.ref(p)() is p
+          assert weakref.ref(q)() is q
+
+      def test_point3d():
+          """Point3D stores x, y, z in slots and has no __dict__"""
+          q = Point3D(1, 2, 3)
+          assert (q.x, q.y, q.z) == (1, 2, 3)
+          assert no_dict(q), "Point3D instances should not have a __dict__"
+
+      def test_point3d_slots_only_new():
+          """Point3D.__slots__ lists only the new name"""
+          slots = Point3D.__dict__.get('__slots__')
+          assert slots is not None, "Point3D needs its own __slots__"
+          names = [slots] if isinstance(slots, str) else list(slots)
+          assert names == ['z'], f"Point3D.__slots__ is {slots!r}"
+
+      def test_point3d_uses_super():
+          """Point3D.__init__ delegates to Point2D.__init__"""
+          assert 'super' in Point3D.__init__.__code__.co_names, "use super().__init__(x, y)"
+
+      def test_reprs():
+          """repr uses the instance's class name"""
+          assert repr(Point2D(1, 2)) == 'Point2D(1, 2)', repr(Point2D(1, 2))
+          assert repr(Point3D(1, 2, 3)) == 'Point3D(1, 2, 3)', repr(Point3D(1, 2, 3))
+          assert repr(TaggedPoint(5, 6)) == 'TaggedPoint(5, 6)', repr(TaggedPoint(5, 6))
+
+      def test_tagged_point():
+          """TaggedPoint allows extra attributes, but x and y stay in slots"""
+          t = TaggedPoint(5, 6)
+          t.label = 'home'
+          assert t.label == 'home'
+          assert t.__dict__ == {'label': 'home'}, f"__dict__ is {t.__dict__!r}"
+          slots = TaggedPoint.__dict__.get('__slots__')
+          assert slots is not None and '__dict__' in slots, "add '__dict__' to TaggedPoint.__slots__"
+    solution: |
+      class Point2D:
+          __slots__ = ('x', 'y', '__weakref__')
+
+          def __init__(self, x, y):
+              self.x = x
+              self.y = y
+
+          def __repr__(self):
+              return f'{type(self).__name__}({self.x}, {self.y})'
+
+
+      class Point3D(Point2D):
+          __slots__ = ('z',)
+
+          def __init__(self, x, y, z):
+              super().__init__(x, y)
+              self.z = z
+
+          def __repr__(self):
+              return f'{type(self).__name__}({self.x}, {self.y}, {self.z})'
+
+
+      class TaggedPoint(Point2D):
+          __slots__ = ('__dict__',)
+    hints:
+      - "Weak references need `'__weakref__'` in the slots of the class that first uses slots. Subclasses inherit it."
+      - A subclass without its own `__slots__` gets a `__dict__` back, so `Point3D` needs `__slots__ = ('z',)`.
+      - "`TaggedPoint` only needs `__slots__ = ('__dict__',)`; `x` and `y` are already slots in `Point2D`."

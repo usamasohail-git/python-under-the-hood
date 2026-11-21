@@ -1,0 +1,349 @@
+quiz:
+  - q: What does this print?
+    code: |
+      import random
+
+      random.seed(42)
+      a = [random.randint(1, 100) for _ in range(5)]
+      random.seed(42)
+      b = [random.randint(1, 100) for _ in range(5)]
+      print(a == b)
+    options:
+      - "`True`"
+      - "`False`"
+      - It depends on the system time
+      - A `TypeError`
+    answer: 0
+    explain: |
+      Re-seeding with the same value puts the generator back into the same state, so the same sequence of numbers is produced again.
+
+  - q: What does this print?
+    code: |
+      import random
+
+      random.seed(0)
+      x = random.random()
+      y = random.random()
+      print(x == y)
+    options:
+      - "`True`, because the seed is fixed"
+      - "`False`"
+      - "`True` only on the first run"
+      - An error, because the seed must be reset before each call
+    answer: 1
+    explain: |
+      A seed sets the **starting point** of the sequence; every call moves the generator forward. `x` and `y` are the first and second numbers of the seed-0 sequence, which differ.
+
+  - q: You need to pick 5 **different** winners from a list of 100 entrants. Which call is right?
+    options:
+      - "`random.choices(entrants, k=5)`"
+      - "`random.choice(entrants) * 5`"
+      - "`random.sample(entrants, k=5)`"
+      - "`random.shuffle(entrants, k=5)`"
+    answer: 2
+    explain: |
+      `sample` picks **without replacement**, so no entrant can win twice. `choices` picks with replacement and may repeat someone; `shuffle` takes no `k` and returns `None`.
+
+  - q: What happens here?
+    code: |
+      import random
+      print(random.sample(range(5), k=10))
+    options:
+      - It prints 10 numbers, some repeated
+      - It prints the 5 numbers in random order
+      - "`ValueError`: the sample is larger than the population"
+      - It prints 10 numbers from 0 to 9
+    answer: 2
+    explain: |
+      Without replacement you can't draw more elements than the population has. (`random.choices(range(5), k=10)` would work, with repeats.)
+
+  - q: Which `cum_weights` value is equivalent to `weights=[5, 3, 2]`?
+    options:
+      - "`[2, 3, 5]`"
+      - "`[5, 8, 10]`"
+      - "`[0.5, 0.3, 0.2]`"
+      - "`[10, 5, 2]`"
+    answer: 1
+    explain: |
+      Cumulative weights are running totals: 5, 5+3, 5+3+2. (`[0.5, 0.3, 0.2]` is equivalent as *relative* weights, but not as cumulative ones.)
+
+  - q: What does `timeit(stmt, setup, number=1000)` return?
+    options:
+      - The average time of one run of `stmt`
+      - The **total** time for all 1000 runs of `stmt`, not including `setup`
+      - The total time including running `setup` 1000 times
+      - A list of 1000 timings
+    answer: 1
+    explain: |
+      `timeit` returns the total elapsed time for the `number` executions. `setup` runs once beforehand and isn't timed. Divide by `number` for a per-run figure.
+
+  - q: What does this print?
+    code: |
+      from timeit import timeit
+
+      data = list(range(100))
+      try:
+          timeit('sum(data)', number=10)
+          print('ok')
+      except NameError:
+          print('NameError')
+    options:
+      - "`ok`"
+      - "`NameError`"
+      - A `SyntaxError`
+      - "`0`"
+    answer: 1
+    explain: |
+      The statement runs in `timeit`'s own namespace, which doesn't contain `data`. Pass `globals=globals()` (or `setup=...`) to make it visible.
+
+  - q: What does this print?
+    code: |
+      _missing = object()
+
+      def f(a=_missing):
+          return a is _missing
+
+      print(f(None), f())
+    options:
+      - "`True True`"
+      - "`False False`"
+      - "`True False`"
+      - "`False True`"
+    answer: 3
+    explain: |
+      `None` is a real argument, so it isn't the sentinel (`False`). With no argument, `a` is the default sentinel object (`True`). That's exactly the distinction a `None` default can't make.
+
+  - q: Why is `def f(x='__no_value__')` a weaker sentinel than `def f(x=_sentinel)` with `_sentinel = object()`?
+    options:
+      - String defaults are evaluated on every call
+      - A caller could legitimately pass that same string, while nobody can accidentally pass the private `object()`
+      - Strings can't be compared with `is`
+      - "`object()` uses less memory"
+    answer: 1
+    explain: |
+      An "unlikely" value is still a possible value. A freshly created `object()` is unique, so an identity test against it can't be triggered by accident.
+
+  - q: What does this print?
+    code: |
+      import argparse
+
+      parser = argparse.ArgumentParser(prog='app')
+      parser.add_argument('n', type=int)
+      parser.add_argument('--twice', action='store_true')
+      args = parser.parse_args(['21', '--twice'])
+      print(args.n * 2 if args.twice else args.n)
+    options:
+      - "`42`"
+      - "`2121`"
+      - "`21`"
+      - An error, because options must come before positionals
+    answer: 0
+    explain: |
+      `type=int` converts `'21'` to the integer 21, and the `store_true` flag sets `args.twice` to `True`. Options and positionals may appear in any order.
+
+  - q: "A script runs `parser.parse_args()` and the user passes an invalid value. What happens?"
+    options:
+      - "`parse_args` returns `None`"
+      - The bad value is stored as a string
+      - A usage line and error message are printed, then `SystemExit` is raised with exit code 2
+      - A `ValueError` traceback is shown
+    answer: 2
+    explain: |
+      `argparse` reports the problem and exits with code 2, the convention for command line usage errors. Catch `SystemExit` (or use `exit_on_error=False`) if you parse inside a larger program.
+
+  - q: What does this print? (Python 3.10+)
+    code: |
+      def kind(x):
+          match x:
+              case 0:
+                  return 'zero'
+              case 1 | 2 | 3:
+                  return 'small'
+              case _:
+                  return 'other'
+
+      print(kind(2), kind(7))
+    options:
+      - "`small other`"
+      - "`small small`"
+      - "`zero other`"
+      - A `SyntaxError`, because `match` needs `break`
+    answer: 0
+    explain: |
+      `1 | 2 | 3` matches any of those values, and `_` is the catch-all default. `match` never falls through, so no `break` is needed.
+
+exercises:
+  - id: repeatable-deal
+    title: A repeatable card deal
+    prompt: |
+      Write `deal(n, seed=None)` that returns a list of `n` **different** cards from the 52-card deck `DECK`.
+
+      Requirements: the same `seed` must always produce the same hand, no card may appear twice, and asking for more than 52 cards must raise `ValueError`.
+    starter: |
+      import random
+
+      suits = 'CDHS'
+      ranks = [str(r) for r in range(2, 11)] + list('JQKA')
+      DECK = [rank + suit for suit in suits for rank in ranks]
+
+      def deal(n, seed=None):
+          return random.choices(DECK, k=n)
+    tests: |
+      def test_size():
+          """returns n cards from the deck"""
+          hand = deal(5, seed=1)
+          assert len(hand) == 5, f"expected 5 cards, got {len(hand)}"
+          assert all(card in DECK for card in hand), "hand contains a card not in DECK"
+
+      def test_no_duplicates():
+          """never deals the same card twice"""
+          for seed in range(50):
+              hand = deal(20, seed=seed)
+              assert len(set(hand)) == 20, f"duplicate cards with seed={seed}: {hand}"
+
+      def test_repeatable():
+          """the same seed gives the same hand"""
+          assert deal(7, seed=123) == deal(7, seed=123)
+
+      def test_different_seeds():
+          """different seeds usually give different hands"""
+          hands = {tuple(deal(5, seed=s)) for s in range(10)}
+          assert len(hands) > 1, "every seed produced the same hand"
+
+      def test_whole_deck():
+          """dealing 52 cards gives the whole deck"""
+          assert sorted(deal(52, seed=0)) == sorted(DECK)
+
+      def test_too_many():
+          """more than 52 cards raises ValueError"""
+          try:
+              deal(53, seed=0)
+          except ValueError:
+              return
+          assert False, "expected ValueError for 53 cards"
+    solution: |
+      import random
+
+      suits = 'CDHS'
+      ranks = [str(r) for r in range(2, 11)] + list('JQKA')
+      DECK = [rank + suit for suit in suits for rank in ranks]
+
+      def deal(n, seed=None):
+          random.seed(seed)
+          return random.sample(DECK, k=n)
+    hints:
+      - "`choices` picks with replacement. Which function picks without replacement?"
+      - Seed the generator at the start of the function so each call with the same seed starts from the same state.
+      - "`random.sample` already raises `ValueError` when `k` is larger than the population."
+
+  - id: sentinel-default
+    title: A lookup that allows None as a default
+    prompt: |
+      Write `lookup(mapping, key, default=...)` that returns `mapping[key]` if the key exists.
+
+      If the key is missing: return `default` **if the caller passed one** (even if it is `None`), otherwise raise `KeyError(key)`.
+
+      Use a private sentinel object, not `None`, as the parameter's default.
+    starter: |
+      def lookup(mapping, key, default=None):
+          if key in mapping:
+              return mapping[key]
+          if default is None:
+              raise KeyError(key)
+          return default
+    tests: |
+      def test_found():
+          """returns the value when the key exists"""
+          assert lookup({'a': 1}, 'a') == 1
+          assert lookup({'a': None}, 'a', 'x') is None
+
+      def test_missing_no_default():
+          """raises KeyError when the key is missing and no default is given"""
+          try:
+              lookup({'a': 1}, 'b')
+          except KeyError:
+              return
+          assert False, "expected KeyError"
+
+      def test_explicit_none_default():
+          """an explicit default of None is returned, not treated as missing"""
+          result = 'not returned'
+          try:
+              result = lookup({'a': 1}, 'b', None)
+          except KeyError:
+              assert False, "lookup(..., None) raised KeyError: None should count as a real default"
+          assert result is None, f"expected None, got {result!r}"
+
+      def test_other_defaults():
+          """falsy defaults like 0 and '' are returned too"""
+          assert lookup({}, 'x', 0) == 0
+          assert lookup({}, 'x', '') == ''
+    solution: |
+      _sentinel = object()
+
+      def lookup(mapping, key, default=_sentinel):
+          if key in mapping:
+              return mapping[key]
+          if default is _sentinel:
+              raise KeyError(key)
+          return default
+    hints:
+      - Create a unique object at module level, for example `_sentinel = object()`, and make it the default.
+      - "Compare with `is`: `if default is _sentinel:` is true only when the caller passed nothing."
+
+  - id: argparse-greeter
+    title: A command line greeter
+    prompt: |
+      Write `greet(argv)` that parses the list `argv` with `argparse` and returns a list of greeting lines.
+
+      The interface: a required positional `name`; an option `-t`/`--times` (an `int`, default `1`) giving how many lines to return; and a flag `--shout` that upper-cases the greeting. Each line is `'Hello, <name>!'`.
+
+      Invalid input (such as `-t abc` or a missing name) should behave like any `argparse` error and raise `SystemExit`.
+    starter: |
+      import argparse
+
+      def greet(argv):
+          parser = argparse.ArgumentParser(prog='greet.py')
+          parser.add_argument('name')
+          args = parser.parse_args(argv)
+          return [f'Hello, {args.name}!']
+    tests: |
+      def test_basic():
+          """one greeting by default"""
+          assert greet(['Ada']) == ['Hello, Ada!'], f"got {greet(['Ada'])!r}"
+
+      def test_times():
+          """--times / -t repeats the greeting"""
+          assert greet(['Ada', '--times', '3']) == ['Hello, Ada!'] * 3
+          assert greet(['-t', '2', 'Bob']) == ['Hello, Bob!'] * 2
+
+      def test_shout():
+          """--shout upper-cases the greeting"""
+          assert greet(['Ada', '--shout']) == ['HELLO, ADA!']
+
+      def test_bad_times():
+          """a non-integer --times is rejected with SystemExit"""
+          try:
+              greet(['Ada', '-t', 'abc'])
+          except SystemExit as ex:
+              assert ex.code == 2, f"expected exit code 2, got {ex.code}"
+              return
+          assert False, "expected SystemExit for -t abc"
+    solution: |
+      import argparse
+
+      def greet(argv):
+          parser = argparse.ArgumentParser(prog='greet.py', description='Greets someone.')
+          parser.add_argument('name', help='who to greet')
+          parser.add_argument('-t', '--times', type=int, default=1, help='number of greetings')
+          parser.add_argument('--shout', action='store_true', help='use capital letters')
+          args = parser.parse_args(argv)
+
+          line = f'Hello, {args.name}!'
+          if args.shout:
+              line = line.upper()
+          return [line] * args.times
+    hints:
+      - "`add_argument('-t', '--times', type=int, default=1)` gives you `args.times` as an integer."
+      - "A flag with no value uses `action='store_true'`."
+      - "`[line] * n` builds a list with `n` copies of `line`."

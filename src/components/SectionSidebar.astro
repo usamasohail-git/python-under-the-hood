@@ -1,0 +1,31 @@
+---
+import { url, lectureId, sectionId, sectionLabel, type Part, type Section } from '../lib/course';
+interface Props { part: Part; section: Section; current?: string; available: Set<string>; hasPractice: boolean }
+const { part, section, current, available, hasPractice } = Astro.props;
+---
+<aside class="sidebar">
+  <details open data-sidebar>
+    <summary>{sectionLabel(section)}: {section.title}</summary>
+    <ol>
+      {section.lectures.map((l) => {
+        const id = lectureId(part, section, l);
+        if (!available.has(id)) return null;
+        return (
+          <li data-progress-lecture={id}>
+            <a href={url(id)} aria-current={current === id ? 'page' : undefined}>
+              <span class="num"><span>{String(l.num).padStart(2, '0')}</span></span><span>{l.title}</span>
+            </a>
+          </li>
+        );
+      })}
+      {hasPractice && (
+        <li><a href={url(`${sectionId(part, section)}/practice`)} aria-current={current === 'practice' ? 'page' : undefined}><span class="num">✎</span><span>Quiz & exercises</span></a></li>
+      )}
+    </ol>
+  </details>
+  <p style="margin-top:1rem"><a href={url(sectionId(part, section))}>← Section overview</a></p>
+</aside>
+<script is:inline>
+  // Collapse the lecture list on small screens so the lesson starts above the fold.
+  if (matchMedia('(max-width: 900px)').matches) document.querySelectorAll('[data-sidebar]').forEach((d) => d.removeAttribute('open'));
+</script>

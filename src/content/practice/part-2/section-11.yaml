@@ -1,0 +1,441 @@
+files: ['cars.csv', 'personal_info.csv']
+
+quiz:
+  - q: What is `csv.Sniffer().sniff(sample)` used for in this project?
+    options:
+      - It validates that every row has the same number of fields
+      - It guesses the file's dialect (delimiter, quote character, ...) from a text sample
+      - It converts each field to the most likely Python type
+      - It reads the header row and returns the field names
+    answer: 1
+    explain: |
+      The sniffer analyzes a chunk of text and returns a `Dialect` describing how the file is formatted. Passing it to `csv.reader` lets one parser handle both the `;`-separated and the `,`-separated file. (`Sniffer.has_header` exists too, but the header row is read with `next(reader)`.)
+
+  - q: What does this print?
+    code: |
+      with open('test.txt', 'w') as f:
+          f.write('abcdefghij')
+
+      with open('test.txt') as f:
+          first = f.read(3)
+          second = f.read(3)
+          f.seek(0)
+          third = f.read(3)
+      print(first, second, third)
+    options:
+      - "`abc abc abc`"
+      - "`abc def ghi`"
+      - "`abc def abc`"
+      - "`abc def def`"
+    answer: 2
+    explain: |
+      Each `read(3)` continues from the current position, so the second read returns `def`. `seek(0)` rewinds to the start, so the third read returns `abc` again. That's how the solution sniffs a sample and then parses the file from the beginning.
+
+  - q: What does this print?
+    code: |
+      from collections import namedtuple
+
+      header = ['Car', 'MPG', 'Origin']
+      Data = namedtuple('Data', map(str.lower, header))
+      print(Data._fields)
+    options:
+      - "`('Car', 'MPG', 'Origin')`"
+      - "A `TypeError`: field names must be a list"
+      - "`('car', 'mpg', 'origin')`"
+      - "`<map object at ...>`"
+    answer: 2
+    explain: |
+      `namedtuple` accepts any iterable of field-name strings, including a lazy `map`, so a header row read at run time is enough to build the class.
+
+  - q: A class-based parser opens its file in `__enter__`, and the next line in `__enter__` raises an exception. What happens to the file?
+    options:
+      - "It stays open: `__exit__` only runs if `__enter__` completes, so setup must clean up after itself"
+      - "`__exit__` is called automatically and closes it"
+      - "The `with` statement retries `__enter__` once"
+      - Python closes every open file when any exception is raised
+    answer: 0
+    explain: |
+      The `with` statement only guarantees `__exit__` once `__enter__` has returned. If setup can fail after acquiring a resource, wrap it in `try`/`except`, release the resource, and re-raise. In a `@contextmanager` generator you get this for free by putting the setup inside the `try` (or inside `with open(...)`).
+
+  - q: What does this print?
+    code: |
+      from contextlib import contextmanager
+
+      @contextmanager
+      def numbers():
+          with open('test.txt', 'w') as f:
+              f.write('1\n2\n3\n')
+          with open('test.txt') as f:
+              yield (int(line) for line in f)
+
+      with numbers() as nums:
+          print(next(nums))
+      try:
+          print(next(nums))
+      except ValueError as ex:
+          print('ValueError:', ex)
+    options:
+      - "`1`, `2`"
+      - "`1`, then `ValueError: I/O operation on closed file.`"
+      - "`1`, then nothing: the generator is exhausted"
+      - "`ValueError: I/O operation on closed file.` straight away"
+    answer: 1
+    explain: |
+      Inside the block, the generator expression reads the first line normally. When the block ends, the generator function resumes after its `yield` and the inner `with` closes the file, so the next read from the still-unfinished generator expression fails.
+
+  - q: Why can't a `@contextmanager` generator simply `yield` every data row itself?
+    code: |
+      from contextlib import contextmanager
+
+      @contextmanager
+      def rows():
+          yield 'row 1'
+          yield 'row 2'
+
+      try:
+          with rows() as r:
+              print(r)
+      except RuntimeError as ex:
+          print('RuntimeError:', ex)
+    options:
+      - "It can: this prints `row 1` and `row 2`"
+      - "It prints `row 1`, then `RuntimeError: generator didn't stop`"
+      - "It prints `['row 1', 'row 2']`"
+      - "It raises `StopIteration`"
+    answer: 1
+    explain: |
+      The single `yield` is the hand-over point for the `as` object. When the block ends, `contextmanager` resumes the generator expecting it to finish; a second `yield` means it didn't, so you get a `RuntimeError`. That's why Goal 2 yields a separate lazy iterator over the rows.
+
+  - q: Why does the solution open the file in `__enter__` instead of `__init__`?
+    options:
+      - "`__init__` can't call `open()`"
+      - "Files can only be opened inside a `with` statement"
+      - "It makes the parser faster"
+      - "Creating the object then acquires nothing, so a parser that's never entered can't leak an open file"
+    answer: 3
+    explain: |
+      Acquiring the resource at the moment the `with` block starts pairs it with the `__exit__` that will release it. An object created but never used in a `with` block never touches the file.
+
+exercises:
+  - id: read-header
+    title: "Warm-up: detect the format and read the header"
+    prompt: |
+      Write `read_header(f_name)` that returns the file's **header row** as a list of **lowercase** field names, whatever the delimiter is. It must:
+
+      - open the file only **once**: sample the first 1000 characters, detect the dialect with `csv.Sniffer`, rewind with `seek(0)`, then read the header with `csv.reader`
+      - close the file before returning
+
+      For example, `read_header('cars.csv')` returns `['car', 'mpg', 'cylinders', ...]`.
+    starter: |
+      import csv
+
+      def read_header(f_name):
+          with open(f_name) as f:
+              return f.readline().strip().split(',')
+    tests: |
+      import builtins
+
+      def test_comma_file():
+          """reads the comma-separated header"""
+          assert read_header('personal_info.csv') == ['ssn', 'first_name', 'last_name', 'gender', 'language']
+
+      def test_semicolon_file():
+          """detects the semicolon delimiter and lowercases the names"""
+          result = read_header('cars.csv')
+          assert result == ['car', 'mpg', 'cylinders', 'displacement', 'horsepower',
+                            'weight', 'acceleration', 'model', 'origin'], f"got {result}"
+
+      def test_tab_file():
+          """works for a tab-separated file too"""
+          with open('pets.tsv', 'w') as f:
+              f.write('Name\tSpecies\tAge\nRex\tdog\t3\nTom\tcat\t5\nPip\tbird\t1\n')
+          assert read_header('pets.tsv') == ['name', 'species', 'age']
+
+      def test_opens_once_and_closes():
+          """opens the file once and closes it"""
+          real_open = builtins.open
+          opened = []
+          def tracking_open(*args, **kwargs):
+              f = real_open(*args, **kwargs)
+              opened.append(f)
+              return f
+          builtins.open = tracking_open
+          try:
+              read_header('cars.csv')
+          finally:
+              builtins.open = real_open
+          assert len(opened) == 1, f"expected the file to be opened once, got {len(opened)}"
+          assert opened[0].closed, "the file was left open"
+    solution: |
+      import csv
+
+      def read_header(f_name):
+          with open(f_name) as f:
+              dialect = csv.Sniffer().sniff(f.read(1000))
+              f.seek(0)
+              reader = csv.reader(f, dialect)
+              return [name.lower() for name in next(reader)]
+    hints:
+      - "`csv.Sniffer().sniff(f.read(1000))` returns a dialect you can pass as the second argument of `csv.reader`."
+      - After reading the sample, call `f.seek(0)` so the reader starts at the first line again.
+      - "`next(reader)` gives you the first parsed row: the header."
+
+  - id: file-parser-class
+    title: "Goal 1: a class-based parsing context manager"
+    prompt: |
+      Write a class `FileParser(f_name)` that is **both a context manager and an iterator**:
+
+      - `__enter__` opens the file, detects its dialect with `csv.Sniffer`, reads the header row, creates a named tuple class called `Data` whose fields are the **lowercased** header names, and returns `self`
+      - iterating over the object yields each data row, **lazily**, as a `Data` named tuple (all values stay strings)
+      - `__exit__` closes the file and doesn't suppress exceptions
+      - once the `with` block has ended, iterating simply stops (no exception)
+
+      ```python
+      with FileParser('cars.csv') as data:
+          print(next(data).car)    # Chevrolet Chevelle Malibu
+      ```
+    starter: |
+      import csv
+      from collections import namedtuple
+
+      class FileParser:
+          def __init__(self, f_name):
+              self.f_name = f_name
+
+          def __enter__(self):
+              pass
+
+          def __exit__(self, exc_type, exc_value, exc_tb):
+              pass
+
+          def __iter__(self):
+              return self
+
+          def __next__(self):
+              raise StopIteration
+    tests: |
+      import builtins
+
+      def _tracking(fn):
+          real_open = builtins.open
+          opened = []
+          def tracking_open(*args, **kwargs):
+              f = real_open(*args, **kwargs)
+              opened.append(f)
+              return f
+          builtins.open = tracking_open
+          try:
+              fn()
+          finally:
+              builtins.open = real_open
+          return opened
+
+      def test_enter_returns_iterator():
+          """__enter__ returns the parser, which is its own iterator"""
+          parser = FileParser('cars.csv')
+          with parser as data:
+              assert data is parser, "__enter__ should return self"
+              assert iter(data) is data, "__iter__ should return self"
+
+      def test_first_car():
+          """rows are Data named tuples with lowercase fields"""
+          with FileParser('cars.csv') as data:
+              row = next(data)
+          assert type(row).__name__ == 'Data', f"got {type(row).__name__}"
+          assert row._fields[:3] == ('car', 'mpg', 'cylinders'), f"got {row._fields}"
+          assert row.car == 'Chevrolet Chevelle Malibu' and row.mpg == '18.0', f"got {row}"
+
+      def test_row_counts():
+          """produces every data row (header excluded)"""
+          with FileParser('cars.csv') as data:
+              n_cars = sum(1 for _ in data)
+          with FileParser('personal_info.csv') as data:
+              people = list(data)
+          assert n_cars == 406, f"cars.csv: got {n_cars} rows"
+          assert len(people) == 1000, f"personal_info.csv: got {len(people)} rows"
+          assert people[0].last_name == 'Tester', f"got {people[0]}"
+
+      def test_other_dialect():
+          """detects the dialect of an unseen file"""
+          with open('pets.tsv', 'w') as f:
+              f.write('Name\tSpecies\tAge\nRex\tdog\t3\nTom\tcat\t5\nPip\tbird\t1\n')
+          with FileParser('pets.tsv') as data:
+              rows = list(data)
+          assert [r.name for r in rows] == ['Rex', 'Tom', 'Pip'], f"got {rows}"
+          assert rows[1].age == '5'
+
+      def test_closes_file():
+          """the file is closed when the block ends"""
+          def use():
+              with FileParser('cars.csv') as data:
+                  next(data)
+          opened = _tracking(use)
+          assert opened, "no file was opened with open()"
+          assert all(f.closed for f in opened), "a file was left open"
+
+      def test_closes_on_error():
+          """the file is closed and the error propagates if the block raises"""
+          def use():
+              try:
+                  with FileParser('cars.csv') as data:
+                      next(data)
+                      raise KeyError('boom')
+              except KeyError:
+                  pass
+              else:
+                  raise AssertionError("the KeyError was suppressed")
+          opened = _tracking(use)
+          assert opened and all(f.closed for f in opened), "a file was left open"
+
+      def test_stops_after_block():
+          """iterating after the block just stops"""
+          with FileParser('cars.csv') as data:
+              next(data)
+          assert list(data) == [], "expected no more rows after the with block"
+    solution: |
+      import csv
+      from collections import namedtuple
+
+      class FileParser:
+          def __init__(self, f_name):
+              self.f_name = f_name
+              self._f = None
+
+          def __enter__(self):
+              self._f = open(self.f_name)
+              try:
+                  dialect = csv.Sniffer().sniff(self._f.read(1000))
+                  self._f.seek(0)
+                  self._reader = csv.reader(self._f, dialect)
+                  headers = next(self._reader)
+                  self._nt = namedtuple('Data', (h.strip().lower() for h in headers))
+              except BaseException:
+                  self._f.close()
+                  raise
+              return self
+
+          def __exit__(self, exc_type, exc_value, exc_tb):
+              self._f.close()
+              return False
+
+          def __iter__(self):
+              return self
+
+          def __next__(self):
+              if self._f is None or self._f.closed:
+                  raise StopIteration
+              return self._nt(*next(self._reader))
+    hints:
+      - "In `__enter__`: open the file, sniff a sample with `csv.Sniffer().sniff(f.read(1000))`, `seek(0)`, create a `csv.reader`, and consume the header with `next(reader)`."
+      - "Build the row type with `namedtuple('Data', ...)` from the lowercased header names, and store the file, reader and class on `self`."
+      - "`__next__` returns `self._nt(*next(self._reader))`, but first raises `StopIteration` if the file is already closed."
+
+  - id: parsed-data-generator
+    title: "Goal 2: a generator-based parsing context manager"
+    prompt: |
+      Implement the same tool with a **generator function** decorated with `contextlib.contextmanager`:
+
+      - `parsed_data(f_name)` opens the file, detects its dialect, reads the header and creates a `Data` named tuple class with **lowercased** field names
+      - it **yields a lazy iterator** (a generator) of `Data` rows
+      - the file is closed when the `with` block ends, including when the block raises (and the exception must propagate)
+
+      ```python
+      with parsed_data('personal_info.csv') as data:
+          print(next(data).first_name)    # Sebastiano
+      ```
+    starter: |
+      import csv
+      from collections import namedtuple
+      from contextlib import contextmanager
+
+      def parsed_data(f_name):
+          with open(f_name) as f:
+              reader = csv.reader(f)
+              next(reader)
+              return list(reader)
+    tests: |
+      import builtins, inspect, types
+
+      def _tracking(fn):
+          real_open = builtins.open
+          opened = []
+          def tracking_open(*args, **kwargs):
+              f = real_open(*args, **kwargs)
+              opened.append(f)
+              return f
+          builtins.open = tracking_open
+          try:
+              fn()
+          finally:
+              builtins.open = real_open
+          return opened
+
+      def test_uses_contextmanager():
+          """parsed_data is a @contextmanager-decorated generator function"""
+          wrapped = getattr(parsed_data, '__wrapped__', None)
+          assert wrapped is not None and inspect.isgeneratorfunction(wrapped), \
+              "decorate a generator function with @contextmanager"
+
+      def test_yields_generator():
+          """the as-object is a lazy generator"""
+          with parsed_data('cars.csv') as data:
+              assert isinstance(data, types.GeneratorType), f"got {type(data).__name__}"
+
+      def test_rows():
+          """rows are Data named tuples with lowercase fields"""
+          with parsed_data('personal_info.csv') as data:
+              row = next(data)
+          assert type(row).__name__ == 'Data', f"got {type(row).__name__}"
+          assert row._fields == ('ssn', 'first_name', 'last_name', 'gender', 'language'), f"got {row._fields}"
+          assert row.first_name == 'Sebastiano'
+
+      def test_cars():
+          """handles the semicolon-separated file"""
+          with parsed_data('cars.csv') as data:
+              rows = list(data)
+          assert len(rows) == 406, f"got {len(rows)} rows"
+          assert rows[0].car == 'Chevrolet Chevelle Malibu' and rows[-1].origin == 'US', f"got {rows[0]}"
+
+      def test_closes_file():
+          """the file is closed when the block ends"""
+          def use():
+              with parsed_data('cars.csv') as data:
+                  next(data)
+          opened = _tracking(use)
+          assert opened, "no file was opened with open()"
+          assert all(f.closed for f in opened), "a file was left open"
+
+      def test_closes_on_error():
+          """the file is closed and the error propagates if the block raises"""
+          def use():
+              try:
+                  with parsed_data('cars.csv') as data:
+                      next(data)
+                      raise KeyError('boom')
+              except KeyError:
+                  pass
+              else:
+                  raise AssertionError("the KeyError was suppressed")
+          opened = _tracking(use)
+          assert opened and all(f.closed for f in opened), "a file was left open"
+    solution: |
+      import csv
+      from collections import namedtuple
+      from contextlib import contextmanager
+
+      @contextmanager
+      def parsed_data(f_name):
+          f = open(f_name)
+          try:
+              dialect = csv.Sniffer().sniff(f.read(1000))
+              f.seek(0)
+              reader = csv.reader(f, dialect)
+              headers = map(str.lower, next(reader))
+              nt = namedtuple('Data', headers)
+              yield (nt(*row) for row in reader)
+          finally:
+              f.close()
+    hints:
+      - "The generator must `yield` exactly once. What you yield is what `as` binds: make it a generator expression over the reader."
+      - "Open the file before a `try`, put the setup and the `yield` inside it, and close the file in `finally`. (Or put everything inside `with open(f_name) as f:`.)"
+      - "Use `csv.Sniffer().sniff(f.read(1000))` and `f.seek(0)` to detect the delimiter without reopening the file."

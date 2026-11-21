@@ -1,0 +1,74 @@
+---
+import Base from '../../../layouts/Base.astro';
+import SectionSidebar from '../../../components/SectionSidebar.astro';
+import { Code } from 'astro:components';
+import { parts, url, contentIndex, lectureId, sectionId, sectionLabel } from '../../../lib/course';
+import { inline, block } from '../../../lib/mdlite';
+
+export async function getStaticPaths() {
+  const { lessons, practice } = await contentIndex();
+  return parts.flatMap((part) => part.sections.flatMap((section) => {
+    const entry = practice.get(sectionId(part, section));
+    if (!entry) return [];
+    const available = new Set(section.lectures.map((l) => lectureId(part, section, l)).filter((id) => lessons.has(id)));
+    return [{ params: { part: part.slug, section: section.slug }, props: { part, section, entry, available } }];
+  }));
+}
+const { part, section, entry, available } = Astro.props;
+const sid = sectionId(part, section);
+const { quiz, exercises } = entry.data;
+const themes = { light: 'github-light', dark: 'github-dark' } as const;
+---
+<Base title={`Practice: ${section.title}`} activePart={part.slug} files={{ section: sid, files: entry.data.files, packages: entry.data.packages }}>
+  <nav class="crumbs" aria-label="Breadcrumb">
+    <a href={url('/')}>Home</a> / <a href={url(part.slug)}>{part.title}</a> / <a href={url(sid)}>{sectionLabel(section)}</a> / <span>Practice</span>
+  </nav>
+  <div class="lesson" data-practice={sid}>
+    <SectionSidebar part={part} section={section} current="practice" available={available} hasPractice={true} />
+    <article class="prose">
+      <p class="eyebrow">{section.title} · Practice</p>
+      <h1>Quiz & exercises</h1>
+      <p class="muted">Answer each question to see the explanation. Your best score is saved in this browser.</p>
+
+      <h2 id="quiz">Quiz</h2>
+      <div data-quiz>
+        {quiz.map((q, qi) => (
+          <fieldset class="question" data-question data-answer={q.answer}>
+            <legend>{qi + 1}. <Fragment set:html={inline(q.q)} /></legend>
+            {q.code && <Code code={q.code.replace(/\n$/, '')} lang="python" themes={themes} defaultColor={false} />}
+            {q.options.map((opt, oi) => (
+              <label class="option"><input type="radio" name={`q${qi}`} value={oi} /><span set:html={inline(opt)} /></label>
+            ))}
+            <div class="feedback" data-feedback hidden><strong data-verdict></strong><Fragment set:html={block(q.explain)} /></div>
+          </fieldset>
+        ))}
+        <div class="quiz-summary" data-quiz-summary hidden aria-live="polite"><strong data-quiz-score></strong></div>
+        <button class="btn" type="button" data-quiz-retry hidden>Retry quiz</button>
+      </div>
+
+      {exercises.length > 0 && <h2 id="exercises">Coding exercises</h2>}
+      {exercises.length > 0 && <p class="muted">Write your code, then press <strong>Check</strong> (or Shift+Enter) to run the tests. Drafts are saved as you type.</p>}
+      {exercises.map((ex, i) => (
+        <section class="exercise" data-exercise={ex.id}>
+          <h3>Exercise {i + 1}: {ex.title} <span class="tag ready" data-badge hidden>✓ Passed</span></h3>
+          <Fragment set:html={block(ex.prompt)} />
+          <pre data-starter hidden>{ex.starter}</pre>
+          <pre data-tests hidden>{ex.tests}</pre>
+          <div class="exercise-editor"><div class="cell-editor" data-editor></div></div>
+          <div class="row">
+            <button class="btn primary" type="button" data-check>Check</button>
+            <button class="btn" type="button" data-reset>Reset</button>
+          </div>
+          <div class="results" data-results hidden aria-live="polite"></div>
+          {ex.hints.length > 0 && (
+            <details><summary>Hints ({ex.hints.length})</summary><ol>{ex.hints.map((h) => <li set:html={inline(h)} />)}</ol></details>
+          )}
+          <details><summary>Show a solution</summary><Code code={ex.solution.replace(/\n$/, '')} lang="python" themes={themes} defaultColor={false} /></details>
+        </section>
+      ))}
+    </article>
+  </div>
+  <script>
+    import '../../../scripts/practice';
+  </script>
+</Base>

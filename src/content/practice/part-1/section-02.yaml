@@ -1,0 +1,420 @@
+quiz:
+  - q: Why does this code fail to compile?
+    code: |
+      a = [1,  # first
+           2   # second]
+    options:
+      - Lists can't span more than one line
+      - "The `]` is inside the comment, so the list is never closed"
+      - Comments aren't allowed inside a list literal
+      - The second line is indented incorrectly
+    answer: 1
+    explain: |
+      A comment runs to the end of the physical line, so the closing bracket is part of the comment. Comments inside brackets are fine as long as the separators and the closing bracket sit outside them.
+
+  - q: What does this print?
+    code: |
+      def f():
+          s = '''a
+          b'''
+          return s
+
+      print(len(f()))
+    options:
+      - "`3`"
+      - "`7`"
+      - "`2`"
+      - "`11`"
+    answer: 1
+    explain: |
+      A triple-quoted string keeps every character you type: `'a'`, the newline, the four spaces of indentation and `'b'`. That's 1 + 1 + 4 + 1 = 7 characters.
+
+  - q: What does this print?
+    code: |
+      def check():
+          print('checked')
+          return 'yes'
+
+      x = 0
+      res = check() if x else 'no'
+      print(res)
+    options:
+      - "`checked` then `no`"
+      - "`checked` then `yes`"
+      - "`no`"
+      - "`yes`"
+    answer: 2
+    explain: |
+      `0` is falsy, so the conditional expression evaluates only the `else` branch. `check()` is never called, so `checked` is never printed.
+
+  - q: What does this print?
+    code: |
+      a = 15
+      if a > 5:
+          print('big')
+      elif a > 10:
+          print('bigger')
+      else:
+          print('small')
+    options:
+      - "`big`"
+      - "`bigger`"
+      - "`big` and `bigger`"
+      - "`small`"
+    answer: 0
+    explain: |
+      Only the **first** branch whose condition is true runs. `a > 5` is already true, so the `elif` is never even tested.
+
+  - q: What does this print?
+    code: |
+      def double(a: int) -> int:
+          return a * 2
+
+      print(double('ab'))
+    options:
+      - "A `TypeError`, because `'ab'` isn't an `int`"
+      - "`None`"
+      - "`abab`"
+      - "`4`"
+    answer: 2
+    explain: |
+      Annotations are not enforced at run time. Strings support `* 2`, so the function returns `'abab'`. Type checkers like mypy would flag the call, but Python itself doesn't.
+
+  - q: What is printed?
+    code: |
+      def greet():
+          print('hi')
+
+      result = greet()
+      print(result)
+    options:
+      - "`hi` then `None`"
+      - "`hi` then `hi`"
+      - "Only `hi`"
+      - "`None` then `hi`"
+    answer: 0
+    explain: |
+      Calling `greet()` prints `hi`. The function has no `return` value, so it returns `None`, which is then printed.
+
+  - q: What does this print?
+    code: |
+      i = 0
+      while i < 3:
+          i += 1
+          if i == 2:
+              continue
+          print(i)
+      else:
+          print('done')
+    options:
+      - "`1 3`"
+      - "`1 2 3 done`"
+      - "`1`"
+      - "`1 3 done`"
+    answer: 3
+    explain: |
+      `continue` skips the `print` for `i == 2` but doesn't end the loop. The loop ends normally when `i < 3` becomes false, without a `break`, so the `else` block runs and prints `done`. (Each value is printed on its own line.)
+
+  - q: What does this print?
+    code: |
+      for i in range(3):
+          try:
+              if i == 1:
+                  break
+          finally:
+              print('finally', i)
+      else:
+          print('else')
+    options:
+      - "`finally 0`"
+      - "`finally 0` then `finally 1`"
+      - "`finally 0`, `finally 1` then `else`"
+      - "`finally 0`, `finally 1`, `finally 2` then `else`"
+    answer: 1
+    explain: |
+      The `finally` block runs even when `break` leaves the `try` block, so `finally 1` is printed before the loop ends. Because the loop ended with `break`, the `else` block is skipped.
+
+  - q: Which statement about Python's `for` loop is true?
+    options:
+      - It is a counter loop, just like `for (i = 0; i < n; i++)` in C
+      - It only works with lists, tuples and strings
+      - It asks an iterable for its values one at a time and runs the block once per value
+      - "It always needs `range()` to work"
+    answer: 2
+    explain: |
+      `for` calls `iter()` on the object and then `next()` repeatedly until `StopIteration`. Any iterable works, including dicts, sets, files and generators. `range()` is just one iterable among many.
+
+  - q: What does this print?
+    code: |
+      class P:
+          def __init__(self, x):
+              self.x = x
+
+      print(P(1) == P(1))
+    options:
+      - "`True`"
+      - "`False`"
+      - "A `TypeError`"
+      - "`NotImplemented`"
+    answer: 1
+    explain: |
+      Without an `__eq__` method, `==` falls back to identity. Two separate instances are different objects, so the result is `False` even though their attributes are equal.
+
+  - q: "A class defines `__eq__` and `__lt__` (but not `__gt__` or `__le__`). Which comparison raises `TypeError`?"
+    options:
+      - "`a < b`"
+      - "`a > b`"
+      - "`a == b`"
+      - "`a <= b`"
+    answer: 3
+    explain: |
+      `a > b` works through the reflected operation `b < a`. But Python never combines `<` and `==` to answer `<=`, so `a <= b` raises `TypeError`. (`functools.total_ordering` can generate the missing methods.)
+
+  - q: What is printed?
+    code: |
+      class Temp:
+          def __init__(self, c):
+              self.c = c
+          def __str__(self):
+              return f'{self.c} C'
+          def __repr__(self):
+              return f'Temp({self.c})'
+
+      t = Temp(21)
+      print(t, [t])
+    options:
+      - "`21 C [21 C]`"
+      - "`Temp(21) [Temp(21)]`"
+      - "`21 C [Temp(21)]`"
+      - "`Temp(21) [21 C]`"
+    answer: 2
+    explain: |
+      `print(t)` uses `__str__`. A list, however, displays its items with `repr()`, so the item inside `[t]` uses `__repr__`.
+
+  - q: What does this print?
+    code: |
+      print(isinstance(True, int), True + True)
+    options:
+      - "`False 2`"
+      - "`True 2`"
+      - "`True True`"
+      - "A `TypeError`"
+    answer: 1
+    explain: |
+      `bool` is a subclass of `int`: `True` behaves like `1` and `False` like `0`, so `True + True` is `2`.
+
+  - q: Which pair of types are both implemented as hash tables?
+    options:
+      - "`list` and `tuple`"
+      - "`str` and `bytes`"
+      - "`set` and `dict`"
+      - "`frozenset` and `list`"
+    answer: 2
+    explain: |
+      Sets and dictionaries are both hash tables. A set is essentially a dictionary that stores only keys. That's why both need hashable elements or keys, and why both have fast membership tests.
+
+  - q: What does this print?
+    code: |
+      class Account:
+          def __init__(self):
+              self.__pin = 1234
+
+      print(list(vars(Account())))
+    options:
+      - "`['__pin']`"
+      - "`['pin']`"
+      - "`['_Account__pin']`"
+      - "`[]`"
+    answer: 2
+    explain: |
+      Two leading underscores inside a class trigger **name mangling**: `__pin` is stored as `_Account__pin`.
+
+  - q: Which of these is **not** a valid identifier?
+    options:
+      - "`_total`"
+      - "`total_2`"
+      - "`2_total`"
+      - "`__total__`"
+    answer: 2
+    explain: |
+      Identifiers must start with a letter or an underscore, never a digit. (`__total__` is legal, but dunder names belong to Python, so don't invent your own.)
+
+exercises:
+  - id: first-negative
+    title: Find the first negative
+    prompt: |
+      Write `first_negative(numbers)` that returns the **index** of the first negative number in the list `numbers`, or `-1` if there is none.
+
+      Use a `for` loop with `enumerate`, `break`, and the loop's `else` clause (no `index()` calls and no flag variable).
+    starter: |
+      def first_negative(numbers):
+          result = -1
+          for value in numbers:
+              if value < 0:
+                  result = value
+          return result
+    tests: |
+      def test_found():
+          """finds the index of the first negative number"""
+          assert first_negative([3, 1, -4, 1, -5]) == 2, f"got {first_negative([3, 1, -4, 1, -5])}"
+
+      def test_first_position():
+          """works when the first item is negative"""
+          assert first_negative([-1, 2]) == 0, f"got {first_negative([-1, 2])}"
+
+      def test_none():
+          """returns -1 when there is no negative number"""
+          assert first_negative([1, 2, 3]) == -1, f"got {first_negative([1, 2, 3])}"
+
+      def test_empty():
+          """returns -1 for an empty list"""
+          assert first_negative([]) == -1, f"got {first_negative([])}"
+    solution: |
+      def first_negative(numbers):
+          for i, value in enumerate(numbers):
+              if value < 0:
+                  result = i
+                  break
+          else:
+              result = -1
+          return result
+    hints:
+      - "`for i, value in enumerate(numbers):` gives you the index and the value together."
+      - "Stop with `break` as soon as you find a negative. The loop's `else` block runs only if you never broke out, which is exactly the \"not found\" case."
+
+  - id: safe-ratios
+    title: Ratios without crashing
+    prompt: |
+      Write `safe_ratios(pairs)` that takes a list of `(a, b)` tuples and returns a tuple `(results, attempts)`:
+
+      - `results` is a list of `a / b` for every pair where the division works; pairs with `b == 0` are **skipped** (use `try` / `except ZeroDivisionError` and `continue`).
+      - `attempts` counts **every** pair processed, including skipped ones. Increment it in a `finally` block.
+    starter: |
+      def safe_ratios(pairs):
+          results = []
+          attempts = 0
+          for a, b in pairs:
+              results.append(a / b)
+              attempts += 1
+          return results, attempts
+    tests: |
+      def test_basic():
+          """divides every pair when there are no zeros"""
+          assert safe_ratios([(1, 2), (9, 3)]) == ([0.5, 3.0], 2)
+
+      def test_skips_zero():
+          """skips pairs that divide by zero"""
+          results, _ = safe_ratios([(1, 0), (4, 2), (5, 0)])
+          assert results == [2.0], f"got {results}"
+
+      def test_counts_all():
+          """counts skipped pairs as attempts too"""
+          _, attempts = safe_ratios([(1, 0), (4, 2), (5, 0)])
+          assert attempts == 3, f"got {attempts}"
+
+      def test_empty():
+          """handles an empty list"""
+          assert safe_ratios([]) == ([], 0)
+    solution: |
+      def safe_ratios(pairs):
+          results = []
+          attempts = 0
+          for a, b in pairs:
+              try:
+                  ratio = a / b
+              except ZeroDivisionError:
+                  continue
+              finally:
+                  attempts += 1
+              results.append(ratio)
+          return results, attempts
+    hints:
+      - "Unpack each pair directly in the loop: `for a, b in pairs:`."
+      - "`continue` in the `except` block skips the `append`, but the `finally` block still runs first, so the counter is always incremented."
+
+  - id: money-class
+    title: A small Money class
+    prompt: |
+      Write a class `Money` whose instances hold an `amount` (in cents, an `int`):
+
+      - `Money(250)` creates an instance; `repr()` gives `'Money(250)'` and `str()` gives `'$2.50'`.
+      - `amount` is a **property**: setting it to a negative value raises `ValueError`, **including in `__init__`**.
+      - `==` compares amounts, and `<` compares amounts too. Comparing with a non-`Money` object should return `NotImplemented` from your methods (so `Money(1) == 1` is simply `False`).
+    starter: |
+      class Money:
+          def __init__(self, amount):
+              self.amount = amount
+    tests: |
+      def test_repr_str():
+          """repr is Money(250), str is $2.50"""
+          m = Money(250)
+          assert repr(m) == 'Money(250)', f"repr was {repr(m)!r}"
+          assert str(m) == '$2.50', f"str was {str(m)!r}"
+
+      def test_str_padding():
+          """str pads cents to two digits"""
+          assert str(Money(5)) == '$0.05', f"got {str(Money(5))!r}"
+
+      def test_equality():
+          """equal amounts compare equal; other types don't"""
+          assert Money(100) == Money(100)
+          assert Money(100) != Money(99)
+          assert not (Money(1) == 1)
+
+      def test_ordering():
+          """< and > compare amounts"""
+          assert Money(1) < Money(2)
+          assert Money(3) > Money(2)
+
+      def test_setter_validates():
+          """setting a negative amount raises ValueError"""
+          m = Money(10)
+          try:
+              m.amount = -1
+          except ValueError:
+              pass
+          else:
+              assert False, "no ValueError for a negative amount"
+          assert m.amount == 10
+
+      def test_init_validates():
+          """creating Money with a negative amount raises ValueError"""
+          try:
+              Money(-5)
+          except ValueError:
+              return
+          assert False, "Money(-5) did not raise ValueError"
+    solution: |
+      class Money:
+          def __init__(self, amount):
+              self.amount = amount          # goes through the setter
+
+          @property
+          def amount(self):
+              return self._amount
+
+          @amount.setter
+          def amount(self, value):
+              if value < 0:
+                  raise ValueError('amount must not be negative')
+              self._amount = value
+
+          def __repr__(self):
+              return f'Money({self.amount})'
+
+          def __str__(self):
+              return f'${self.amount // 100}.{self.amount % 100:02d}'
+
+          def __eq__(self, other):
+              if isinstance(other, Money):
+                  return self.amount == other.amount
+              return NotImplemented
+
+          def __lt__(self, other):
+              if isinstance(other, Money):
+                  return self.amount < other.amount
+              return NotImplemented
+    hints:
+      - "Store the value in `self._amount` and expose it with `@property` / `@amount.setter`. In `__init__`, assign `self.amount` so the setter validates it."
+      - "For `str`, `divmod` or `//` and `%` split cents into dollars and cents; `:02d` pads to two digits."
+      - "You only need `__lt__`: Python answers `a > b` by trying `b < a`."

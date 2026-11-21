@@ -1,0 +1,47 @@
+---
+import Base from '../../../layouts/Base.astro';
+import { render } from 'astro:content';
+import { parts, url, contentIndex, lectureId, sectionId, sectionLabel } from '../../../lib/course';
+
+export function getStaticPaths() {
+  return parts.flatMap((p) => p.sections.map((s) => ({ params: { part: p.slug, section: s.slug }, props: { part: p, section: s } })));
+}
+const { part, section } = Astro.props;
+const { lessons, practice, sections } = await contentIndex();
+const sid = sectionId(part, section);
+const overview = sections.get(sid);
+const { Content } = overview ? await render(overview) : { Content: null };
+const ids = section.lectures.map((l) => lectureId(part, section, l));
+const practiceEntry = practice.get(sid);
+---
+<Base title={`${section.title} · ${part.title}`} activePart={part.slug} description={overview?.data.summary}>
+  <nav class="crumbs" aria-label="Breadcrumb"><a href={url('/')}>Home</a> / <a href={url(part.slug)}>{part.title}</a> / <span>{sectionLabel(section)}</span></nav>
+  <p class="eyebrow">{part.title} · {sectionLabel(section)}</p>
+  <h1>{section.title}</h1>
+  <div class="prose">
+    {Content ? <Content /> : <p class="muted">Lesson notes for this section are being written. The lecture list below matches the original course.</p>}
+  </div>
+  <div class="bar" data-progress-of={ids.join(' ')} style="max-width:var(--prose)"><span></span></div>
+  <div class="bar-label" data-progress-of={ids.join(' ')}><span data-progress-label></span></div>
+
+  <h2>Lectures</h2>
+  <ol class="lecture-list prose" style="max-width:var(--prose)">
+    {section.lectures.map((l) => {
+      const id = lectureId(part, section, l);
+      return lessons.has(id) ? (
+        <li data-progress-lecture={id}><a href={url(id)}><span class="num">{String(l.num).padStart(2, '0')}</span><span>{l.title}</span><span class="check" aria-label="completed">✓</span></a></li>
+      ) : (
+        <li><span class="soon"><span class="num">{String(l.num).padStart(2, '0')}</span><span>{l.title}</span><span class="tag" style="margin-left:auto">soon</span></span></li>
+      );
+    })}
+  </ol>
+
+  {practiceEntry && (
+    <div class="card prose" style="margin-top:1.5rem;max-width:var(--prose)">
+      <h3>Practice: quiz & exercises</h3>
+      <p class="muted">{practiceEntry.data.quiz.length} quiz questions · {practiceEntry.data.exercises.length} coding exercises</p>
+      <p class="muted" data-quiz-best={sid}></p>
+      <a class="btn primary" href={url(`${sid}/practice`)}>Go to practice →</a>
+    </div>
+  )}
+</Base>

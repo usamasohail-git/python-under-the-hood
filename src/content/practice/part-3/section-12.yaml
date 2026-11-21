@@ -1,0 +1,256 @@
+quiz:
+  - q: What does this print?
+    code: |
+      from types import MappingProxyType
+      d = {'a': 1}
+      mp = MappingProxyType(d)
+      d['b'] = 2
+      print(len(mp), mp.get('b'))
+    options:
+      - "`1 None`"
+      - "`2 2`"
+      - "`1 2`"
+      - "A `TypeError`"
+    answer: 1
+    explain: |
+      A mapping proxy is a **live view** of the original dictionary, not a copy. Changing `d` directly is allowed, and the proxy sees the new key immediately.
+
+  - q: What does this print?
+    code: |
+      from types import MappingProxyType
+      mp = MappingProxyType({'a': 1})
+      try:
+          mp['a'] = 2
+      except TypeError:
+          print('TypeError', end=' ')
+      print(hasattr(mp, 'update'))
+    options:
+      - "`2 True`"
+      - "`TypeError True`"
+      - "`TypeError False`"
+      - "`False`"
+    answer: 2
+    explain: |
+      Item assignment on a proxy raises `TypeError`, and mutating methods such as `update`, `pop` and `clear` simply don't exist on it.
+
+  - q: What does this print?
+    code: |
+      from types import MappingProxyType
+      mp = MappingProxyType({'tags': ['a']})
+      mp['tags'].append('b')
+      print(mp['tags'])
+    options:
+      - "`['a', 'b']`"
+      - "`['a']`"
+      - "A `TypeError`"
+      - "An `AttributeError`"
+    answer: 0
+    explain: |
+      The proxy is read-only only at the top level: you can't rebind `mp['tags']`, but the list it refers to is an ordinary mutable list, so `append` works.
+
+  - q: What does this print?
+    code: |
+      from types import MappingProxyType
+      mp = MappingProxyType({'a': 1})
+      c = mp.copy()
+      c['a'] = 99
+      print(type(c).__name__, mp['a'])
+    options:
+      - "`mappingproxy 1`"
+      - "`dict 99`"
+      - "`mappingproxy 99`"
+      - "`dict 1`"
+    answer: 3
+    explain: |
+      `copy()` returns a shallow copy of the underlying mapping, here a plain `dict`. It's independent of the original, so changing it doesn't affect what the proxy shows.
+
+  - q: Why is a class's `__dict__` a `mappingproxy` instead of a plain `dict`?
+    options:
+      - "To save memory, since proxies store no data"
+      - "So that class attributes can be changed only through `setattr`/attribute assignment, which keeps the interpreter's internal state (such as method caches) consistent"
+      - "Because class attributes are immutable and can never be changed"
+      - "Because `dict` cannot hold functions as values"
+    answer: 1
+    explain: |
+      Class attributes can certainly be changed (`Test.b = 2`), but only through attribute assignment, which lets the interpreter update its caches. The proxy lets you inspect the namespace while blocking direct writes to it.
+
+exercises:
+  - id: read-only-inventory
+    title: A read-only view of internal state
+    prompt: |
+      Write a class `Inventory` that keeps item counts in a private dict.
+
+      - `add(item, qty=1)` increases the count of `item` (qty must be positive, otherwise raise `ValueError`).
+      - `remove(item, qty=1)` decreases it, deleting the item when it reaches 0. Removing more than is in stock raises `ValueError`.
+      - The property `stock` returns a **read-only, live** view of the counts: callers can read it, but any attempt to assign to it raises `TypeError`, and it always reflects later changes.
+    starter: |
+      class Inventory:
+          def __init__(self):
+              self._stock = {}
+
+          def add(self, item, qty=1):
+              self._stock[item] = self._stock.get(item, 0) + qty
+
+          def remove(self, item, qty=1):
+              self._stock[item] -= qty
+
+          @property
+          def stock(self):
+              return self._stock
+    tests: |
+      def test_add_and_read():
+          """added items can be read through stock"""
+          inv = Inventory()
+          inv.add('apple', 3)
+          inv.add('apple')
+          assert inv.stock['apple'] == 4, f"got {inv.stock.get('apple')}"
+
+      def test_read_only():
+          """assigning through stock raises TypeError"""
+          inv = Inventory()
+          inv.add('apple')
+          try:
+              inv.stock['apple'] = 100
+          except TypeError:
+              pass
+          else:
+              raise AssertionError("stock allowed item assignment")
+          assert inv.stock['apple'] == 1
+
+      def test_live_view():
+          """a view obtained earlier sees later changes"""
+          inv = Inventory()
+          view = inv.stock
+          inv.add('pear', 2)
+          assert view.get('pear') == 2, "the view did not reflect a later add()"
+
+      def test_remove():
+          """remove decreases and deletes at zero"""
+          inv = Inventory()
+          inv.add('kiwi', 2)
+          inv.remove('kiwi')
+          assert inv.stock['kiwi'] == 1
+          inv.remove('kiwi')
+          assert 'kiwi' not in inv.stock, "item with 0 left should be removed"
+
+      def test_validation():
+          """invalid quantities raise ValueError"""
+          inv = Inventory()
+          inv.add('fig')
+          for action in (lambda: inv.add('fig', 0), lambda: inv.remove('fig', 5), lambda: inv.remove('plum')):
+              try:
+                  action()
+              except ValueError:
+                  pass
+              else:
+                  raise AssertionError("expected ValueError")
+          assert inv.stock['fig'] == 1, "a failed operation changed the stock"
+    solution: |
+      from types import MappingProxyType
+
+      class Inventory:
+          def __init__(self):
+              self._stock = {}
+              self._view = MappingProxyType(self._stock)
+
+          def add(self, item, qty=1):
+              if qty <= 0:
+                  raise ValueError('qty must be positive')
+              self._stock[item] = self._stock.get(item, 0) + qty
+
+          def remove(self, item, qty=1):
+              if qty <= 0:
+                  raise ValueError('qty must be positive')
+              available = self._stock.get(item, 0)
+              if qty > available:
+                  raise ValueError(f'only {available} {item!r} in stock')
+              if qty == available:
+                  del self._stock[item]
+              else:
+                  self._stock[item] = available - qty
+
+          @property
+          def stock(self):
+              return self._view
+    hints:
+      - "Wrap the private dict once with `types.MappingProxyType` and return that proxy from the property; it stays in sync automatically."
+      - "Validate *before* changing anything, so a failed `remove` leaves the stock untouched."
+
+  - id: deep-freeze
+    title: Freeze a nested structure
+    prompt: |
+      A `MappingProxyType` is only read-only at the top level. Write `deep_freeze(obj)` that returns a fully read-only version of a nested structure:
+
+      - every `dict` becomes a `MappingProxyType` over a **new** dict whose values are frozen too,
+      - every `list` becomes a `tuple` of frozen items,
+      - every `set` becomes a `frozenset`,
+      - anything else is returned unchanged.
+
+      The original object must not be modified.
+    starter: |
+      from types import MappingProxyType
+
+      def deep_freeze(obj):
+          if isinstance(obj, dict):
+              return MappingProxyType(obj)
+          return obj
+    tests: |
+      from types import MappingProxyType
+
+      data = {'name': 'svc', 'ports': [80, 443], 'tags': {'web'},
+              'db': {'hosts': ['a', 'b'], 'opts': {'ssl': True}}}
+
+      def test_top_level():
+          """the top level is a read-only mapping"""
+          f = deep_freeze(data)
+          assert isinstance(f, MappingProxyType), f"got {type(f).__name__}"
+          assert f['name'] == 'svc'
+
+      def test_nested_dicts():
+          """nested dicts are frozen too"""
+          f = deep_freeze(data)
+          assert isinstance(f['db'], MappingProxyType)
+          assert isinstance(f['db']['opts'], MappingProxyType)
+          try:
+              f['db']['opts']['ssl'] = False
+          except TypeError:
+              pass
+          else:
+              raise AssertionError("a nested dict can still be modified")
+
+      def test_lists_and_sets():
+          """lists become tuples, sets become frozensets, at any depth"""
+          f = deep_freeze(data)
+          assert f['ports'] == (80, 443), f"ports: {f['ports']!r}"
+          assert f['db']['hosts'] == ('a', 'b')
+          assert f['tags'] == frozenset({'web'}) and isinstance(f['tags'], frozenset)
+
+      def test_original_untouched():
+          """the original structure is not modified or shared"""
+          f = deep_freeze(data)
+          assert data['ports'] == [80, 443] and isinstance(data['db'], dict)
+          data_copy_hosts = data['db']['hosts']
+          data_copy_hosts.append('c')
+          try:
+              assert f['db']['hosts'] == ('a', 'b'), "frozen copy changed with the original"
+          finally:
+              data_copy_hosts.pop()
+
+      def test_scalars():
+          """other values are returned unchanged"""
+          assert deep_freeze(5) == 5 and deep_freeze('x') == 'x' and deep_freeze(None) is None
+          assert deep_freeze([[1], {'a': [2]}])[1]['a'] == (2,)
+    solution: |
+      from types import MappingProxyType
+
+      def deep_freeze(obj):
+          if isinstance(obj, dict):
+              return MappingProxyType({k: deep_freeze(v) for k, v in obj.items()})
+          if isinstance(obj, list):
+              return tuple(deep_freeze(v) for v in obj)
+          if isinstance(obj, set):
+              return frozenset(obj)
+          return obj
+    hints:
+      - "Recurse: for a dict, build `{k: deep_freeze(v) for k, v in obj.items()}` and wrap *that* new dict in a proxy."
+      - "Set elements are already hashable (and so immutable enough), so `frozenset(obj)` is all a set needs."

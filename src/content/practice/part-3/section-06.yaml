@@ -1,0 +1,425 @@
+quiz:
+  - q: What does this print?
+    code: |
+      data = {'a': 1, 'b': 2, 'z': 0}
+      template = {'a': int, 'b': int, 'c': int}
+      print(sorted(template.keys() - data.keys()), sorted(data.keys() - template.keys()))
+    options:
+      - "`['z'] ['c']`"
+      - "`['c'] ['z']`"
+      - "`['c', 'z'] []`"
+      - A `TypeError`, since views don't support `-`
+    answer: 1
+    explain: |
+      Keys views are set-like. Template keys absent from the data (`c`) are **missing**; data keys absent from the template (`z`) are **extra**.
+
+  - q: Why does the validator sort the mismatched paths before joining them into a message?
+    options:
+      - Because sets iterate in an arbitrary order, so without sorting the same problem could produce differently ordered messages
+      - Because `str.join` only accepts sorted input
+      - To make the validator faster
+      - Because keys views return their elements in reverse order
+    answer: 0
+    explain: |
+      The paths live in a set, and a set's iteration order depends on hashing and insertion history. Sorting gives one stable message, which matters for tests, logs and users.
+
+  - q: What does this print?
+    code: |
+      def expected_type(t):
+          return dict if isinstance(t, dict) else t
+
+      print(isinstance(True, expected_type(int)),
+            isinstance({'x': 1}, expected_type({'first': str})),
+            isinstance('Ada', expected_type({'first': str})))
+    options:
+      - "`False True False`"
+      - "`True True True`"
+      - "`True True False`"
+      - "`True False False`"
+    answer: 2
+    explain: |
+      `bool` is a subclass of `int`, so `isinstance(True, int)` is `True`. A nested template expects a `dict`; `{'x': 1}` is one (its contents are checked later, recursively), while `'Ada'` isn't.
+
+  - q: Why is the validator written recursively instead of with nested loops?
+    options:
+      - Recursion is always faster than loops in Python
+      - Loops cannot iterate over dictionaries
+      - Python has no stack limit, so recursion is free
+      - The nesting depth of the template isn't known in advance, and each level is validated the same way
+    answer: 3
+    explain: |
+      Each nested dictionary is a smaller instance of the same problem, so the function can call itself on it, however deep the structure goes. (Python does have a recursion limit, around 1000 by default, but real documents are nowhere near that deep.)
+
+  - q: What does this print?
+    code: |
+      class SchemaError(Exception): pass
+      class SchemaKeyMismatch(SchemaError): pass
+      class SchemaTypeMismatch(SchemaError, TypeError): pass
+
+      for exc in (SchemaKeyMismatch('k'), SchemaTypeMismatch('t')):
+          try:
+              raise exc
+          except TypeError:
+              print('TypeError', exc)
+          except SchemaError:
+              print('SchemaError', exc)
+    options:
+      - "`SchemaError k` then `TypeError t`"
+      - "`SchemaError k` then `SchemaError t`"
+      - "`TypeError k` then `TypeError t`"
+      - "`TypeError k` then `SchemaError t`"
+    answer: 0
+    explain: |
+      `except` clauses are tried top to bottom. `SchemaKeyMismatch` isn't a `TypeError`, so it reaches the second clause. `SchemaTypeMismatch` inherits from `TypeError`, so the first matching clause catches it.
+
+  - q: In the recursive walk, why is it safe to write `data[key]` instead of `data.get(key)` while looping over the template?
+    options:
+      - Because `data[key]` never raises
+      - Because the loop runs only after the key check has confirmed that both dictionaries have exactly the same keys at this level
+      - Because `get` doesn't work on nested dictionaries
+      - It isn't safe; it can raise `KeyError` for valid data
+    answer: 1
+    explain: |
+      Mismatched keys are reported (and the function returns or raises) before the type loop starts, so by then every template key is guaranteed to be in the data.
+
+  - q: Compared with returning `(False, message)`, what is the main advantage of raising an exception from deep inside the recursion?
+    options:
+      - Exceptions make the function run in constant time
+      - Exceptions are the only way to produce a message string
+      - The exception propagates up through every recursive call automatically, and a caller can't accidentally ignore the failure
+      - Returning tuples from recursive functions is a syntax error
+    answer: 2
+    explain: |
+      With status tuples, every level has to check the result and pass failures up by hand, and a caller who forgets to check the flag silently accepts bad data. An uncaught exception stops the program instead.
+
+exercises:
+  - id: key-mismatches
+    title: "Goal 1: Mismatched keys at one level"
+    prompt: |
+      Write `key_mismatches(data, template, path='')` that compares the keys of **one level** of two dictionaries and returns a tuple `(missing, extra)`:
+
+      - `missing`: a **set** of dotted paths of template keys that are not in `data`;
+      - `extra`: a **set** of dotted paths of `data` keys that are not in `template`.
+
+      A dotted path joins `path` and the key with a `.`, except at the top level (`path == ''`), where it's just the key converted to `str`. Example: `key_mismatches({'a': 1}, {'b': int}, 'x.y')` returns `({'x.y.b'}, {'x.y.a'})`.
+
+      Only compare keys; ignore the values completely.
+    starter: |
+      def key_mismatches(data, template, path=''):
+          missing = template.keys() - data.keys()
+          extra = data.keys() - template.keys()
+          return missing, extra
+    tests: |
+      def test_no_mismatch():
+          """matching keys give two empty sets (values ignored)"""
+          r = key_mismatches({'a': 'x', 'b': {}}, {'a': int, 'b': int}, 'p')
+          assert r == (set(), set()), r
+
+      def test_missing_with_path():
+          """missing keys are prefixed with the path"""
+          r = key_mismatches({'a': 1}, {'a': int, 'b': int, 'c': int}, 'some.path')
+          assert r == ({'some.path.b', 'some.path.c'}, set()), r
+
+      def test_extra_with_path():
+          """extra keys are prefixed with the path"""
+          r = key_mismatches({'a': 1, 'z': 0}, {'a': int}, 'bio')
+          assert r == (set(), {'bio.z'}), r
+
+      def test_both():
+          """missing and extra together"""
+          r = key_mismatches({'a': 1}, {'b': int}, 'x.y')
+          assert r == ({'x.y.b'}, {'x.y.a'}), r
+
+      def test_top_level():
+          """no leading dot at the top level"""
+          r = key_mismatches({'a': 1}, {'b': int})
+          assert r == ({'b'}, {'a'}), r
+
+      def test_non_string_keys():
+          """non-string keys are converted to str"""
+          r = key_mismatches({1: 'x'}, {2: int})
+          assert r == ({'2'}, {'1'}), r
+          r = key_mismatches({1: 'x'}, {2: int}, 'n')
+          assert r == ({'n.2'}, {'n.1'}), r
+
+      def test_return_types():
+          """returns a tuple of two sets"""
+          r = key_mismatches({}, {})
+          assert isinstance(r, tuple) and len(r) == 2
+          assert all(type(s) is set for s in r), r
+    solution: |
+      def join_path(path, key):
+          return f'{path}.{key}' if path else str(key)
+
+      def key_mismatches(data, template, path=''):
+          missing = template.keys() - data.keys()
+          extra = data.keys() - template.keys()
+          return ({join_path(path, k) for k in missing},
+                  {join_path(path, k) for k in extra})
+    hints:
+      - The starter finds the right keys already; it just doesn't turn them into paths.
+      - "Write a helper `join_path(path, key)` that returns `str(key)` when `path` is empty and `f'{path}.{key}'` otherwise, and apply it in two set comprehensions."
+
+  - id: validate-template
+    title: "Goal 2: Validate a whole document"
+    prompt: |
+      Write `validate(data, template)` that returns `(True, '')` if `data` matches `template`, or `(False, message)` for the **first** problem found.
+
+      Template values are either a type (match with `isinstance`) or a nested template dict (the value must be a `dict` that validates recursively). All template keys are required and extra keys are not allowed.
+
+      At each level, in this order:
+
+      1. If any keys are missing or extra, return `(False, 'mismatched keys: ' + ...)` listing **all** mismatched dotted paths at that level (missing and extra together), **sorted** and joined with `', '`.
+      2. Then, for each template key **in template order**: if the value has the wrong type (a non-dict where the template is a dict counts), return `(False, 'bad type: <path>')`. If the template value is a dict, validate that sub-dictionary completely before moving on to the next key.
+
+      Paths are dotted from the top, with no leading dot (`'bio.dob.month'`, `'user_id'`).
+    starter: |
+      def validate(data, template):
+          if data.keys() != template.keys():
+              return False, 'mismatched keys'
+          return True, ''
+    tests: |
+      template = {
+          'user_id': int,
+          'name': {'first': str, 'last': str},
+          'bio': {
+              'dob': {'year': int, 'month': int, 'day': int},
+              'birthplace': {'country': str, 'city': str},
+          },
+      }
+
+      def person(**changes):
+          p = {
+              'user_id': 100,
+              'name': {'first': 'Ada', 'last': 'Lovelace'},
+              'bio': {
+                  'dob': {'year': 1815, 'month': 12, 'day': 10},
+                  'birthplace': {'country': 'United Kingdom', 'city': 'London'},
+              },
+          }
+          p.update(changes)
+          return p
+
+      def test_valid():
+          """valid data"""
+          assert validate(person(), template) == (True, ''), validate(person(), template)
+
+      def test_missing_nested_key():
+          """missing key deep in the structure"""
+          p = person()
+          del p['bio']['birthplace']['city']
+          r = validate(p, template)
+          assert r == (False, 'mismatched keys: bio.birthplace.city'), r
+
+      def test_bad_nested_type():
+          """wrong type deep in the structure"""
+          p = person()
+          p['bio']['dob']['month'] = 'December'
+          r = validate(p, template)
+          assert r == (False, 'bad type: bio.dob.month'), r
+
+      def test_extra_top_level():
+          """extra key at the top level, no leading dot"""
+          r = validate(person(admin=True), template)
+          assert r == (False, 'mismatched keys: admin'), r
+
+      def test_sorted_mismatches():
+          """all mismatched keys at a level, sorted"""
+          data = {'name': {}, 'bio': {}, 'y': 0, 'x': 0}
+          r = validate(data, template)
+          assert r == (False, 'mismatched keys: user_id, x, y'), r
+
+      def test_scalar_instead_of_dict():
+          """a scalar where a nested template is expected"""
+          r = validate(person(name='Ada Lovelace'), template)
+          assert r == (False, 'bad type: name'), r
+
+      def test_template_order():
+          """the first problem in template order wins"""
+          p = person(user_id='100')
+          p['bio']['dob']['day'] = 'ten'
+          r = validate(p, template)
+          assert r == (False, 'bad type: user_id'), r
+
+      def test_depth_first():
+          """a nested dict is validated fully before the next key"""
+          p = person()
+          p['name']['last'] = 42
+          p['bio'] = 'unknown'
+          r = validate(p, template)
+          assert r == (False, 'bad type: name.last'), r
+
+      def test_keys_before_types():
+          """key problems at a level are reported before type problems"""
+          p = person(user_id='x')
+          del p['bio']
+          r = validate(p, template)
+          assert r == (False, 'mismatched keys: bio'), r
+
+      def test_type_tuple_and_flat():
+          """flat templates and tuples of types work too"""
+          t = {'n': (int, float), 's': str}
+          assert validate({'n': 1.5, 's': ''}, t) == (True, '')
+          assert validate({'n': '1', 's': ''}, t) == (False, 'bad type: n')
+    solution: |
+      def join_path(path, key):
+          return f'{path}.{key}' if path else str(key)
+
+      def _validate(data, template, path):
+          missing = {join_path(path, k) for k in template.keys() - data.keys()}
+          extra = {join_path(path, k) for k in data.keys() - template.keys()}
+          if missing or extra:
+              return False, 'mismatched keys: ' + ', '.join(sorted(missing | extra))
+          for key, expected in template.items():
+              key_path = join_path(path, key)
+              value = data[key]
+              if isinstance(expected, dict):
+                  if not isinstance(value, dict):
+                      return False, f'bad type: {key_path}'
+                  is_ok, message = _validate(value, expected, key_path)
+                  if not is_ok:
+                      return False, message
+              elif not isinstance(value, expected):
+                  return False, f'bad type: {key_path}'
+          return True, ''
+
+      def validate(data, template):
+          return _validate(data, template, '')
+    hints:
+      - Write a recursive helper that takes the current `path` as a third argument, and have `validate` call it with `''`.
+      - Compare keys with keys-view differences first. Only then loop over `template.items()`; after the key check, `data[key]` is safe.
+      - For a nested template, check `isinstance(value, dict)` first, then recurse and return immediately if the recursive call reports a problem.
+
+  - id: schema-exceptions
+    title: "Goal 3: Raise exceptions instead"
+    prompt: |
+      Define an exception hierarchy and a validator that raises instead of returning status codes:
+
+      - `SchemaError`, a subclass of `Exception`;
+      - `SchemaKeyMismatch`, a subclass of `SchemaError`;
+      - `SchemaTypeMismatch`, a subclass of **both** `SchemaError` and `TypeError`.
+
+      Then write `check(data, template)`, with exactly the same rules and messages as Goal 2's `validate`, that returns `None` for valid data, raises `SchemaKeyMismatch('mismatched keys: ...')` for key problems and raises `SchemaTypeMismatch('bad type: ...')` for type problems.
+    starter: |
+      class SchemaError(Exception):
+          pass
+
+      class SchemaKeyMismatch(SchemaError):
+          pass
+
+      class SchemaTypeMismatch(SchemaError):
+          pass
+
+      def check(data, template):
+          if data.keys() != template.keys():
+              raise SchemaError('mismatched keys')
+    tests: |
+      template = {
+          'user_id': int,
+          'name': {'first': str, 'last': str},
+          'bio': {
+              'dob': {'year': int, 'month': int, 'day': int},
+              'birthplace': {'country': str, 'city': str},
+          },
+      }
+
+      def person():
+          return {
+              'user_id': 100,
+              'name': {'first': 'Ada', 'last': 'Lovelace'},
+              'bio': {
+                  'dob': {'year': 1815, 'month': 12, 'day': 10},
+                  'birthplace': {'country': 'United Kingdom', 'city': 'London'},
+              },
+          }
+
+      def raised(data):
+          try:
+              check(data, template)
+          except Exception as ex:
+              return ex
+          return None
+
+      def test_hierarchy():
+          """exception classes have the right bases"""
+          assert issubclass(SchemaError, Exception)
+          assert issubclass(SchemaKeyMismatch, SchemaError)
+          assert issubclass(SchemaTypeMismatch, SchemaError)
+          assert issubclass(SchemaTypeMismatch, TypeError), "SchemaTypeMismatch should also be a TypeError"
+          assert not issubclass(SchemaKeyMismatch, TypeError)
+
+      def test_valid_returns_none():
+          """valid data returns None without raising"""
+          assert check(person(), template) is None
+
+      def test_key_mismatch():
+          """missing nested key raises SchemaKeyMismatch"""
+          p = person()
+          del p['bio']['birthplace']['city']
+          ex = raised(p)
+          assert type(ex) is SchemaKeyMismatch, repr(ex)
+          assert str(ex) == 'mismatched keys: bio.birthplace.city', str(ex)
+
+      def test_type_mismatch():
+          """wrong nested type raises SchemaTypeMismatch"""
+          p = person()
+          p['bio']['dob']['month'] = 'December'
+          ex = raised(p)
+          assert type(ex) is SchemaTypeMismatch, repr(ex)
+          assert str(ex) == 'bad type: bio.dob.month', str(ex)
+
+      def test_caught_as_type_error():
+          """type problems can be caught as TypeError"""
+          p = person()
+          p['name'] = 'Ada'
+          try:
+              check(p, template)
+          except TypeError as ex:
+              assert str(ex) == 'bad type: name', str(ex)
+          else:
+              assert False, 'no exception raised'
+
+      def test_sorted_and_ordered():
+          """same ordering rules as Goal 2"""
+          p = person()
+          p['zz'] = 1
+          p['aa'] = 2
+          ex = raised(p)
+          assert type(ex) is SchemaKeyMismatch and str(ex) == 'mismatched keys: aa, zz', repr(ex)
+          p = person()
+          p['name']['last'] = 42
+          p['bio']['dob']['day'] = 'ten'
+          ex = raised(p)
+          assert type(ex) is SchemaTypeMismatch and str(ex) == 'bad type: name.last', repr(ex)
+    solution: |
+      class SchemaError(Exception):
+          pass
+
+      class SchemaKeyMismatch(SchemaError):
+          pass
+
+      class SchemaTypeMismatch(SchemaError, TypeError):
+          pass
+
+      def join_path(path, key):
+          return f'{path}.{key}' if path else str(key)
+
+      def _check(data, template, path):
+          missing = {join_path(path, k) for k in template.keys() - data.keys()}
+          extra = {join_path(path, k) for k in data.keys() - template.keys()}
+          if missing or extra:
+              raise SchemaKeyMismatch('mismatched keys: ' + ', '.join(sorted(missing | extra)))
+          for key, expected in template.items():
+              key_path = join_path(path, key)
+              value = data[key]
+              expected_type = dict if isinstance(expected, dict) else expected
+              if not isinstance(value, expected_type):
+                  raise SchemaTypeMismatch(f'bad type: {key_path}')
+              if isinstance(expected, dict):
+                  _check(value, expected, key_path)
+
+      def check(data, template):
+          _check(data, template, '')
+    hints:
+      - "Multiple inheritance works for exceptions too: `class SchemaTypeMismatch(SchemaError, TypeError): pass`."
+      - Start from your Goal 2 solution and replace each `return False, message` with a `raise`. The recursive call no longer needs its result checked.

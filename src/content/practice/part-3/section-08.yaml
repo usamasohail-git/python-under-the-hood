@@ -1,0 +1,513 @@
+quiz:
+  - q: Why does the encoder check `isinstance(obj, datetime)` **before** `isinstance(obj, date)`?
+    options:
+      - "`datetime` objects are slower to check"
+      - "`datetime` is a subclass of `date`, so a `datetime` would otherwise match the `date` branch"
+      - "`date` objects can't be checked with `isinstance`"
+      - The order doesn't matter
+    answer: 1
+    explain: |
+      Every `datetime` is also a `date`. If the `date` branch comes first it catches datetimes too, so put the more specific type first whenever the formats differ.
+
+  - q: What does this print?
+    code: |
+      import json
+      from decimal import Decimal
+
+      price = Decimal('337.60')
+      as_float = json.loads(json.dumps(float(price)))
+      as_text = Decimal(json.loads(json.dumps(str(price))))
+      print(as_float, as_text)
+    options:
+      - "`337.60 337.60`"
+      - "`337.6 337.6`"
+      - "`337.6 337.60`"
+      - "`337.60 337.6`"
+    answer: 2
+    explain: |
+      Converting to `float` loses the trailing zero (and, for most values, exactness). Writing the `Decimal` as a string and rebuilding it with `Decimal(text)` keeps the exact digits.
+
+  - q: What does this print?
+    code: |
+      class Stock:
+          def __init__(self, symbol):
+              self.symbol = symbol
+
+      print(Stock('TSLA') == Stock('TSLA'), [Stock('A')] == [Stock('A')])
+    options:
+      - "`True True`"
+      - "`False True`"
+      - "`True False`"
+      - "`False False`"
+    answer: 3
+    explain: |
+      Without `__eq__`, `==` falls back to identity, and these are different objects. Lists compare their elements with `==`, so they're unequal too. That's why the solution defines `__eq__` before checking `decoded == activity`.
+
+  - q: The encoder returns `obj.as_dict()` for a `Stock`, and that dict still contains a `date` and several `Decimal`s. What happens?
+    options:
+      - "`dumps` raises `TypeError`, because `default` must return only JSON-native types"
+      - The values are written using their `repr`
+      - The encoder calls `default` again for each of those values, so the `date` and `Decimal` branches convert them
+      - The values are silently dropped
+    answer: 2
+    explain: |
+      Whatever `default` returns is encoded with the same rules, recursively. So each value type only needs to be handled once, in its own branch.
+
+  - q: What does this print?
+    code: |
+      import json
+
+      def hook(d):
+          return d.get('object', d)
+
+      text = '{"a": {"object": "Stock"}, "b": [{"object": "Trade"}, {"x": 1}]}'
+      print(json.loads(text, object_hook=hook))
+    options:
+      - "`{'a': 'Stock', 'b': ['Trade', {'x': 1}]}`"
+      - "`{'a': {'object': 'Stock'}, 'b': [{'object': 'Trade'}, {'x': 1}]}`"
+      - "`{'a': 'Stock', 'b': [{'object': 'Trade'}, {'x': 1}]}`"
+      - A `KeyError`
+    answer: 0
+    explain: |
+      `object_hook` is called for every JSON object at every depth, including those inside lists, and each is replaced by the hook's return value. The root has no `"object"` key, so it's returned as itself (with its already-converted contents).
+
+  - q: In the marshmallow solution, why does `make_stock` contain `data['open_'] = data.pop('open')`?
+    options:
+      - marshmallow can't handle a field named `open`
+      - "`Stock.__init__` takes the parameter `open_`, so `Stock(**data)` would fail with an unexpected keyword argument `open`"
+      - It converts the price from a string to a `Decimal`
+      - To hide the opening price from the JSON output
+    answer: 1
+    explain: |
+      The schema field matches the **attribute** name `open`, but the constructor's parameter is `open_`. The `post_load` hook renames the key before calling the constructor.
+
+  - q: 'Why does the marshmallow version not need an `"object": "Stock"` marker in the JSON?'
+    options:
+      - marshmallow adds hidden markers automatically
+      - JSON keeps Python type information by default
+      - The schema already says that every item under `"quotes"` is a stock, so the structure is known in advance
+      - It does need one; loading fails without it
+    answer: 2
+    explain: |
+      With a schema, type information lives in the schema rather than in the data. The hand-written decoder had no schema, so it needed markers to discover each object's type.
+
+exercises:
+  - id: financial-encoder
+    title: "Exercise 1: encode stocks and trades"
+    prompt: |
+      Complete `CustomEncoder`, a `json.JSONEncoder` subclass, so that `json.dumps(activity, cls=CustomEncoder)` works for any structure containing `Stock` and `Trade` objects.
+
+      - A `Stock` or `Trade` becomes a JSON object with all its fields (`as_dict()`) **plus** a key `"object"` whose value is the class name (`"Stock"` or `"Trade"`).
+      - A `datetime` becomes its ISO string, e.g. `"2018-11-22T10:05:12"`.
+      - A `date` becomes its ISO string, e.g. `"2018-11-22"`.
+      - A `Decimal` becomes a string with the exact digits, e.g. `"337.60"`.
+      - Anything else unsupported must still raise `TypeError`.
+
+      The classes are given; don't change them.
+    starter: |
+      import json
+      from datetime import date, datetime
+      from decimal import Decimal
+
+      class Stock:
+          def __init__(self, symbol, date, open_, high, low, close, volume):
+              self.symbol = symbol
+              self.date = date
+              self.open = open_
+              self.high = high
+              self.low = low
+              self.close = close
+              self.volume = volume
+
+          def as_dict(self):
+              return dict(symbol=self.symbol, date=self.date, open=self.open, high=self.high,
+                          low=self.low, close=self.close, volume=self.volume)
+
+      class Trade:
+          def __init__(self, symbol, timestamp, order, price, volume, commission):
+              self.symbol = symbol
+              self.timestamp = timestamp
+              self.order = order
+              self.price = price
+              self.commission = commission
+              self.volume = volume
+
+          def as_dict(self):
+              return dict(symbol=self.symbol, timestamp=self.timestamp, order=self.order,
+                          price=self.price, volume=self.volume, commission=self.commission)
+
+      class CustomEncoder(json.JSONEncoder):
+          def default(self, obj):
+              if isinstance(obj, (Stock, Trade)):
+                  return obj.as_dict()
+              return super().default(obj)
+    tests: |
+      def make_stock():
+          return Stock('TSLA', date(2018, 11, 22), Decimal('338.19'), Decimal('338.64'),
+                       Decimal('337.60'), Decimal('338.19'), 365_607)
+
+      def make_trade():
+          return Trade('TSLA', datetime(2018, 11, 22, 10, 5, 12), 'buy', Decimal('338.25'),
+                       100, Decimal('9.99'))
+
+      def encode(obj):
+          return json.loads(json.dumps(obj, cls=CustomEncoder))
+
+      def test_stock():
+          """a Stock becomes a dict with a type marker"""
+          got = encode(make_stock())
+          expected = {'symbol': 'TSLA', 'date': '2018-11-22', 'open': '338.19', 'high': '338.64',
+                      'low': '337.60', 'close': '338.19', 'volume': 365607, 'object': 'Stock'}
+          assert got == expected, got
+
+      def test_trade():
+          """a Trade keeps its full timestamp"""
+          got = encode(make_trade())
+          expected = {'symbol': 'TSLA', 'timestamp': '2018-11-22T10:05:12', 'order': 'buy',
+                      'price': '338.25', 'volume': 100, 'commission': '9.99', 'object': 'Trade'}
+          assert got == expected, got
+
+      def test_activity_structure():
+          """works inside nested lists and dicts"""
+          got = encode({'quotes': [make_stock()], 'trades': [make_trade(), make_trade()]})
+          assert [q['object'] for q in got['quotes']] == ['Stock'], got
+          assert [t['object'] for t in got['trades']] == ['Trade', 'Trade'], got
+
+      def test_plain_values():
+          """dates, datetimes and Decimals work on their own too"""
+          got = encode([date(2020, 1, 2), datetime(2020, 1, 2, 3, 4, 5), Decimal('0.10')])
+          assert got == ['2020-01-02', '2020-01-02T03:04:05', '0.10'], got
+
+      def test_unknown_type():
+          """other unsupported types still raise TypeError"""
+          try:
+              json.dumps({'z': 1 + 2j}, cls=CustomEncoder)
+          except TypeError:
+              pass
+          else:
+              raise AssertionError('complex numbers should raise TypeError')
+    solution: |
+      import json
+      from datetime import date, datetime
+      from decimal import Decimal
+
+      class Stock:
+          def __init__(self, symbol, date, open_, high, low, close, volume):
+              self.symbol = symbol
+              self.date = date
+              self.open = open_
+              self.high = high
+              self.low = low
+              self.close = close
+              self.volume = volume
+
+          def as_dict(self):
+              return dict(symbol=self.symbol, date=self.date, open=self.open, high=self.high,
+                          low=self.low, close=self.close, volume=self.volume)
+
+      class Trade:
+          def __init__(self, symbol, timestamp, order, price, volume, commission):
+              self.symbol = symbol
+              self.timestamp = timestamp
+              self.order = order
+              self.price = price
+              self.commission = commission
+              self.volume = volume
+
+          def as_dict(self):
+              return dict(symbol=self.symbol, timestamp=self.timestamp, order=self.order,
+                          price=self.price, volume=self.volume, commission=self.commission)
+
+      class CustomEncoder(json.JSONEncoder):
+          def default(self, obj):
+              if isinstance(obj, (Stock, Trade)):
+                  result = obj.as_dict()
+                  result['object'] = type(obj).__name__
+                  return result
+              if isinstance(obj, datetime):      # check before date: datetime is a subclass
+                  return obj.isoformat()
+              if isinstance(obj, date):
+                  return obj.isoformat()
+              if isinstance(obj, Decimal):
+                  return str(obj)
+              return super().default(obj)
+    hints:
+      - "Whatever `default` returns is encoded recursively, so the dict from `as_dict()` may still contain dates and Decimals: add a branch for each value type."
+      - "`type(obj).__name__` gives `'Stock'` or `'Trade'`."
+      - "`str(Decimal('337.60'))` is `'337.60'`; going through `float` would lose the trailing zero."
+
+  - id: financial-decoder
+    title: "Exercise 2: decode them again"
+    prompt: |
+      JSON produced by the Exercise 1 encoder marks stocks and trades with `"object": "Stock"` / `"object": "Trade"`. Dates, timestamps and prices are ISO strings and decimal strings.
+
+      Write:
+
+      - `decode_financials(d)`: given a dict, return a `Stock` or `Trade` built from it (with real `date`, `datetime`, `Decimal` and `int` values) if it carries one of those markers, otherwise return `d` unchanged;
+      - `load_activity(text)`: decode a JSON string, converting marked objects **anywhere** in the document.
+
+      The classes (with `__eq__`) are given.
+    starter: |
+      import json
+      from datetime import date, datetime
+      from decimal import Decimal
+
+      class Stock:
+          def __init__(self, symbol, date, open_, high, low, close, volume):
+              self.symbol = symbol
+              self.date = date
+              self.open = open_
+              self.high = high
+              self.low = low
+              self.close = close
+              self.volume = volume
+
+          def __eq__(self, other):
+              return type(other) is Stock and vars(self) == vars(other)
+
+      class Trade:
+          def __init__(self, symbol, timestamp, order, price, volume, commission):
+              self.symbol = symbol
+              self.timestamp = timestamp
+              self.order = order
+              self.price = price
+              self.commission = commission
+              self.volume = volume
+
+          def __eq__(self, other):
+              return type(other) is Trade and vars(self) == vars(other)
+
+      def decode_financials(d):
+          # your code here
+          return d
+
+      def load_activity(text):
+          return json.loads(text)
+    tests: |
+      STOCK = ('{"symbol": "TSLA", "date": "2018-11-22", "open": "338.19", "high": "338.64", '
+               '"low": "337.60", "close": "338.19", "volume": 365607, "object": "Stock"}')
+      TRADE = ('{"symbol": "AAPL", "timestamp": "2018-11-22T10:30:05", "order": "sell", '
+               '"price": "177.01", "volume": 20, "commission": "9.99", "object": "Trade"}')
+
+      def test_stock():
+          """a marked dict becomes an equal Stock"""
+          got = load_activity(STOCK)
+          expected = Stock('TSLA', date(2018, 11, 22), Decimal('338.19'), Decimal('338.64'),
+                           Decimal('337.60'), Decimal('338.19'), 365607)
+          assert got == expected, vars(got) if hasattr(got, '__dict__') else got
+
+      def test_trade():
+          """a marked dict becomes an equal Trade"""
+          got = load_activity(TRADE)
+          expected = Trade('AAPL', datetime(2018, 11, 22, 10, 30, 5), 'sell', Decimal('177.01'),
+                           20, Decimal('9.99'))
+          assert got == expected, vars(got) if hasattr(got, '__dict__') else got
+
+      def test_exact_types():
+          """values have their real types"""
+          s = load_activity(STOCK)
+          assert type(s.date) is date, f'date is {type(s.date).__name__}'
+          assert isinstance(s.low, Decimal) and str(s.low) == '337.60', repr(s.low)
+          t = load_activity(TRADE)
+          assert type(t.timestamp) is datetime, f'timestamp is {type(t.timestamp).__name__}'
+
+      def test_anywhere():
+          """marked objects are converted at any depth"""
+          got = load_activity('{"quotes": [' + STOCK + '], "deep": {"x": [[' + TRADE + ']]}}')
+          assert isinstance(got['quotes'][0], Stock), got
+          assert isinstance(got['deep']['x'][0][0], Trade), got
+
+      def test_other_dicts_unchanged():
+          """unmarked dicts stay dicts"""
+          d = {'a': 1, 'object': 'Bond'}
+          assert decode_financials(d) == d
+          assert load_activity('{"meta": {"source": "feed"}}') == {'meta': {'source': 'feed'}}
+    solution: |
+      import json
+      from datetime import date, datetime
+      from decimal import Decimal
+
+      class Stock:
+          def __init__(self, symbol, date, open_, high, low, close, volume):
+              self.symbol = symbol
+              self.date = date
+              self.open = open_
+              self.high = high
+              self.low = low
+              self.close = close
+              self.volume = volume
+
+          def __eq__(self, other):
+              return type(other) is Stock and vars(self) == vars(other)
+
+      class Trade:
+          def __init__(self, symbol, timestamp, order, price, volume, commission):
+              self.symbol = symbol
+              self.timestamp = timestamp
+              self.order = order
+              self.price = price
+              self.commission = commission
+              self.volume = volume
+
+          def __eq__(self, other):
+              return type(other) is Trade and vars(self) == vars(other)
+
+      def decode_stock(d):
+          return Stock(d['symbol'], date.fromisoformat(d['date']),
+                       Decimal(d['open']), Decimal(d['high']), Decimal(d['low']),
+                       Decimal(d['close']), int(d['volume']))
+
+      def decode_trade(d):
+          return Trade(d['symbol'], datetime.fromisoformat(d['timestamp']), d['order'],
+                       Decimal(d['price']), int(d['volume']), Decimal(d['commission']))
+
+      DECODERS = {'Stock': decode_stock, 'Trade': decode_trade}
+
+      def decode_financials(d):
+          decoder = DECODERS.get(d.get('object'))
+          return decoder(d) if decoder else d
+
+      def load_activity(text):
+          return json.loads(text, object_hook=decode_financials)
+    hints:
+      - "`date.fromisoformat`, `datetime.fromisoformat` and `Decimal(text)` reverse the encoder's conversions exactly."
+      - "Pass `object_hook=decode_financials` to `json.loads`: it's called for every JSON object at every depth."
+      - "Use `d.get('object')` so dicts without a marker don't raise `KeyError`."
+
+  - id: dataclass-schema
+    title: "Exercise 3: let the declarations be the schema"
+    prompt: |
+      Schema libraries derive serialization from declared field types. Dataclasses declare their fields and types too, so we can do the same with the standard library.
+
+      Write two generic functions that work for **any** dataclass whose fields are annotated with `str`, `int`, `date`, `datetime` or `Decimal`:
+
+      - `to_dict(obj)`: return a dict of JSON-native values: `date`/`datetime` as ISO strings, `Decimal` as a string, `str` and `int` unchanged.
+      - `from_dict(cls, data)`: build an instance of the dataclass `cls`, converting each value back according to the field's declared type. If a field is missing or `data` has keys that aren't fields, raise `ValueError`.
+
+      Use `dataclasses.fields(cls)`; each field has `.name` and `.type` (the annotated class).
+    starter: |
+      import json
+      from dataclasses import dataclass, fields
+      from datetime import date, datetime
+      from decimal import Decimal
+
+      @dataclass
+      class Stock:
+          symbol: str
+          date: date
+          open: Decimal
+          high: Decimal
+          low: Decimal
+          close: Decimal
+          volume: int
+
+      @dataclass
+      class Trade:
+          symbol: str
+          timestamp: datetime
+          order: str
+          price: Decimal
+          volume: int
+          commission: Decimal
+
+      def to_dict(obj):
+          # your code here
+          pass
+
+      def from_dict(cls, data):
+          # your code here
+          pass
+    tests: |
+      STOCK = Stock('TSLA', date(2018, 11, 22), Decimal('338.19'), Decimal('338.64'),
+                    Decimal('337.60'), Decimal('338.19'), 365607)
+      TRADE = Trade('TSLA', datetime(2018, 11, 22, 10, 5, 12), 'buy', Decimal('338.25'),
+                    100, Decimal('9.99'))
+
+      def test_to_dict_stock():
+          """to_dict converts dates and Decimals"""
+          got = to_dict(STOCK)
+          assert got == {'symbol': 'TSLA', 'date': '2018-11-22', 'open': '338.19', 'high': '338.64',
+                         'low': '337.60', 'close': '338.19', 'volume': 365607}, got
+
+      def test_to_dict_is_json_ready():
+          """the result can be passed straight to json.dumps"""
+          text = json.dumps(to_dict(TRADE))
+          assert '"timestamp": "2018-11-22T10:05:12"' in text, text
+
+      def test_round_trip():
+          """JSON round trip gives equal objects with exact types"""
+          for obj in (STOCK, TRADE):
+              back = from_dict(type(obj), json.loads(json.dumps(to_dict(obj))))
+              assert back == obj, back
+          back = from_dict(Stock, to_dict(STOCK))
+          assert type(back.date) is date and str(back.low) == '337.60', back
+
+      def test_other_dataclass():
+          """works for any dataclass, not just Stock and Trade"""
+          @dataclass
+          class Dividend:
+              symbol: str
+              paid: date
+              amount: Decimal
+
+          d = Dividend('MSFT', date(2018, 12, 13), Decimal('0.46'))
+          assert to_dict(d) == {'symbol': 'MSFT', 'paid': '2018-12-13', 'amount': '0.46'}, to_dict(d)
+          assert from_dict(Dividend, to_dict(d)) == d
+
+      def test_missing_or_extra_keys():
+          """missing fields and unknown keys raise ValueError"""
+          data = to_dict(TRADE)
+          for bad in ({k: v for k, v in data.items() if k != 'price'}, {**data, 'fee': '1'}):
+              try:
+                  from_dict(Trade, bad)
+              except ValueError:
+                  pass
+              else:
+                  raise AssertionError(f'accepted bad keys: {sorted(bad)}')
+    solution: |
+      import json
+      from dataclasses import dataclass, fields
+      from datetime import date, datetime
+      from decimal import Decimal
+
+      @dataclass
+      class Stock:
+          symbol: str
+          date: date
+          open: Decimal
+          high: Decimal
+          low: Decimal
+          close: Decimal
+          volume: int
+
+      @dataclass
+      class Trade:
+          symbol: str
+          timestamp: datetime
+          order: str
+          price: Decimal
+          volume: int
+          commission: Decimal
+
+      # field type -> (to native, from native)
+      CONVERTERS = {
+          str: (str, str),
+          int: (int, int),
+          date: (date.isoformat, date.fromisoformat),
+          datetime: (datetime.isoformat, datetime.fromisoformat),
+          Decimal: (str, Decimal),
+      }
+
+      def to_dict(obj):
+          return {f.name: CONVERTERS[f.type][0](getattr(obj, f.name)) for f in fields(obj)}
+
+      def from_dict(cls, data):
+          names = {f.name for f in fields(cls)}
+          missing, extra = names - data.keys(), data.keys() - names
+          if missing or extra:
+              raise ValueError(f'missing: {sorted(missing)}, unexpected: {sorted(extra)}')
+          return cls(**{f.name: CONVERTERS[f.type][1](data[f.name]) for f in fields(cls)})
+    hints:
+      - "A table mapping each type to a pair of functions, `{date: (date.isoformat, date.fromisoformat), ...}`, keeps both functions short."
+      - "`fields(obj)` works on instances as well as classes, and `f.type` is the annotation, e.g. `Decimal`."
+      - "Compare `{f.name for f in fields(cls)}` with `data.keys()` to find missing and unexpected keys."

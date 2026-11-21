@@ -1,0 +1,547 @@
+files:
+  - data/personal_info.csv
+  - data/employment.csv
+  - data/vehicles.csv
+  - data/update_status.csv
+
+quiz:
+  - q: What does this print?
+    code: |
+      import csv
+      line = '"Kohler, Bradtke and Davis",Support,80-0975518'
+      print(len(line.split(',')), len(next(csv.reader([line]))))
+    options:
+      - "`3 3`"
+      - "`4 4`"
+      - "`4 3`"
+      - "`3 4`"
+    answer: 2
+    explain: |
+      `split(',')` knows nothing about quoting and also splits inside the quoted employer name. `csv.reader` treats the quoted text as one field, giving the correct three fields.
+
+  - q: What does this print?
+    code: |
+      from itertools import chain, compress
+      masks = ([True, False], [False, True])
+      mask = chain.from_iterable(masks)
+      rows = [['a', 'b', 'c', 'd'], ['e', 'f', 'g', 'h']]
+      for row in rows:
+          print(list(compress(row, mask)))
+    options:
+      - "`['a', 'd']` then `['e', 'h']`"
+      - "`['a', 'd']` then `[]`"
+      - "`['a', 'b', 'c', 'd']` then `['e', 'f', 'g', 'h']`"
+      - "`['a']` then `['h']`"
+    answer: 1
+    explain: |
+      `chain.from_iterable` returns a one-shot **iterator**. The first `compress` uses up all four selectors, so for the second row there are no selectors left and `compress` stops immediately. Storing the flattened mask with `tuple(...)` fixes it.
+
+  - q: Three aligned generators yield named tuples `A`, `B` and `C` records. What is each item of `zip(gen_a, gen_b, gen_c)`?
+    options:
+      - "One flat tuple containing all the fields of the three records"
+      - "A tuple of three named tuples: one `A`, one `B` and one `C` record"
+      - "A single named tuple with the fields of all three classes"
+      - "A list of three field values"
+    answer: 1
+    explain: |
+      `zip` simply bundles the next item of each input into a tuple. Flattening those three records into one sequence of values is a separate step, done with `chain.from_iterable`.
+
+  - q: What does this print?
+    code: |
+      from itertools import groupby
+      makes = ['Ford', 'GMC', 'Ford', 'Ford', 'GMC']
+      print([(k, len(list(g))) for k, g in groupby(makes)])
+    options:
+      - "`[('Ford', 3), ('GMC', 2)]`"
+      - "`[('Ford', 1), ('GMC', 1), ('Ford', 2), ('GMC', 1)]`"
+      - "`[('GMC', 2), ('Ford', 3)]`"
+      - "`[('Ford', 1), ('GMC', 1)]`"
+    answer: 1
+    explain: |
+      `groupby` groups only **consecutive** equal items, so `'Ford'` and `'GMC'` each appear more than once. Sorting with the same key first (`groupby(sorted(makes))`) gives one group per make.
+
+  - q: What does this print?
+    code: |
+      from functools import partial
+
+      def filter_key(min_year, make, row):
+          return row[0] == make and row[1] >= min_year
+
+      is_new_ford = partial(filter_key, 2000, 'Ford')
+      rows = [('Ford', 1997), ('Ford', 2005), ('GMC', 2010)]
+      print(list(filter(is_new_ford, rows)))
+    options:
+      - "`[('Ford', 2005)]`"
+      - "`[('Ford', 1997), ('Ford', 2005)]`"
+      - "`[('Ford', 2005), ('GMC', 2010)]`"
+      - "A `TypeError`: `filter_key` needs three arguments"
+    answer: 0
+    explain: |
+      `partial` fixes `min_year=2000` and `make='Ford'`, producing a one-argument function, which is what `filter` needs. Only the 2005 Ford passes both tests.
+
+  - q: |
+      A generator function opens a file with `with open(...) as f:` and does `yield from csv.reader(f)`. When is the file closed?
+    options:
+      - "Immediately after the generator function is called"
+      - "After the first row has been yielded"
+      - "When the generator finishes, or is closed or garbage-collected if the caller stops early"
+      - "Never: files opened inside generators must be closed manually"
+    answer: 2
+    explain: |
+      Calling a generator function runs none of its body. The file opens on the first `next()`, and the `with` block exits when the generator runs to completion. If you stop early, the `with` block exits when the generator is closed (`gen.close()`) or garbage-collected.
+
+  - q: |
+      You parse `last_updated` with `datetime.fromisoformat('2017-10-07T00:14:42Z')` (Python 3.11+), then test `row.last_updated >= datetime(2017, 3, 1)`. What happens?
+    options:
+      - It works, because both are `datetime` objects
+      - It compares the dates as strings
+      - "A `TypeError`, because an aware datetime is compared with a naive one"
+      - The `Z` is rejected with a `ValueError`
+    answer: 2
+    explain: |
+      Since 3.11 `fromisoformat` accepts the `Z` suffix and returns a timezone-**aware** datetime (UTC), while `datetime(2017, 3, 1)` is **naive**. Python refuses to order them. Either make the cutoff aware too (`tzinfo=timezone.utc`), or parse naively with `strptime`.
+
+exercises:
+  - id: goal-1-typed-iterators
+    title: "Goal 1: typed iterators per file"
+    prompt: |
+      Write two functions:
+
+      - `parse_date(value)` converts a string like `'2017-10-07T00:14:42Z'` into a **naive** `datetime` (no time zone).
+      - `iter_file(fname, class_name, parser)` is a generator that lazily reads the CSV file `fname` and yields one named tuple per **data row**. The named tuple class is called `class_name` and its field names come from the file's header row. `parser` is a tuple of one-argument functions, one per column, used to convert each value.
+
+      For example, `iter_file('data/vehicles.csv', 'Vehicle', (str, str, str, int))` should first yield `Vehicle(ssn='100-53-9824', vehicle_make='Oldsmobile', vehicle_model='Bravada', model_year=1993)`.
+
+      Some employer names contain commas inside quotes, so use the `csv` module rather than `split(',')`.
+    starter: |
+      import csv
+      from collections import namedtuple
+      from datetime import datetime
+
+      def parse_date(value):
+          """'2017-10-07T00:14:42Z' -> datetime(2017, 10, 7, 0, 14, 42)"""
+          pass
+
+      def iter_file(fname, class_name, parser):
+          """Lazily yield one named tuple per data row of the CSV file fname."""
+          pass
+    tests: |
+      from datetime import datetime
+
+      VEHICLE_PARSER = (str, str, str, int)
+
+      def test_parse_date():
+          """parse_date returns a naive datetime"""
+          d = parse_date('2017-10-07T00:14:42Z')
+          assert d == datetime(2017, 10, 7, 0, 14, 42), f"got {d!r}"
+          assert d.tzinfo is None, "the datetime should be naive (no tzinfo)"
+
+      def test_first_vehicle():
+          """first vehicle row, with model_year as an int"""
+          row = next(iter_file('data/vehicles.csv', 'Vehicle', VEHICLE_PARSER))
+          assert tuple(row) == ('100-53-9824', 'Oldsmobile', 'Bravada', 1993), f"got {row!r}"
+          assert isinstance(row.model_year, int), "model_year should be an int"
+
+      def test_class_and_fields():
+          """named tuple class uses class_name and the header's field names"""
+          row = next(iter_file('data/vehicles.csv', 'Vehicle', VEHICLE_PARSER))
+          assert type(row).__name__ == 'Vehicle', f"class is {type(row).__name__}"
+          assert row._fields == ('ssn', 'vehicle_make', 'vehicle_model', 'model_year'), f"fields are {row._fields}"
+
+      def test_header_not_yielded():
+          """the header row is not yielded as data"""
+          row = next(iter_file('data/personal_info.csv', 'Personal', (str,) * 5))
+          assert row.ssn == '100-53-9824', f"first row was {row!r}"
+
+      def test_row_count():
+          """every file has 1000 data rows"""
+          n = sum(1 for _ in iter_file('data/personal_info.csv', 'Personal', (str,) * 5))
+          assert n == 1000, f"got {n} rows"
+
+      def test_quoted_commas():
+          """quoted employer names stay in one field"""
+          employers = [r.employer for r in iter_file('data/employment.csv', 'Employment', (str,) * 4)]
+          assert 'Kohler, Bradtke and Davis' in employers, "quoted employer names were split"
+          assert len(employers) == 1000
+
+      def test_dates_parsed():
+          """update_status dates become datetime objects"""
+          parser = (str, parse_date, parse_date)
+          row = next(iter_file('data/update_status.csv', 'UpdateStatus', parser))
+          assert row.last_updated == datetime(2017, 10, 7, 0, 14, 42), f"got {row.last_updated!r}"
+          assert row.created == datetime(2016, 1, 24, 21, 19, 30), f"got {row.created!r}"
+
+      def test_lazy():
+          """iter_file returns a lazy iterator, not a list"""
+          result = iter_file('data/vehicles.csv', 'Vehicle', VEHICLE_PARSER)
+          assert iter(result) is result, "iter_file should return an iterator (use yield)"
+    solution: |
+      import csv
+      from collections import namedtuple
+      from datetime import datetime
+
+      def parse_date(value, *, fmt='%Y-%m-%dT%H:%M:%SZ'):
+          return datetime.strptime(value, fmt)
+
+      def csv_parser(fname, *, include_header=False):
+          with open(fname) as f:
+              reader = csv.reader(f, delimiter=',', quotechar='"')
+              if not include_header:
+                  next(reader)
+              yield from reader
+
+      def iter_file(fname, class_name, parser):
+          header = next(csv_parser(fname, include_header=True))
+          nt_class = namedtuple(class_name, header)
+          for row in csv_parser(fname):
+              yield nt_class(*(parse_fn(value) for value, parse_fn in zip(row, parser)))
+    hints:
+      - "`datetime.strptime(value, '%Y-%m-%dT%H:%M:%SZ')` parses the dates; the `Z` is matched literally."
+      - "Read the header with `next(csv.reader(f))` and pass that list straight to `namedtuple(class_name, header)`."
+      - "`zip(row, parser)` pairs each raw string with its converter; unpack the converted values into the class with `*`."
+
+  - id: goal-2-combined
+    title: "Goal 2: one combined iterator"
+    prompt: |
+      The starter contains a working Goal 1 solution and the per-file constants. Write a generator function `iter_combined()` that yields **one named tuple per person**, combining all four files. The class must be called `Data`, and its fields must be, in this order:
+
+      `ssn, first_name, last_name, gender, language, employer, department, employee_id, vehicle_make, vehicle_model, model_year, last_updated, created`
+
+      That is: all personal fields, then the other files' fields in file order, with `ssn` appearing **only once**. The files are aligned (row *k* is the same person in every file), so you don't need to match SSNs. Keep the converted types from Goal 1.
+    starter: |
+      import csv
+      import itertools
+      from collections import namedtuple
+      from datetime import datetime
+
+      def parse_date(value, *, fmt='%Y-%m-%dT%H:%M:%SZ'):
+          return datetime.strptime(value, fmt)
+
+      def csv_parser(fname, *, include_header=False):
+          with open(fname) as f:
+              reader = csv.reader(f, delimiter=',', quotechar='"')
+              if not include_header:
+                  next(reader)
+              yield from reader
+
+      def extract_field_names(fname):
+          return next(csv_parser(fname, include_header=True))
+
+      def iter_file(fname, class_name, parser):
+          nt_class = namedtuple(class_name, extract_field_names(fname))
+          for row in csv_parser(fname):
+              yield nt_class(*(parse_fn(value) for value, parse_fn in zip(row, parser)))
+
+      FNAMES = ('data/personal_info.csv', 'data/employment.csv',
+                'data/vehicles.csv', 'data/update_status.csv')
+      CLASS_NAMES = ('Personal', 'Employment', 'Vehicle', 'UpdateStatus')
+      PARSERS = ((str, str, str, str, str), (str, str, str, str),
+                 (str, str, str, int), (str, parse_date, parse_date))
+
+      def iter_combined():
+          # your code here
+          pass
+    tests: |
+      from datetime import datetime
+
+      EXPECTED_FIELDS = ('ssn', 'first_name', 'last_name', 'gender', 'language',
+                         'employer', 'department', 'employee_id', 'vehicle_make',
+                         'vehicle_model', 'model_year', 'last_updated', 'created')
+
+      def test_fields():
+          """Data class has the 13 expected fields, ssn only once"""
+          row = next(iter_combined())
+          assert type(row).__name__ == 'Data', f"class is {type(row).__name__}"
+          assert row._fields == EXPECTED_FIELDS, f"fields are {row._fields}"
+
+      def test_first_row():
+          """first combined record has the right values and types"""
+          row = next(iter_combined())
+          expected = ('100-53-9824', 'Sebastiano', 'Tester', 'Male', 'Icelandic',
+                      'Stiedemann-Bailey', 'Research and Development', '29-0890771',
+                      'Oldsmobile', 'Bravada', 1993,
+                      datetime(2017, 10, 7, 0, 14, 42), datetime(2016, 1, 24, 21, 19, 30))
+          assert tuple(row) == expected, f"got {row!r}"
+
+      def test_count_and_unique():
+          """1000 records, one per SSN"""
+          rows = list(iter_combined())
+          assert len(rows) == 1000, f"got {len(rows)} records"
+          assert len({r.ssn for r in rows}) == 1000, "SSNs should be unique"
+
+      def test_rows_line_up():
+          """the employer comes from the same row number as the person"""
+          rows = list(iter_combined())
+          kohler = [r for r in rows if r.employer == 'Kohler, Bradtke and Davis']
+          assert kohler and kohler[0].ssn == '105-27-5541', "records from different files are misaligned"
+
+      def test_last_row_types():
+          """types are kept through to the last record"""
+          last = None
+          for last in iter_combined():
+              pass
+          assert last is not None
+          assert isinstance(last.model_year, int) and isinstance(last.created, datetime)
+
+      def test_lazy():
+          """iter_combined returns a lazy iterator"""
+          result = iter_combined()
+          assert iter(result) is result, "iter_combined should be a generator (use yield)"
+    solution: |
+      import csv
+      import itertools
+      from collections import namedtuple
+      from datetime import datetime
+
+      def parse_date(value, *, fmt='%Y-%m-%dT%H:%M:%SZ'):
+          return datetime.strptime(value, fmt)
+
+      def csv_parser(fname, *, include_header=False):
+          with open(fname) as f:
+              reader = csv.reader(f, delimiter=',', quotechar='"')
+              if not include_header:
+                  next(reader)
+              yield from reader
+
+      def extract_field_names(fname):
+          return next(csv_parser(fname, include_header=True))
+
+      def iter_file(fname, class_name, parser):
+          nt_class = namedtuple(class_name, extract_field_names(fname))
+          for row in csv_parser(fname):
+              yield nt_class(*(parse_fn(value) for value, parse_fn in zip(row, parser)))
+
+      FNAMES = ('data/personal_info.csv', 'data/employment.csv',
+                'data/vehicles.csv', 'data/update_status.csv')
+      CLASS_NAMES = ('Personal', 'Employment', 'Vehicle', 'UpdateStatus')
+      PARSERS = ((str, str, str, str, str), (str, str, str, str),
+                 (str, str, str, int), (str, parse_date, parse_date))
+
+      def iter_combined():
+          headers = [extract_field_names(fname) for fname in FNAMES]
+          # keep every column of the first file, and every non-ssn column of the others
+          mask = tuple(i == 0 or name != 'ssn'
+                       for i, header in enumerate(headers) for name in header)
+          all_fields = itertools.chain.from_iterable(headers)
+          Data = namedtuple('Data', itertools.compress(all_fields, mask))
+
+          file_iters = (iter_file(fname, class_name, parser)
+                        for fname, class_name, parser in zip(FNAMES, CLASS_NAMES, PARSERS))
+          for records in zip(*file_iters):
+              values = itertools.chain.from_iterable(records)
+              yield Data(*itertools.compress(values, mask))
+    hints:
+      - "`zip(*file_iters)` yields a tuple of four records (one per file) for each person."
+      - "`itertools.chain.from_iterable(records)` flattens the four records into one stream of values."
+      - "Build a Boolean mask (one entry per column across all four headers) that is `False` for the extra `ssn` columns, store it as a **tuple**, and use `itertools.compress` on both the header names and every row."
+
+  - id: goal-3-current
+    title: "Goal 3: only current records"
+    prompt: |
+      The starter contains a working `iter_combined()` from Goal 2. Write a generator function `iter_current(cutoff=datetime(2017, 3, 1))` that yields only the **current** combined records: those whose `last_updated` is **on or after** `cutoff`. Records updated before the cutoff are stale and must be skipped.
+
+      Keep it lazy: don't build a list of all records.
+    starter: |
+      import csv
+      import itertools
+      from collections import namedtuple
+      from datetime import datetime
+
+      def parse_date(value, *, fmt='%Y-%m-%dT%H:%M:%SZ'):
+          return datetime.strptime(value, fmt)
+
+      def csv_parser(fname, *, include_header=False):
+          with open(fname) as f:
+              reader = csv.reader(f, delimiter=',', quotechar='"')
+              if not include_header:
+                  next(reader)
+              yield from reader
+
+      def extract_field_names(fname):
+          return next(csv_parser(fname, include_header=True))
+
+      def iter_file(fname, class_name, parser):
+          nt_class = namedtuple(class_name, extract_field_names(fname))
+          for row in csv_parser(fname):
+              yield nt_class(*(parse_fn(value) for value, parse_fn in zip(row, parser)))
+
+      FNAMES = ('data/personal_info.csv', 'data/employment.csv',
+                'data/vehicles.csv', 'data/update_status.csv')
+      CLASS_NAMES = ('Personal', 'Employment', 'Vehicle', 'UpdateStatus')
+      PARSERS = ((str, str, str, str, str), (str, str, str, str),
+                 (str, str, str, int), (str, parse_date, parse_date))
+      MASKS = ((True, True, True, True, True), (True, True, True, False),
+               (False, True, True, True), (False, True, True))
+
+      def iter_combined():
+          mask = tuple(itertools.chain.from_iterable(MASKS))
+          fields = itertools.chain.from_iterable(extract_field_names(f) for f in FNAMES)
+          Data = namedtuple('Data', itertools.compress(fields, mask))
+          file_iters = (iter_file(f, c, p) for f, c, p in zip(FNAMES, CLASS_NAMES, PARSERS))
+          for records in zip(*file_iters):
+              yield Data(*itertools.compress(itertools.chain.from_iterable(records), mask))
+
+      def iter_current(cutoff=datetime(2017, 3, 1)):
+          # your code here
+          pass
+    tests: |
+      from datetime import datetime
+
+      def test_count():
+          """871 records are current with the default cutoff"""
+          n = sum(1 for _ in iter_current())
+          assert n == 871, f"got {n} current records"
+
+      def test_all_current():
+          """every yielded record is on or after the cutoff"""
+          cutoff = datetime(2017, 3, 1)
+          assert all(r.last_updated >= cutoff for r in iter_current())
+
+      def test_stale_skipped():
+          """a person last updated in January 2017 is skipped"""
+          ssns = {r.ssn for r in iter_current()}
+          assert '101-71-4702' not in ssns, "stale record 101-71-4702 was included"
+          assert '100-53-9824' in ssns, "current record 100-53-9824 is missing"
+
+      def test_custom_cutoff():
+          """the cutoff can be changed"""
+          n = sum(1 for _ in iter_current(datetime(2018, 1, 1)))
+          assert n == 195, f"got {n} records for a 2018-01-01 cutoff"
+
+      def test_cutoff_inclusive():
+          """a record updated exactly at the cutoff counts as current"""
+          exact = datetime(2017, 10, 7, 0, 14, 42)
+          ssns = {r.ssn for r in iter_current(exact)}
+          assert '100-53-9824' in ssns, "records updated exactly at the cutoff should be kept"
+
+      def test_lazy():
+          """iter_current returns a lazy iterator"""
+          result = iter_current()
+          assert iter(result) is result, "iter_current should return an iterator"
+          assert type(next(result)).__name__ == 'Data'
+    solution: |
+      import csv
+      import itertools
+      from collections import namedtuple
+      from datetime import datetime
+
+      def parse_date(value, *, fmt='%Y-%m-%dT%H:%M:%SZ'):
+          return datetime.strptime(value, fmt)
+
+      def csv_parser(fname, *, include_header=False):
+          with open(fname) as f:
+              reader = csv.reader(f, delimiter=',', quotechar='"')
+              if not include_header:
+                  next(reader)
+              yield from reader
+
+      def extract_field_names(fname):
+          return next(csv_parser(fname, include_header=True))
+
+      def iter_file(fname, class_name, parser):
+          nt_class = namedtuple(class_name, extract_field_names(fname))
+          for row in csv_parser(fname):
+              yield nt_class(*(parse_fn(value) for value, parse_fn in zip(row, parser)))
+
+      FNAMES = ('data/personal_info.csv', 'data/employment.csv',
+                'data/vehicles.csv', 'data/update_status.csv')
+      CLASS_NAMES = ('Personal', 'Employment', 'Vehicle', 'UpdateStatus')
+      PARSERS = ((str, str, str, str, str), (str, str, str, str),
+                 (str, str, str, int), (str, parse_date, parse_date))
+      MASKS = ((True, True, True, True, True), (True, True, True, False),
+               (False, True, True, True), (False, True, True))
+
+      def iter_combined():
+          mask = tuple(itertools.chain.from_iterable(MASKS))
+          fields = itertools.chain.from_iterable(extract_field_names(f) for f in FNAMES)
+          Data = namedtuple('Data', itertools.compress(fields, mask))
+          file_iters = (iter_file(f, c, p) for f, c, p in zip(FNAMES, CLASS_NAMES, PARSERS))
+          for records in zip(*file_iters):
+              yield Data(*itertools.compress(itertools.chain.from_iterable(records), mask))
+
+      def iter_current(cutoff=datetime(2017, 3, 1)):
+          yield from filter(lambda row: row.last_updated >= cutoff, iter_combined())
+    hints:
+      - "`last_updated` is already a `datetime`, so you can compare it with `cutoff` directly."
+      - "`filter(predicate, iter_combined())` is lazy; `yield from` it, or return it."
+      - "Stale means `last_updated < cutoff`, so current means `>=`."
+
+  - id: goal-4-largest-groups
+    title: "Goal 4: the largest car make groups per gender"
+    prompt: |
+      Write `largest_make_groups(records)`. `records` is any iterable (possibly a one-shot generator) of objects with `gender` and `vehicle_make` attributes, such as the current records from Goal 3.
+
+      Return a dictionary mapping each gender that appears to a tuple `(count, makes)`, where `count` is the size of that gender's largest make group and `makes` is an **alphabetically sorted list** of every make with that count (there may be ties). An empty input returns `{}`.
+
+      Example: for records `(F, Ford), (F, GMC), (M, Ford), (F, Ford), (M, Kia), (F, GMC)` the result is `{'F': (2, ['Ford', 'GMC']), 'M': (1, ['Ford', 'Kia'])}`.
+
+      Practice `sorted` + `itertools.groupby` here rather than `Counter`. The tests also run your function on the project data.
+    starter: |
+      import itertools
+
+      def largest_make_groups(records):
+          # your code here
+          pass
+    tests: |
+      import csv
+      from collections import namedtuple
+
+      R = namedtuple('R', 'gender vehicle_make')
+
+      def _current_records():
+          # an independent loader: personal + vehicles + update status, current rows only
+          with open('data/personal_info.csv') as p, open('data/vehicles.csv') as v, \
+               open('data/update_status.csv') as u:
+              rows = zip(csv.reader(p), csv.reader(v), csv.reader(u))
+              next(rows)  # headers
+              for person, vehicle, status in rows:
+                  if status[1] >= '2017-03-01':   # ISO timestamps sort chronologically
+                      yield R(person[3], vehicle[1])
+
+      def test_example():
+          """the example from the prompt"""
+          data = [R('F', 'Ford'), R('F', 'GMC'), R('M', 'Ford'), R('F', 'Ford'), R('M', 'Kia'), R('F', 'GMC')]
+          result = largest_make_groups(data)
+          assert result == {'F': (2, ['Ford', 'GMC']), 'M': (1, ['Ford', 'Kia'])}, f"got {result}"
+
+      def test_single_winner():
+          """a clear winner is reported alone"""
+          data = [R('M', 'Kia'), R('M', 'Audi'), R('M', 'Kia')]
+          assert largest_make_groups(data) == {'M': (2, ['Kia'])}
+
+      def test_unsorted_input():
+          """input does not need to be sorted"""
+          data = [R('F', 'Audi'), R('M', 'Audi'), R('F', 'BMW'), R('F', 'Audi'), R('M', 'BMW'), R('F', 'BMW'), R('F', 'Audi')]
+          result = largest_make_groups(data)
+          assert result == {'F': (3, ['Audi']), 'M': (1, ['Audi', 'BMW'])}, f"got {result}"
+
+      def test_generator_input():
+          """works on a one-shot generator"""
+          gen = (R(g, m) for g, m in [('F', 'Ford'), ('M', 'Ford'), ('F', 'Ford')])
+          assert largest_make_groups(gen) == {'F': (2, ['Ford']), 'M': (1, ['Ford'])}
+
+      def test_empty():
+          """no records gives an empty dict"""
+          assert largest_make_groups([]) == {}
+
+      def test_project_data():
+          """current project records: a tie for women, Ford for men"""
+          result = largest_make_groups(_current_records())
+          assert result == {'Female': (42, ['Chevrolet', 'Ford']), 'Male': (40, ['Ford'])}, f"got {result}"
+    solution: |
+      import itertools
+
+      def largest_make_groups(records):
+          key = lambda r: (r.gender, r.vehicle_make)
+          ordered = sorted(records, key=key)       # one pass over a one-shot input
+          result = {}
+          for gender, gender_rows in itertools.groupby(ordered, key=lambda r: r.gender):
+              counts = [(make, sum(1 for _ in rows))
+                        for make, rows in itertools.groupby(gender_rows, key=lambda r: r.vehicle_make)]
+              top = max(count for _, count in counts)
+              result[gender] = (top, sorted(make for make, count in counts if count == top))
+          return result
+    hints:
+      - "`records` may be a generator, so read it only once, for example with `sorted(records, key=...)`."
+      - "Sorting by `(gender, vehicle_make)` lets you `groupby` gender first and then `groupby` make inside each gender group."
+      - "Count each make group as you reach it with `sum(1 for _ in group)`, then keep every make whose count equals the maximum."

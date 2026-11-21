@@ -1,0 +1,522 @@
+quiz:
+  - q: Why do the tests use `math.isclose(p.side_length, math.sqrt(2), ...)` instead of `p.side_length == math.sqrt(2)`?
+    options:
+      - "`==` doesn't work on properties"
+      - Floating-point arithmetic introduces tiny rounding errors, so a correct result may differ from the expected value in the last digits
+      - "`math.isclose` is faster than `==`"
+      - "`p.area` returns a string"
+    answer: 1
+    explain: |
+      For a square with `R = 1`, `2 * math.sin(math.pi / 4)` gives `1.414213562373095`, while `math.sqrt(2)` is `1.4142135623730951`. Comparing with a tolerance accepts results that are correct up to rounding.
+
+  - q: "`Polygon` defines `__gt__` but not `__lt__`. What happens when you evaluate `Polygon(3, 1) < Polygon(5, 1)`?"
+    options:
+      - "`TypeError`: `<` is not supported"
+      - "It returns `False`"
+      - "Python tries the reflected operation `Polygon(5, 1).__gt__(Polygon(3, 1))`, which returns `True`"
+      - "Python compares the objects' `id()` values"
+    answer: 2
+    explain: |
+      When the left operand has no `__lt__` (or returns `NotImplemented`), Python tries the right operand's reflected method, `__gt__`. So defining `__gt__` gives you both `>` and `<`.
+
+  - q: What does this print?
+    code: |
+      class P:
+          def __init__(self, n):
+              self._n = n
+          def __eq__(self, other):
+              if isinstance(other, P):
+                  return self._n == other._n
+              return NotImplemented
+
+      print(P(3) == P(3), P(3) == 3, P(3) != 'x')
+    options:
+      - "`True False True`"
+      - "`True True False`"
+      - A `TypeError` on `P(3) == 3`
+      - "`True NotImplemented True`"
+    answer: 0
+    explain: |
+      Returning `NotImplemented` lets Python try `int.__eq__`, which also can't compare; for `==` Python then falls back to identity, giving `False`. `!=` is derived from `__eq__` automatically, so `P(3) != 'x'` is `True`.
+
+  - q: What happens when this code runs?
+    code: |
+      class Circle:
+          def __init__(self, r):
+              self._r = r
+          @property
+          def radius(self):
+              return self._r
+
+      c = Circle(1)
+      c.radius = 5
+    options:
+      - "`c.radius` becomes `5`"
+      - "A new attribute `radius` hides the property"
+      - "Nothing happens: the assignment is silently ignored"
+      - An `AttributeError`, because the property has no setter
+    answer: 3
+    explain: |
+      A property defined with only a getter is read-only. Assigning to it raises `AttributeError`, which is how the project keeps its polygons immutable.
+
+  - q: "`Polygons.__getitem__` simply returns `self._polygons[s]`. Which of these does that **not** give you automatically?"
+    options:
+      - Negative indexing
+      - Extended slicing such as `ps[::-1]`
+      - "A new `Polygons` instance when slicing"
+      - "An `IndexError` for an out-of-range index, so iteration stops"
+    answer: 2
+    explain: |
+      Delegation passes the index or slice to the underlying tuple, which handles every indexing case correctly, but a slice of a tuple is a tuple, not a `Polygons` object.
+
+  - q: What does this print?
+    code: |
+      words = ['kiwi', 'banana', 'fig', 'cherry']
+      print(max(words, key=len), sorted(words, key=len, reverse=True)[0])
+    options:
+      - "`banana banana`"
+      - "`cherry cherry`"
+      - "`banana cherry`"
+      - "`kiwi banana`"
+    answer: 0
+    explain: |
+      Both pick a 6-letter word. `max` returns the **first** maximal item it sees, and the stable reverse sort keeps `'banana'` before `'cherry'`. `max` gets there in one pass without building a sorted list.
+
+  - q: With a fixed circumradius `R`, which polygon in `Polygons(m, R)` has the highest area-to-perimeter ratio?
+    options:
+      - The triangle
+      - The square
+      - The one with the most vertices, `m`
+      - It depends on `R`
+    answer: 2
+    explain: |
+      The ratio simplifies to half the apothem, `R cos(π/n) / 2`, which increases with `n` for any `R`. So the last polygon in the sequence always wins.
+
+exercises:
+  - id: polygon-geometry
+    title: "Goal 1a: Polygon properties"
+    prompt: |
+      Create a class `Polygon(n, R)` for a regular convex polygon with `n` vertices and circumradius `R`.
+
+      - Raise `ValueError` if `n < 3`.
+      - `repr(Polygon(3, 1))` must be `'Polygon(n=3, R=1)'`.
+      - Provide these **read-only** properties (assigning to them must raise `AttributeError`): `count_vertices`, `count_edges`, `circumradius`, `interior_angle` (degrees), `side_length`, `apothem`, `area`, `perimeter`.
+
+      Formulas: interior angle `(n - 2) * 180 / n`; side `2 R sin(π/n)`; apothem `R cos(π/n)`; area `n / 2 * side * apothem`; perimeter `n * side`.
+    starter: |
+      import math
+
+      class Polygon:
+          def __init__(self, n, R):
+              self._n = n
+              self._R = R
+
+          # add __repr__ and the properties here
+    tests: |
+      import math
+
+      def close(a, b):
+          return math.isclose(a, b, rel_tol=0.001, abs_tol=0.001)
+
+      def test_repr():
+          """repr looks like Polygon(n=3, R=1)"""
+          assert repr(Polygon(3, 1)) == 'Polygon(n=3, R=1)', repr(Polygon(3, 1))
+
+      def test_counts():
+          """vertex/edge counts and circumradius"""
+          p = Polygon(5, 2)
+          assert (p.count_vertices, p.count_edges, p.circumradius) == (5, 5, 2)
+
+      def test_interior_angle():
+          """interior angles in degrees"""
+          assert close(Polygon(3, 1).interior_angle, 60)
+          assert close(Polygon(4, 1).interior_angle, 90)
+          assert close(Polygon(12, 3).interior_angle, 150)
+
+      def test_square():
+          """square with R=1"""
+          p = Polygon(4, 1)
+          assert close(p.side_length, math.sqrt(2)), p.side_length
+          assert close(p.apothem, 0.70711), p.apothem
+          assert close(p.area, 2), p.area
+          assert close(p.perimeter, 4 * math.sqrt(2)), p.perimeter
+
+      def test_hexagon_and_dodecagon():
+          """hexagon (R=2) and 12-gon (R=3)"""
+          p = Polygon(6, 2)
+          assert close(p.side_length, 2) and close(p.apothem, 1.73205)
+          assert close(p.area, 10.3923) and close(p.perimeter, 12)
+          p = Polygon(12, 3)
+          assert close(p.side_length, 1.55291) and close(p.apothem, 2.89778)
+          assert close(p.area, 27) and close(p.perimeter, 18.635)
+
+      def test_read_only():
+          """properties cannot be assigned"""
+          p = Polygon(4, 1)
+          for name in ('count_vertices', 'circumradius', 'area', 'side_length'):
+              try:
+                  setattr(p, name, 100)
+              except AttributeError:
+                  continue
+              assert False, f'{name} should be read-only'
+
+      def test_validation():
+          """fewer than 3 vertices raises ValueError"""
+          for n in (2, 0, -1):
+              try:
+                  Polygon(n, 1)
+              except ValueError:
+                  continue
+              assert False, f'Polygon({n}, 1) should raise ValueError'
+    solution: |
+      import math
+
+      class Polygon:
+          def __init__(self, n, R):
+              if n < 3:
+                  raise ValueError('Polygon must have at least 3 vertices.')
+              self._n = n
+              self._R = R
+
+          def __repr__(self):
+              return f'Polygon(n={self._n}, R={self._R})'
+
+          @property
+          def count_vertices(self):
+              return self._n
+
+          @property
+          def count_edges(self):
+              return self._n
+
+          @property
+          def circumradius(self):
+              return self._R
+
+          @property
+          def interior_angle(self):
+              return (self._n - 2) * 180 / self._n
+
+          @property
+          def side_length(self):
+              return 2 * self._R * math.sin(math.pi / self._n)
+
+          @property
+          def apothem(self):
+              return self._R * math.cos(math.pi / self._n)
+
+          @property
+          def area(self):
+              return self._n / 2 * self.side_length * self.apothem
+
+          @property
+          def perimeter(self):
+              return self._n * self.side_length
+    hints:
+      - "Decorate each method with `@property`. A property with no setter is automatically read-only."
+      - Build `area` and `perimeter` from `side_length` and `apothem` so each formula appears only once.
+      - "`math.pi`, `math.sin` and `math.cos` work in radians."
+
+  - id: polygon-comparisons
+    title: "Goal 1b: Equality and ordering"
+    prompt: |
+      The starter contains a working `Polygon` class. Add comparisons:
+
+      - `==`: two polygons are equal when they have the same number of vertices **and** the same circumradius. Comparing with a non-`Polygon` must not raise; it should simply be unequal.
+      - `>` and `<`: based on the number of vertices only. Comparing with a non-`Polygon` using `>` or `<` should raise `TypeError`.
+
+      Implement as few methods as you can: Python's reflected comparisons will do the rest.
+    starter: |
+      import math
+
+      class Polygon:
+          def __init__(self, n, R):
+              if n < 3:
+                  raise ValueError('Polygon must have at least 3 vertices.')
+              self._n = n
+              self._R = R
+
+          def __repr__(self):
+              return f'Polygon(n={self._n}, R={self._R})'
+
+          @property
+          def count_vertices(self):
+              return self._n
+
+          @property
+          def circumradius(self):
+              return self._R
+
+          @property
+          def area(self):
+              s = 2 * self._R * math.sin(math.pi / self._n)
+              return self._n / 2 * s * self._R * math.cos(math.pi / self._n)
+
+          # add your comparison methods here
+    tests: |
+      def test_equal():
+          """same n and R are equal"""
+          assert Polygon(15, 100) == Polygon(15, 100)
+
+      def test_not_equal():
+          """different n or different R are unequal"""
+          assert Polygon(15, 10) != Polygon(15, 100)
+          assert Polygon(3, 10) != Polygon(4, 10)
+
+      def test_ordering():
+          """> and < compare vertex counts only"""
+          p1, p2, p3 = Polygon(3, 10), Polygon(10, 10), Polygon(15, 1)
+          assert p2 > p1 and p1 < p2
+          assert p3 > p2 and p2 < p3, 'ordering must ignore R'
+          assert not (p1 > p1)
+
+      def test_other_types_eq():
+          """== with another type is False, not an error"""
+          assert (Polygon(3, 1) == 3) is False
+          assert Polygon(3, 1) != 'triangle'
+
+      def test_other_types_order():
+          """> with another type raises TypeError"""
+          try:
+              Polygon(3, 1) > 3
+          except TypeError:
+              return
+          assert False, 'expected TypeError'
+
+      def test_sorting():
+          """sorted() works using the natural ordering"""
+          ps = [Polygon(5, 1), Polygon(3, 1), Polygon(4, 1)]
+          assert [p.count_vertices for p in sorted(ps)] == [3, 4, 5]
+    solution: |
+      import math
+
+      class Polygon:
+          def __init__(self, n, R):
+              if n < 3:
+                  raise ValueError('Polygon must have at least 3 vertices.')
+              self._n = n
+              self._R = R
+
+          def __repr__(self):
+              return f'Polygon(n={self._n}, R={self._R})'
+
+          @property
+          def count_vertices(self):
+              return self._n
+
+          @property
+          def circumradius(self):
+              return self._R
+
+          @property
+          def area(self):
+              s = 2 * self._R * math.sin(math.pi / self._n)
+              return self._n / 2 * s * self._R * math.cos(math.pi / self._n)
+
+          def __eq__(self, other):
+              if isinstance(other, Polygon):
+                  return (self.count_vertices == other.count_vertices
+                          and self.circumradius == other.circumradius)
+              return NotImplemented
+
+          def __gt__(self, other):
+              if isinstance(other, Polygon):
+                  return self.count_vertices > other.count_vertices
+              return NotImplemented
+    hints:
+      - "Return `NotImplemented` (don't raise) when `other` isn't a `Polygon`. Python turns that into `False` for `==` and a `TypeError` for `>`."
+      - "`__gt__` is enough for both `>` and `<`: for `a < b` Python tries `b.__gt__(a)`. And `!=` is derived from `__eq__`."
+
+  - id: polygons-sequence
+    title: "Goal 2: The Polygons sequence"
+    prompt: |
+      The starter includes the finished `Polygon` class. Write `Polygons(m, R)`, an immutable sequence of the polygons with `3, 4, ..., m` vertices, all with circumradius `R`.
+
+      - Raise `ValueError` if `m < 3`.
+      - `len()` returns the number of polygons (`m - 2`).
+      - Support indexing (positive and negative, `IndexError` when out of range), slicing including extended slices, and iteration.
+      - `repr(Polygons(6, 1))` is `'Polygons(m=6, R=1)'`.
+      - A read-only property `max_efficiency_polygon` returns the polygon with the highest `area / perimeter` ratio.
+    starter: |
+      import math
+
+      class Polygon:
+          def __init__(self, n, R):
+              if n < 3:
+                  raise ValueError('Polygon must have at least 3 vertices.')
+              self._n = n
+              self._R = R
+
+          def __repr__(self):
+              return f'Polygon(n={self._n}, R={self._R})'
+
+          @property
+          def count_vertices(self):
+              return self._n
+
+          @property
+          def circumradius(self):
+              return self._R
+
+          @property
+          def side_length(self):
+              return 2 * self._R * math.sin(math.pi / self._n)
+
+          @property
+          def apothem(self):
+              return self._R * math.cos(math.pi / self._n)
+
+          @property
+          def area(self):
+              return self._n / 2 * self.side_length * self.apothem
+
+          @property
+          def perimeter(self):
+              return self._n * self.side_length
+
+          def __eq__(self, other):
+              if isinstance(other, Polygon):
+                  return (self._n, self._R) == (other._n, other._R)
+              return NotImplemented
+
+          def __gt__(self, other):
+              if isinstance(other, Polygon):
+                  return self._n > other._n
+              return NotImplemented
+
+
+      class Polygons:
+          def __init__(self, m, R):
+              self._m = m
+              self._R = R
+
+          # add __len__, __repr__, __getitem__ and max_efficiency_polygon
+    tests: |
+      import math
+
+      def test_validation():
+          """m < 3 raises ValueError"""
+          try:
+              Polygons(2, 1)
+          except ValueError:
+              return
+          assert False, 'expected ValueError'
+
+      def test_len_and_repr():
+          """len() and repr()"""
+          assert len(Polygons(3, 1)) == 1
+          assert len(Polygons(10, 1)) == 8
+          assert repr(Polygons(6, 1)) == 'Polygons(m=6, R=1)', repr(Polygons(6, 1))
+
+      def test_indexing():
+          """positive and negative indices"""
+          ps = Polygons(8, 2)
+          assert ps[0] == Polygon(3, 2)
+          assert ps[2] == Polygon(5, 2)
+          assert ps[-1] == Polygon(8, 2)
+          assert ps[-6] == Polygon(3, 2)
+
+      def test_index_error():
+          """out-of-range indices raise IndexError"""
+          ps = Polygons(5, 1)
+          for bad in (3, 50, -4):
+              try:
+                  ps[bad]
+              except IndexError:
+                  continue
+              assert False, f'ps[{bad}] should raise IndexError'
+
+      def test_iteration():
+          """iteration yields every polygon in order"""
+          assert [p.count_vertices for p in Polygons(7, 1)] == [3, 4, 5, 6, 7]
+          assert all(p.circumradius == 4 for p in Polygons(5, 4))
+
+      def test_slicing():
+          """slices and extended slices"""
+          ps = Polygons(8, 1)
+          assert [p.count_vertices for p in ps[2:5]] == [5, 6, 7]
+          assert [p.count_vertices for p in ps[::-1]] == [8, 7, 6, 5, 4, 3]
+          assert [p.count_vertices for p in ps[::2]] == [3, 5, 7]
+          assert list(ps[10:20]) == []
+
+      def test_max_efficiency():
+          """max_efficiency_polygon has the best area/perimeter ratio"""
+          ps = Polygons(10, 1)
+          best = ps.max_efficiency_polygon
+          assert best == Polygon(10, 1), best
+          assert Polygons(3, 5).max_efficiency_polygon == Polygon(3, 5)
+
+      def test_area_tends_to_pi():
+          """a polygon with many sides has area close to pi (R=1)"""
+          assert math.isclose(Polygons(500, 1)[-1].area, math.pi, rel_tol=0.001)
+    solution: |
+      import math
+
+      class Polygon:
+          def __init__(self, n, R):
+              if n < 3:
+                  raise ValueError('Polygon must have at least 3 vertices.')
+              self._n = n
+              self._R = R
+
+          def __repr__(self):
+              return f'Polygon(n={self._n}, R={self._R})'
+
+          @property
+          def count_vertices(self):
+              return self._n
+
+          @property
+          def circumradius(self):
+              return self._R
+
+          @property
+          def side_length(self):
+              return 2 * self._R * math.sin(math.pi / self._n)
+
+          @property
+          def apothem(self):
+              return self._R * math.cos(math.pi / self._n)
+
+          @property
+          def area(self):
+              return self._n / 2 * self.side_length * self.apothem
+
+          @property
+          def perimeter(self):
+              return self._n * self.side_length
+
+          def __eq__(self, other):
+              if isinstance(other, Polygon):
+                  return (self._n, self._R) == (other._n, other._R)
+              return NotImplemented
+
+          def __gt__(self, other):
+              if isinstance(other, Polygon):
+                  return self._n > other._n
+              return NotImplemented
+
+
+      class Polygons:
+          def __init__(self, m, R):
+              if m < 3:
+                  raise ValueError('m must be at least 3')
+              self._m = m
+              self._R = R
+              self._polygons = tuple(Polygon(n, R) for n in range(3, m + 1))
+
+          def __len__(self):
+              return self._m - 2
+
+          def __repr__(self):
+              return f'Polygons(m={self._m}, R={self._R})'
+
+          def __getitem__(self, s):
+              return self._polygons[s]
+
+          @property
+          def max_efficiency_polygon(self):
+              return max(self._polygons, key=lambda p: p.area / p.perimeter)
+    hints:
+      - Build the polygons once in `__init__` and keep them in a tuple. Then `__getitem__` can just return `self._polygons[s]`, which handles ints, negative indices, slices and `IndexError`.
+      - "`max(iterable, key=...)` finds the item with the largest key in one pass."
