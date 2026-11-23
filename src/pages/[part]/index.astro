@@ -23,10 +23,11 @@ const kindLabel = { lessons: 'Lessons', project: 'Project', exercises: 'Coding e
           <span class="eyebrow">{sectionLabel(s)} · {kindLabel[s.kind]}</span>
           <h3>{s.title}</h3>
           <p class="muted" style="margin-bottom:.6rem">{s.lectures.length} lecture{s.lectures.length === 1 ? '' : 's'}{hasPractice ? ' · quiz & exercises' : ''}</p>
-          {written === ids.length ? <span class="tag ready">Available</span>
-            : written > 0 ? <span class="tag ready">{written} of {ids.length} available</span>
-            : <span class="tag">Coming soon</span>}
+          {written < ids.length && (
+            <span class="tag">{written === 0 ? 'Not written yet' : `${written} of ${ids.length} written`}</span>
+          )}
           <div class="bar" data-progress-of={ids.join(' ')}><span></span></div>
+          <div class="bar-label" data-progress-of={ids.join(' ')}><span data-progress-label></span></div>
         </a>
       );
     })}

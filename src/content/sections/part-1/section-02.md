@@ -17,3 +17,4 @@ In this section you'll learn:
 - how `break` and `continue` interact with `try` / `except` / `finally`
 - what Python's `for` loop really does (iterate over an iterable), plus unpacking and `enumerate`
 - writing a class with `__init__`, methods, `__str__` / `__repr__`, `__eq__` / `__lt__`, and properties with validation
+- the core built-in collections (strings, lists, tuples, sets and dictionaries): creating them, indexing and slicing, their key methods, comprehensions, and the mutability pitfalls that catch everyone

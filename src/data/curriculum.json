@@ -66,6 +66,36 @@
               "slug": "09-classes",
               "title": "Classes",
               "source": "Part 1/Section 02 - A Quick Refresher/07 - Classes.ipynb"
+            },
+            {
+              "num": 10,
+              "title": "Strings",
+              "source": null,
+              "slug": "10-strings"
+            },
+            {
+              "num": 11,
+              "title": "Lists",
+              "source": null,
+              "slug": "11-lists"
+            },
+            {
+              "num": 12,
+              "title": "Tuples",
+              "source": null,
+              "slug": "12-tuples"
+            },
+            {
+              "num": 13,
+              "title": "Sets",
+              "source": null,
+              "slug": "13-sets"
+            },
+            {
+              "num": 14,
+              "title": "Dictionaries",
+              "source": null,
+              "slug": "14-dictionaries"
             }
           ]
         },

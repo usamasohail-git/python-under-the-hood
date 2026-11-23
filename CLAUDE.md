@@ -1,8 +1,9 @@
 # Python Under the Hood: interactive course site
 
 A free, static, interactive Python course: lesson notes, editable code cells that run real Python
-in the browser, quizzes and auto-graded exercises. It mirrors the 4-part / 47-section / 324-lecture
-structure of Dr. Fred Baptiste's *Python 3: Deep Dive* (Udemy). Lesson text is original.
+in the browser, quizzes and auto-graded exercises. It mirrors the 4-part / 47-section structure of Dr. Fred Baptiste's *Python 3: Deep Dive* (Udemy):
+324 lectures from the course, plus 5 extra refresher lessons (Part 1 · Section 02: strings, lists, tuples,
+sets, dictionaries). Lesson text is original.
 
 ## Commands
 

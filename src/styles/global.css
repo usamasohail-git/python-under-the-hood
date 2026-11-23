@@ -94,8 +94,10 @@ button { font: inherit; }
 .site-nav a:hover, .site-nav a[aria-current] { color: var(--fg); background: var(--surface-2); }
 .icon-btn { border: 1px solid var(--border); background: var(--surface); color: var(--fg); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; display: grid; place-items: center; flex: none; }
 .icon-btn svg { width: 18px; height: 18px; }
-[data-theme-toggle] .i-sun, [data-theme-toggle] .i-moon, [data-theme-toggle] .i-auto { display: none; }
-[data-theme-toggle][data-mode="light"] .i-sun, [data-theme-toggle][data-mode="dark"] .i-moon, [data-theme-toggle][data-mode="system"] .i-auto { display: block; }
+/* The icon shows what a click will do: moon in light mode, sun in dark mode. The half-circle is
+   only a placeholder for the moment before theme.ts sets data-mode. */
+[data-theme-toggle] .i-sun, [data-theme-toggle] .i-moon, [data-theme-toggle][data-mode] .i-auto { display: none; }
+[data-theme-toggle][data-mode="light"] .i-moon, [data-theme-toggle][data-mode="dark"] .i-sun { display: block; }
 .site-footer { border-top: 1px solid var(--border); margin-top: 4rem; padding: 1.5rem 0; color: var(--muted); font-size: 0.9rem; }
 .site-footer .wrap { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; justify-content: space-between; }
 .site-footer a { color: var(--muted); }

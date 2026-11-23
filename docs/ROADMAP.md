@@ -1,7 +1,7 @@
 # Roadmap
 
-Status (2026-11-22): all content is written and verified: 324 lessons, 47 sections, ~460 quiz
-questions, ~170 auto-graded exercises, ~3,100 runnable cells.
+Status (2026-11-22): all content is written and verified: 329 lessons, 47 sections, ~470 quiz
+questions, ~170 auto-graded exercises, ~3,170 runnable cells.
 
 ## Done: SEO and sharing (2026-11-22)
 
