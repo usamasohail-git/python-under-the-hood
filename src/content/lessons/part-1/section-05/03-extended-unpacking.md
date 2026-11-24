@@ -39,6 +39,16 @@ print(first, rest)
 
 Notice that the starred name is **always a list**, whatever type you unpacked. If you need a string back, join it: `''.join(rest)`.
 
+The same works when the targets are written as a list. The starred name is still a list, and the brackets on the left don't change that:
+
+```python run
+[first, *rest] = (1, 2, 3)       # list target, tuple value
+print(first, rest)
+
+(first, *rest) = [1, 2, 3]       # tuple target, list value
+print(first, rest)
+```
+
 ## The star can go anywhere (once)
 
 The starred name doesn't have to be last. Python fills the plain names at both ends first, then gives the star whatever is left in the middle, possibly nothing at all:
@@ -93,11 +103,14 @@ print(s1.union(s2, s3))
 print({*s1, *s2, *s3})
 ```
 
-Duplicates disappear, because the result is a set. (The `|` operator, `s1 | s2 | s3`, does the same thing.) A trailing comma lets you unpack into a plain tuple or list on the *left* side too: `*items, = some_set` turns any iterable into a list.
+Duplicates disappear, because the result is a set. (The `|` operator, `s1 | s2 | s3`, does the same thing.) A starred name can't stand alone as a target (`*items = s` is a `SyntaxError`), but wrapping it in a one-element tuple or list makes it legal. Both `*items, = s` (note the trailing comma) and `[*items] = s` turn any iterable into a list:
 
 ```python run
 *items, = {10, 20}
 print(type(items), sorted(items))
+
+[*items] = 'abc'
+print(items)
 ```
 
 ### Dictionaries: `*` gives keys, `**` gives pairs
@@ -155,6 +168,9 @@ print(a, b, c, d)
 
 a, b, (c, d) = [1, 2, 'XY']      # a string is an iterable too
 print(a, b, c, d)
+
+[a, b, [c, d]] = 1, 2, 'XY'      # the same pattern written with lists
+print(a, b, c, d)
 ```
 
 And each nested level may have its own star. This is allowed, because the second star belongs to the inner pattern, not the outer one:
@@ -181,7 +197,7 @@ print(a, b, c, d, e)
 
 ## Key takeaways
 
-- `first, *rest = iterable` works on any iterable; the starred name always becomes a list, possibly empty.
+- `first, *rest = iterable` (or `[first, *rest] = iterable`) works on any iterable; the starred name always becomes a list, possibly empty.
 - Only one starred name is allowed per level of unpacking, but nested patterns can each have their own.
 - On the right-hand side, `*` spreads iterables into lists, tuples and sets; `**` merges dictionaries, with later keys winning.
 - In Python 3.9+, `d1 | d2` is the operator form of `{**d1, **d2}`.

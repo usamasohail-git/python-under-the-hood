@@ -157,6 +157,19 @@ quiz:
     explain: |
       An empty list is falsy. With `not items`, a caller's own empty list is silently swapped for a new one, so the caller never sees the changes. `is None` only triggers when the argument was actually omitted (or `None` was passed explicitly).
 
+  - q: What does this print?
+    code: |
+      [first, *rest] = ('a', 'b', 'c')
+      print(first, rest)
+    options:
+      - "`a ('b', 'c')`"
+      - "`a ['b', 'c']`"
+      - "A `SyntaxError`: unpacking targets must be a tuple"
+      - "`['a'] ['b', 'c']`"
+    answer: 1
+    explain: |
+      Targets can be written as a list as well as a tuple; the square brackets only group the names. The starred name always collects into a list, whatever the type of the value on the right.
+
 exercises:
   - id: flexible-average
     title: An average with options

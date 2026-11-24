@@ -61,6 +61,57 @@ except ValueError as ex:
     print('ValueError:', ex)
 ```
 
+## Tuple or list on the left: both work
+
+The names on the left are usually written as a tuple, with or without parentheses. You can also write them as a **list**, with square brackets. All three forms below do exactly the same thing:
+
+```python run
+a, b, c = 'XYZ'          # bare tuple of names (the usual style)
+print(a, b, c)
+
+(a, b, c) = 'XYZ'        # parenthesized tuple
+print(a, b, c)
+
+[a, b, c] = 'XYZ'        # list of names
+print(a, b, c)
+```
+
+The brackets on the left say nothing about the *type* of the value on the right, and they don't create a list. They only group the target names. Any combination works: a list target with a tuple on the right, a tuple target with a list on the right, or a mix when the data is nested:
+
+```python run
+[x, y] = (10, 20)               # list target, tuple value
+print(x, y)
+
+(x, y) = [10, 20]               # tuple target, list value
+print(x, y)
+
+[name, (lat, lon)] = ['Paris', (48.86, 2.35)]   # list and tuple patterns mixed
+print(name, lat, lon)
+```
+
+Python compiles every one of these forms to the same unpacking instruction, so there is no speed difference:
+
+```python run
+import dis
+
+def tuple_style():
+    a, b = 1, 2
+
+def list_style():
+    [a, b] = 1, 2
+
+ops = lambda f: [i.opname for i in dis.get_instructions(f)]
+print(ops(tuple_style) == ops(list_style))
+```
+
+The list form is uncommon in everyday code. Some people use it to make a single-item unpacking stand out, because `[value] = items` is easier to spot than `value, = items`:
+
+```python run
+items = ['only one']
+[value] = items          # fails with ValueError unless items has exactly one element
+print(value)
+```
+
 ## Swapping two variables
 
 A classic use of unpacking is swapping two variables. In many languages you need a temporary variable:
@@ -149,6 +200,7 @@ The order you see may differ from the order the letters were typed, and it can e
 
 - The comma creates a tuple; parentheses only group. `(1,)` is a tuple, `(1)` is an int.
 - `a, b, c = iterable` assigns items by position; the counts must match or you get a `ValueError`.
+- The targets can be written as a tuple (`a, b`, `(a, b)`) or a list (`[a, b]`). The brackets only group names and don't depend on the type on the right.
 - The right-hand side is evaluated completely before any names are bound, which is why `a, b = b, a` swaps safely.
 - Unpacking a dict unpacks its keys (in insertion order since 3.7). Sets have no reliable order.
 
