@@ -24,6 +24,8 @@ const theme = EditorView.theme({
   '.cm-activeLine': { backgroundColor: 'var(--code-active)' },
   '.cm-lineNumbers .cm-gutterElement': { padding: '0 10px 0 12px' },
   '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--fg)' },
+  // drawSelection() hides the native caret and draws its own (black by default): theme it.
+  '.cm-cursor, .cm-dropCursor': { borderLeft: '2px solid var(--code-fg)' },
   '&.cm-focused': { outline: 'none' },
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection': { backgroundColor: 'var(--code-selection) !important' },
   '.cm-matchingBracket': { backgroundColor: 'var(--code-selection)', outline: 'none' },
