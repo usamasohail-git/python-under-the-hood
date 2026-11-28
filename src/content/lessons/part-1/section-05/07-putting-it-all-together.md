@@ -62,6 +62,39 @@ func(1, 'x', 'y', 'z', d=4)
 
 In the second call, `b` received `'x'`. Positional arguments always fill the named positional parameters **before** anything reaches `*args`, so as soon as you pass extra positionals, a default on `b` can never be used. Keep that in mind when you design a signature with both defaults and `*args`.
 
+You might try to get around this by passing the extras by position and setting `b` by name. That doesn't work:
+
+```python run
+def f(a, b=10, *args):
+    return a, b, args
+
+try:
+    f(1, 2, 3, b=5)
+except TypeError as ex:
+    print('TypeError:', ex)
+```
+
+Follow the steps above. In step 1, `1` fills `a`, `2` fills `b` and `3` goes into `args`. In step 2, `b=5` tries to fill `b` a second time, so step 3 raises the error. A default doesn't make a parameter "keyword-only". It only says what to use if nothing fills it, and `b` is still the second positional slot.
+
+Leaving out the `2` doesn't help either. The `3` would just take `b`'s place:
+
+```python run
+try:
+    f(1, 3, b=5)
+except TypeError as ex:
+    print('TypeError:', ex)
+```
+
+If you want callers to pass any number of extra positionals **and** optionally set `b` by name, move `b` after `*args`. That makes it keyword-only:
+
+```python run
+def g(a, *args, b=10):
+    return a, b, args
+
+print(g(1, 2, 3, b=5))
+print(g(1, 2, 3))
+```
+
 ### Keyword-only parameters, with and without extras
 
 ```python run
@@ -151,7 +184,7 @@ print(inspect.signature(divmod))
 ## Key takeaways
 
 - Order in a definition: positional-only, `/`, positional-or-keyword, `*args` or `*`, keyword-only, `**kwargs`.
-- Positional arguments fill named positional parameters before anything reaches `*args`, so defaults before `*args` are only used when there are no extras.
+- Positional arguments fill named positional parameters before anything reaches `*args`, so defaults before `*args` are only used when there are no extras. Setting such a parameter by name as well (`f(1, 2, 3, b=5)`) is a `TypeError`: "got multiple values for argument 'b'".
 - Options that must not be confused with data (like `print`'s `sep` and `end`) belong in keyword-only parameters.
 
 </div>

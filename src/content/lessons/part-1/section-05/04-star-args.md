@@ -37,6 +37,31 @@ except TypeError as ex:
     print('TypeError:', ex)
 ```
 
+<div class="callout note">
+<span class="callout-title">A tuple of references, not a tuple of copies</span>
+
+`args` is a new tuple, but its items are the **same objects** the caller passed. Nothing is copied (see Part 1 · Section 03, "Function Arguments and Mutability"). The tuple stops you from replacing its items, but it can't stop you from mutating a mutable object inside it, and the caller will see that change:
+
+```python run
+def f(*args):
+    print('same object as x:', args[0] is x)
+    args[0].append(99)      # mutates the caller's list
+
+x = [1, 2]
+f(x)
+print(x)
+
+def g(*args):
+    try:
+        args[0] = 'other'   # replacing an item of the tuple is not allowed
+    except TypeError as ex:
+        print('TypeError:', ex)
+
+g(x)
+```
+
+</div>
+
 ## Example: an average of any number of values
 
 `*args` is perfect when a function naturally accepts "one or more" or "zero or more" values:

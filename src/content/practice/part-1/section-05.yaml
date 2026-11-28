@@ -170,6 +170,38 @@ quiz:
     explain: |
       Targets can be written as a list as well as a tuple; the square brackets only group the names. The starred name always collects into a list, whatever the type of the value on the right.
 
+  - q: What happens here?
+    code: |
+      def f(a, b=10, *args):
+          return a, b, args
+
+      f(1, 2, 3, b=5)
+    options:
+      - "It returns `(1, 5, (2, 3))`"
+      - "It returns `(1, 2, (3,))`, and `b=5` is ignored"
+      - "A `TypeError`: `f()` got multiple values for argument `b`"
+      - "It returns `(1, 5, (3,))`"
+    answer: 2
+    explain: |
+      Positional arguments are matched first: `1` goes to `a`, `2` to `b`, and `3` into `args`. Then `b=5` tries to fill `b` again, so Python raises a `TypeError`. To pass extras and set `b` by name, define `b` after `*args` to make it keyword-only: `def f(a, *args, b=10)`.
+
+  - q: What does this print?
+    code: |
+      def f(*args):
+          args[0].append(99)
+
+      x = [1, 2]
+      f(x)
+      print(x)
+    options:
+      - "`[1, 2]`, because `*args` packs copies of the arguments"
+      - "`[1, 2, 99]`"
+      - "A `TypeError`, because `args` is an immutable tuple"
+      - "`([1, 2, 99],)`"
+    answer: 1
+    explain: |
+      `args` is a new tuple, but its first item is the very list `x` refers to. A tuple only prevents replacing its items (`args[0] = ...`); mutating a list inside it is allowed, and the caller sees the change.
+
 exercises:
   - id: flexible-average
     title: An average with options
